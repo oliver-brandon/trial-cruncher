@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "trial-cruncher"
+version = "0.1.0"
+description = "From raw trials to analysis-ready data."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "PySide6>=6.7",
+    "numpy>=1.26.4",
+    "pandas>=2.2.3",
+    "scipy>=1.13",
+    "h5py>=3.11",
+    "openpyxl>=3.1.5",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3", "ruff>=0.9"]
+
+[project.scripts]
+trial-cruncher = "trial_cruncher.cli:main"
+
+[project.gui-scripts]
+trial-cruncher-gui = "trial_cruncher.gui.app:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trial_cruncher"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
