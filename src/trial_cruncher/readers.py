@@ -1,4 +1,4 @@
-"""Future format-specific readers. No MATLAB or Med-PC schemas are assumed."""
+"""Format-specific extraction contract; see medpc.py for the first implementation."""
 
 from collections.abc import Mapping
 from pathlib import Path

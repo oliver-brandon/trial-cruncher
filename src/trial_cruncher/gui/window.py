@@ -1,9 +1,10 @@
-"""Minimal candidate selection UI with filesystem traversal off the GUI thread."""
+"""File selection and read-only Med-PC import review."""
 
 import logging
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
+from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal, Slot
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
@@ -11,9 +12,12 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMessageBox,
+    QProgressBar,
     QPushButton,
+    QSplitter,
     QVBoxLayout,
     QWidget,
 )
@@ -24,6 +28,9 @@ from trial_cruncher.discovery import (
     discover_files,
     normalize_extensions,
 )
+from trial_cruncher.gui.import_worker import ImportWorker
+from trial_cruncher.gui.review import ReviewPanel
+from trial_cruncher.processing import ImportResult
 
 logger = logging.getLogger(__name__)
 
@@ -60,17 +67,21 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Trial Cruncher")
-        self.resize(850, 550)
+        self.resize(1150, 750)
         self.selected_files: set[Path] = set()
         self._worker: DiscoveryWorker | None = None
+        self._import_worker: ImportWorker | None = None
+        self._closing = False
+        self.import_results: dict[Path, ImportResult] = {}
+        self._items: dict[Path, QListWidgetItem] = {}
         self._pool = QThreadPool.globalInstance()
 
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.addWidget(QLabel("From raw trials to analysis-ready data."))
         description = QLabel(
-            "Select candidate behavioral files. "
-            "Parsing, analysis, and export are not yet available."
+            "Add Med-PC session files or a folder, then import to review session details, "
+            "decoded choices, and warnings. Supports PRL_BO and PRL_OPTO_CORSTIM."
         )
         description.setWordWrap(True)
         layout.addWidget(description)
@@ -89,23 +100,47 @@ class MainWindow(QMainWindow):
         self.add_files_button = QPushButton("Add files…")
         self.add_folder_button = QPushButton("Add folder…")
         self.clear_button = QPushButton("Clear selection")
-        for button in (self.add_files_button, self.add_folder_button, self.clear_button):
+        self.import_button = QPushButton("Import Med-PC")
+        self.import_button.setToolTip("Import or re-read all files in the list")
+        self.cancel_button = QPushButton("Cancel after current file")
+        self.cancel_button.setEnabled(False)
+        for button in (
+            self.add_files_button,
+            self.add_folder_button,
+            self.clear_button,
+            self.import_button,
+            self.cancel_button,
+        ):
             buttons.addWidget(button)
         buttons.addStretch()
         layout.addLayout(buttons)
         self.file_list = QListWidget()
-        self.file_list.setAccessibleName("Selected candidate files")
-        layout.addWidget(self.file_list)
+        self.file_list.setAccessibleName("Files and import status")
+        self.review = ReviewPanel()
+        splitter = QSplitter()
+        splitter.addWidget(self.file_list)
+        splitter.addWidget(self.review)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 3)
+        splitter.setSizes([320, 800])
+        layout.addWidget(splitter, 1)
+        self.progress = QProgressBar()
+        self.progress.hide()
+        layout.addWidget(self.progress)
         layout.addWidget(QLabel("Discovery messages:"))
         self.issue_list = QListWidget()
         self.issue_list.setAccessibleName("Discovery messages")
-        self.issue_list.setMaximumHeight(120)
+        self.issue_list.setMaximumHeight(75)
         layout.addWidget(self.issue_list)
         self.setCentralWidget(container)
         self.statusBar().showMessage("0 candidate files selected")
         self.add_files_button.clicked.connect(self.choose_files)
         self.add_folder_button.clicked.connect(self.choose_folder)
         self.clear_button.clicked.connect(self.clear_selection)
+        self.import_button.clicked.connect(self.import_selected_files)
+        self.cancel_button.clicked.connect(self.cancel_import)
+        self.file_list.currentRowChanged.connect(self.review_current_file)
+        self._set_busy(False)
 
     @Slot()
     def choose_files(self) -> None:
@@ -122,7 +157,7 @@ class MainWindow(QMainWindow):
             self.add_paths([path])
 
     def add_paths(self, paths: list[str]) -> None:
-        if self._worker is not None:
+        if self._closing or self._worker is not None or self._import_worker is not None:
             return
         try:
             extensions = normalize_extensions(self.extensions.text().split(","))
@@ -130,6 +165,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Check file extensions", str(exc))
             return
         self._set_busy(True)
+        self.progress.setRange(0, 0)
+        self.progress.show()
         self.statusBar().showMessage("Discovering files…")
         self._worker = DiscoveryWorker(paths, extensions, self.recursive.isChecked())
         self._worker.signals.finished.connect(self._discovery_finished)
@@ -139,22 +176,149 @@ class MainWindow(QMainWindow):
     @Slot(object)
     def _discovery_finished(self, result: DiscoveryResult) -> None:
         self.selected_files.update(result.files)
-        self.file_list.clear()
-        self.file_list.addItems(str(path) for path in sorted(self.selected_files, key=str))
+        self._rebuild_file_list()
         self.issue_list.addItems(f"{issue.path}: {issue.message}" for issue in result.issues)
         if not result.files and not result.issues:
             self.issue_list.addItem("No files matched the configured extensions in this selection.")
         self._worker = None
+        self.progress.hide()
         self._set_busy(False)
         self.statusBar().showMessage(f"{len(self.selected_files)} candidate files selected")
+        self._finish_close()
 
     @Slot(str)
     def _discovery_failed(self, message: str) -> None:
         self._worker = None
+        self.progress.hide()
         self._set_busy(False)
         self.issue_list.addItem(message)
         self.statusBar().showMessage("Discovery failed; existing selection retained")
-        QMessageBox.warning(self, "File discovery failed", message)
+        if not self._closing:
+            QMessageBox.warning(self, "File discovery failed", message)
+        self._finish_close()
+
+    def _rebuild_file_list(self) -> None:
+        current = self.file_list.currentItem()
+        selected_path = current.data(Qt.ItemDataRole.UserRole) if current else None
+        self.file_list.clear()
+        self._items.clear()
+        for path in sorted(self.selected_files, key=str):
+            item = QListWidgetItem()
+            item.setData(Qt.ItemDataRole.UserRole, path)
+            item.setToolTip(str(path))
+            self._items[path] = item
+            self.file_list.addItem(item)
+            self._set_file_state(path, self._result_status(self.import_results.get(path)))
+        if selected_path in self._items:
+            self.file_list.setCurrentItem(self._items[selected_path])
+        elif self.file_list.count():
+            self.file_list.setCurrentRow(0)
+
+    @staticmethod
+    def _result_status(result: ImportResult | None) -> str:
+        if result is None:
+            return "Not imported"
+        if result.error:
+            return "Failed"
+        if result.session and result.session.warnings:
+            return f"Warnings ({len(result.session.warnings)})"
+        return "Imported"
+
+    def _set_file_state(self, path: Path, state: str) -> None:
+        self._items[path].setText(f"{state} — {path.name}")
+        self._items[path].setToolTip(f"{path}\n{state}")
+
+    @Slot(int)
+    def review_current_file(self, row: int = -1) -> None:
+        item = self.file_list.currentItem()
+        if item is None:
+            self.review.clear()
+            return
+        path = item.data(Qt.ItemDataRole.UserRole)
+        result = self.import_results.get(path)
+        if result is None:
+            self.review.clear(f"{path.name} — No import result yet.")
+        else:
+            self.review.show_result(result)
+
+    @Slot()
+    def import_selected_files(self) -> None:
+        if (
+            self._closing
+            or not self.selected_files
+            or self._worker is not None
+            or self._import_worker is not None
+        ):
+            return
+        paths = tuple(sorted(self.selected_files, key=str))
+        self.import_results.clear()
+        for path in paths:
+            self._set_file_state(path, "Pending")
+        self.review_current_file()
+        self._import_worker = ImportWorker(paths)
+        self._import_worker.signals.result.connect(self._import_result)
+        self._import_worker.signals.progress.connect(self._import_progress)
+        self._import_worker.signals.finished.connect(self._import_finished)
+        self.progress.setRange(0, len(paths))
+        self.progress.setValue(0)
+        self.progress.setFormat("%v / %m files")
+        self.progress.show()
+        self._set_busy(True)
+        self.statusBar().showMessage(f"Importing {len(paths)} file(s)…")
+        self._pool.start(self._import_worker)
+
+    @Slot(object)
+    def _import_result(self, result: ImportResult) -> None:
+        self.import_results[result.source_file] = result
+        self._set_file_state(result.source_file, self._result_status(result))
+        item = self.file_list.currentItem()
+        if item and item.data(Qt.ItemDataRole.UserRole) == result.source_file:
+            self.review.show_result(result)
+
+    @Slot(int, int)
+    def _import_progress(self, completed: int, total: int) -> None:
+        self.progress.setValue(completed)
+
+    @Slot(bool)
+    def _import_finished(self, cancelled: bool) -> None:
+        self._import_worker = None
+        for path in self.selected_files - self.import_results.keys():
+            self._set_file_state(path, "Not imported (cancelled)")
+        failures = sum(result.error is not None for result in self.import_results.values())
+        warnings = sum(
+            bool(result.session and result.session.warnings)
+            for result in self.import_results.values()
+        )
+        count = len(self.import_results) - failures
+        prefix = "Cancelled" if cancelled else "Import complete"
+        self.statusBar().showMessage(
+            f"{prefix}: {count} imported ({warnings} with warnings), {failures} failed; "
+            f"{len(self.selected_files) - len(self.import_results)} not imported."
+        )
+        self._set_busy(False)
+        self._finish_close()
+
+    @Slot()
+    def cancel_import(self) -> None:
+        if self._import_worker is not None:
+            self._import_worker.cancel()
+            self.cancel_button.setEnabled(False)
+            self.statusBar().showMessage(
+                "Cancelling after the current file; finished results are kept."
+            )
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        if self._worker is not None or self._import_worker is not None:
+            self._closing = True
+            self.cancel_import()
+            self.statusBar().showMessage("Finishing the current operation before closing…")
+            event.ignore()
+        else:
+            event.accept()
+
+    def _finish_close(self) -> None:
+        if self._closing:
+            QTimer.singleShot(0, self.close)
 
     def _set_busy(self, busy: bool) -> None:
         for widget in (
@@ -164,11 +328,20 @@ class MainWindow(QMainWindow):
             self.extensions,
             self.recursive,
         ):
-            widget.setEnabled(not busy)
+            widget.setEnabled(not busy and not self._closing)
+        self.import_button.setEnabled(not busy and not self._closing and bool(self.selected_files))
+        self.cancel_button.setEnabled(busy and self._import_worker is not None)
 
     @Slot()
     def clear_selection(self) -> None:
+        if self._worker is not None or self._import_worker is not None:
+            return
         self.selected_files.clear()
+        self.import_results.clear()
+        self._items.clear()
         self.file_list.clear()
         self.issue_list.clear()
+        self.review.clear()
+        self.progress.hide()
+        self._set_busy(False)
         self.statusBar().showMessage("0 candidate files selected")

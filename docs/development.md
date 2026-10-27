@@ -31,12 +31,28 @@ Use `ruff format .` to apply formatting. Tests exercise read-only discovery,
 case-insensitive filtering, recursion, deduplication, access failures, symlink cycles,
 missing-versus-zero values, CLI isolation from Qt, JSON logging, and GUI selection
 through mocked native dialogs plus actual background discovery and Qt signals.
+GUI import tests also cover mixed successes/warnings/failures, visible decoded values,
+raw review after unsupported-program failures, stale-result removal on re-import,
+background-thread execution, cancellation, and deferred close while a file is active.
 All fixtures are synthetic. The GUI suite selects Qt's offscreen platform before
 creating the application; this checks widgets and signals, not interactive desktop
 rendering or native file dialog behavior.
 
+`tests/test_medpc.py` adds synthetic Med-PC extraction/PRL decoding checks with
+hand-constructed outcomes, source line/hash checks, missing-versus-empty arrays,
+invalid choices, terminators, summary mismatches, and CLI status/logging checks.
+These tests have no dependency on ignored local research data. For a real local
+sample, run `trial-cruncher --inspect-medpc "data/your-session.txt"` and compare
+the returned choices and summary checks with the source; exit code 2 means the
+inspection completed with warnings. See [medpc.md](medpc.md) for interpretation rules
+and the recorded scope of local sample validation. Never copy research recordings
+into committed test fixtures without explicit approval.
+
 For a desktop smoke test, launch the app, select both files and a folder, change
 extensions and recursion, verify deduplication/messages, and clear the selection.
+Import supported Med-PC files, switch between all four review tabs, and include a
+malformed/unsupported file to verify other sessions still import. Check warnings and
+unavailable values, cancel a multi-file import, and re-import after a file changes.
 Confirm inputs remain unchanged. Current CI uses Ubuntu with Python 3.12 and 3.14;
 macOS and Windows interactive behavior requires separate verification. Linux Qt may
 require EGL/OpenGL libraries (`libegl1` and `libopengl0` on Ubuntu). Remote desktops

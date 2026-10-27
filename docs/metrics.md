@@ -1,6 +1,13 @@
 # Behavioral metric conventions
 
 No behavioral metrics are implemented or scientifically validated in this release.
+The [PRL normalizer](medpc.md) extracts task duration and choice outcomes and checks
+their counts against saved summaries. These are extraction/consistency checks, not
+a new metric suite. Stored `A[5]` is preserved as the source's `A[0] / Y` fraction;
+it must not be relabeled as an independently calculated percent correct. Head entries
+are not recorded, so head-entry and retrieval/response latency calculations are
+unavailable for the current protocol.
+
 The names below describe potential work, not universal definitions: percent correct,
 completed trials, rewards, response/retrieval latency, win-stay, lose-shift,
 perseverative/regressive errors, trials to criterion, acquisition/reversal performance,

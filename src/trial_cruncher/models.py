@@ -11,6 +11,7 @@ class Event:
     name: str
     timestamp_s: float | None
     raw_values: Mapping[str, Any] = field(default_factory=dict)
+    attributes: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,7 @@ class Session:
     trials: tuple[Trial, ...] = ()
     metadata: Mapping[str, Any] = field(default_factory=dict)
     warnings: tuple[str, ...] = ()
+    duration_s: float | None = None
 
 
 @dataclass(frozen=True)
