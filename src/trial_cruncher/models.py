@@ -3,7 +3,7 @@
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 
 @dataclass(frozen=True)
@@ -45,6 +45,13 @@ class MetricResult:
 
     name: str
     definition_version: str
-    value: float | None
+    value: int | float | None
     unit: str
     warnings: tuple[str, ...] = ()
+    reasons: tuple[str, ...] = ()
+
+    @property
+    def status(self) -> Literal["available", "available_with_warnings", "unavailable"]:
+        if self.value is None:
+            return "unavailable"
+        return "available_with_warnings" if self.warnings else "available"

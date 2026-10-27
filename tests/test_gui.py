@@ -370,3 +370,101 @@ def test_export_background_controls_failure_retry_and_close(app, write_export, m
         release.set()
         wait_until(app, lambda: window._export_worker is None)
         window.close()
+
+
+def test_session_metrics_display_withholding_zero_and_clear(app, write_export, monkeypatch):
+    import csv
+    import json
+
+    path = write_export()
+    mismatch = path.with_name("mismatch.txt")
+    mismatch.write_text(path.read_text().replace("2.00 2.00 4.00", "2.00 2.00 5.00"))
+    empty = path.with_name("empty.txt")
+    empty.write_text(
+        "File: synthetic\nMSN: PRL_BO\nS: 0\nSubject: 0007\nC:\nA:\n  0: 0 0 0\nB:\n  0: 0 0 0 0\n"
+    )
+    bad = path.with_name("bad.txt")
+    bad.write_text("Malformed synthetic input")
+    window = MainWindow()
+    window.show()
+    try:
+        window.add_paths([str(path), str(mismatch), str(empty), str(bad)])
+        wait_for_discovery(app, window)
+        window.import_button.click()
+        wait_until(app, lambda: window._import_worker is None)
+        choose_path(window, path)
+        window.review.tabs.setCurrentWidget(window.review.metric_page)
+        table = window.review.metric_table
+        assert table.rowCount() == 6
+        assert [table.item(row, 1).text() for row in range(6)] == ["4", "2", "2", "2", "2", "50.00"]
+        assert table.item(0, 3).text() == "Available"
+        assert "Valid decoded records: 4" in window.review.metric_diagnostics.toPlainText()
+        choose_path(window, mismatch)
+        assert [table.item(row, 1).text() for row in range(6)] == ["Unavailable"] * 6
+        assert all("A[2]" in table.item(row, 4).text() for row in range(6))
+        assert "Valid decoded records: 4" in window.review.metric_diagnostics.toPlainText()
+        choose_path(window, empty)
+        assert [table.item(row, 1).text() for row in range(6)] == ["0"] * 5 + ["Unavailable"]
+        assert "zero recorded choices" in table.item(5, 4).text()
+        choose_path(window, bad)
+        assert table.rowCount() == 0
+        assert window.review.metric_diagnostics.toPlainText() == "No calculated metrics available."
+        monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(path.parent))
+        window.export_button.click()
+        wait_until(app, lambda: window._export_worker is None)
+        (destination,) = path.parent.glob("trial-cruncher-export-*")
+        with (destination / "sessions.csv").open(newline="") as stream:
+            exported = {row["source_file"]: row for row in csv.DictReader(stream)}
+        assert len(exported) == 3
+        assert exported[str(path)]["prl.percent_correct"] == "50.0"
+        assert exported[str(empty)]["prl.choice_count"] == "0"
+        assert exported[str(empty)]["prl.percent_correct"] == ""
+        assert exported[str(mismatch)]["prl.choice_count"] == ""
+        assert (
+            json.loads(exported[str(mismatch)]["metric_results_json"])[0]["status"] == "unavailable"
+        )
+        choose_path(window, path)
+        assert table.rowCount() == 6
+        path.unlink()
+        window.import_button.click()
+        wait_until(app, lambda: window._import_worker is None)
+        choose_path(window, path)
+        assert table.rowCount() == 0  # No stale metrics after a failed re-read.
+        window.clear_button.click()
+        assert table.rowCount() == 0
+    finally:
+        window.close()
+
+
+def test_metric_calculation_is_in_worker_and_failure_isolated(app, write_export, monkeypatch):
+    from trial_cruncher import processing
+
+    path = write_export()
+    failed = path.with_name("a-failed.txt")
+    failed.write_bytes(path.read_bytes())
+    original = processing.calculate_prl_summary
+    calls = []
+
+    def calculate(session):
+        assert QThread.currentThread() != app.thread()
+        calls.append(session.source_file)
+        if session.source_file == failed:
+            raise RuntimeError("Synthetic metric calculation failure")
+        return original(session)
+
+    monkeypatch.setattr(processing, "calculate_prl_summary", calculate)
+    window = MainWindow()
+    try:
+        window.add_paths([str(path), str(failed)])
+        wait_for_discovery(app, window)
+        window.import_button.click()
+        wait_until(app, lambda: window._import_worker is None)
+        assert calls == [failed, path]
+        assert window.import_results[failed].error
+        assert window.import_results[failed].summary is None
+        choose_path(window, path)
+        assert window.review.metric_table.rowCount() == 6
+        assert window.import_results[path].summary.metrics[-1].value == 50
+        assert window.export_button.isEnabled()
+    finally:
+        window.close()

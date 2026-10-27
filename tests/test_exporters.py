@@ -11,6 +11,7 @@ import pytest
 from trial_cruncher import exporters
 from trial_cruncher.exporters import CSVExporter, export_import_results
 from trial_cruncher.models import Session
+from trial_cruncher.prl_metrics import METRIC_LABELS, calculate_prl_summary
 from trial_cruncher.processing import import_medpc_file
 from trial_cruncher.tables import CHOICE_COLUMNS, build_choice_table, build_session_table
 
@@ -27,7 +28,7 @@ def test_export_round_trip_provenance_missing_and_raw_fields(write_export, tmp_p
     result = import_medpc_file(path)
     # Exercise CSV quoting/newlines/Unicode without creating a second reader dialect.
     session = replace(result.session, warnings=(*result.session.warnings, 'comma, "quote"\nμ'))
-    result = replace(result, session=session)
+    result = replace(result, session=session, summary=calculate_prl_summary(session))
     destination = export_import_results({path: result}, [path], tmp_path)
     (row,) = read_csv(destination / "sessions.csv")
     choices = read_csv(destination / "choices.csv")
@@ -59,7 +60,25 @@ def test_export_round_trip_provenance_missing_and_raw_fields(write_export, tmp_p
     assert all(row["warnings_json"] == choices[0]["warnings_json"] for row in choices)
     assert choices[1]["source_line"] == str(session.events[1].raw_values["line_number"])
     assert manifest["tables"]["choices.csv"]["rows"] == 4
-    assert manifest["configuration"]["metrics"] == []
+    assert [metric["name"] for metric in manifest["configuration"]["metrics"]] == list(
+        METRIC_LABELS
+    )
+    assert manifest["configuration"]["metric_eligibility_policy"] == "strict-withholding-v1"
+    assert manifest["schema_version"] == row["schema_version"] == "2"
+    assert row["metric_definition_version"] == "1"
+    assert row["metric_policy"] == "strict-withholding-v1"
+    assert all(row[name] == "" for name in METRIC_LABELS)
+    exported_metrics = json.loads(row["metric_results_json"])
+    assert len(exported_metrics) == 6
+    for metric in exported_metrics:
+        assert metric["value"] is None and metric["status"] == "unavailable"
+        assert metric["definition_version"] == "1"
+        assert "invalid choice" in metric["reasons"][0]
+        assert metric["warnings"] == list(session.warnings)
+    diagnostics = json.loads(row["metric_diagnostics_json"])
+    assert diagnostics["observed_record_count"] == 4
+    assert diagnostics["decoded_choice_count"] == 3
+    assert diagnostics["invalid_record_count"] == 1
     assert manifest["dependency_versions"]["pandas"]
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before
 
@@ -255,3 +274,55 @@ def test_export_uses_reviewed_snapshot_even_after_source_changes(write_export, t
     )
     assert len(read_csv(destination / "choices.csv")) == 4
     assert (path.read_bytes(), path.stat().st_mtime_ns) == changed
+
+
+@pytest.mark.parametrize(
+    "choices,counts,outcomes,expected",
+    [
+        ("0.06 1.27", "0 2 2", "0 0 1 1", ["2", "0", "2", "1", "1", "0.0"]),
+        ("0.01 1.26 2.37", "1 2 3", "1 0 1 1", ["3", "1", "2", "2", "1", str(100 / 3)]),
+        (None, "0 0 0", "0 0 0 0", ["0", "0", "0", "0", "0", ""]),
+    ],
+)
+def test_metric_csv_zero_missing_and_precision(
+    write_export, tmp_path, choices, counts, outcomes, expected
+):
+    c = f"C:\n  0: {choices}\n" if choices is not None else "C:\n"
+    path = write_export(
+        f"File: synthetic\nMSN: PRL_BO\nSubject: 0007\nS: 10\n"
+        f"{c}A:\n  0: {counts}\n  5: 0.12345\nB:\n  0: {outcomes}\n"
+    )
+    result = import_medpc_file(path)
+    destination = export_import_results({path: result}, [path], tmp_path)
+    (row,) = read_csv(destination / "sessions.csv")
+    assert [row[name] for name in METRIC_LABELS] == expected
+    serialized = json.loads(row["metric_results_json"])
+    for metric, original in zip(serialized, result.summary.metrics, strict=True):
+        assert metric["value"] == original.value
+        assert metric["status"] == original.status
+        assert metric["reasons"] == list(original.reasons)
+        assert metric["unit"] == original.unit
+    assert json.loads(row["metadata_json"])["raw_medpc"]["arrays"]["A"]["5"] == "0.12345"
+
+
+def test_csv_mismatch_withholds_metrics_but_preserves_choice_rows(write_export, tmp_path):
+    path = write_export()
+    path.write_text(path.read_text().replace("2.00 2.00 4.00", "2.00 2.00 5.00"))
+    result = import_medpc_file(path)
+    destination = export_import_results({path: result}, [path], tmp_path)
+    (row,) = read_csv(destination / "sessions.csv")
+    assert all(row[name] == "" for name in METRIC_LABELS)
+    assert all(
+        "Saved count mismatch: A[2]" in metric["reasons"][0]
+        for metric in json.loads(row["metric_results_json"])
+    )
+    assert len(read_csv(destination / "choices.csv")) == 4
+    assert json.loads(row["metadata_json"])["raw_medpc"]["arrays"]["A"]["2"] == "5.00"
+
+
+def test_export_requires_calculated_summary_before_writing(write_export, tmp_path):
+    path = write_export()
+    result = replace(import_medpc_file(path), summary=None)
+    with pytest.raises(ValueError, match="re-import"):
+        export_import_results({path: result}, [path], tmp_path)
+    assert not list(tmp_path.glob("trial-cruncher-export-*"))

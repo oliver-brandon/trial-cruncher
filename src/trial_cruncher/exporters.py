@@ -14,6 +14,12 @@ from typing import Protocol
 import pandas as pd
 
 from trial_cruncher import __version__
+from trial_cruncher.prl_metrics import (
+    DEFINITION_SET,
+    DEFINITION_VERSION,
+    ELIGIBILITY_POLICY,
+    METRIC_LABELS,
+)
 from trial_cruncher.processing import ImportResult
 from trial_cruncher.tables import (
     SCHEMA_VERSION,
@@ -72,12 +78,16 @@ def export_import_results(
     """
     paths = tuple(sorted(set(selected_paths), key=str))
     sessions = []
+    summaries = {}
     inputs = []
     for path in paths:
         result = results.get(path)
         session = result.session if result and not result.error else None
         if session is not None:
+            if result.summary is None:
+                raise ValueError("Session metrics are missing; re-import before exporting.")
             sessions.append(session)
+            summaries[session.source_file] = result.summary
         raw = result.raw if result else None
         inputs.append(
             {
@@ -95,7 +105,7 @@ def export_import_results(
     if not sessions:
         raise ValueError("Import at least one supported session before exporting.")
     tables = {
-        "sessions.csv": build_session_table(sessions),
+        "sessions.csv": build_session_table(sessions, summaries),
         "choices.csv": build_choice_table(sessions),
     }
     manifest = {
@@ -113,7 +123,18 @@ def export_import_results(
             "session_filter": "Successful imports, including sessions with warnings",
             "choice_filter": "All normalized choice events, including invalid decoded choices",
             "order": "Source path, then normalizer event order (Med-PC C index)",
-            "metrics": [],
+            "metrics": [
+                {
+                    "name": name,
+                    "definition_version": DEFINITION_VERSION,
+                    "unit": "%" if name == "prl.percent_correct" else "count",
+                }
+                for name in METRIC_LABELS
+            ],
+            "metric_definition_set": DEFINITION_SET,
+            "metric_definition_version": DEFINITION_VERSION,
+            "metric_eligibility_policy": ELIGIBILITY_POLICY,
+            "percent_correct_denominator": "Recorded choices; no configured target substitution",
             "task_configuration": "No overrides; raw acquisition fields are in metadata_json",
         },
         "serialization": {

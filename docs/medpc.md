@@ -34,7 +34,9 @@ an inspection command, not a CSV/Excel export pipeline.
 
 For GUI review, launch `trial-cruncher --gui`, add files or a folder, and click
 **Import Med-PC**. Click a file to browse Session details, Decoded choices, Warnings
-and checks, and Source text. The same reader and normalizer drive both interfaces.
+and checks, and Source text. The Session metrics tab shows the six owner-approved
+PRL summaries, with strict withholding and diagnostic counts; see
+[their definitions](prl-session-metrics.md). The same reader and normalizer drive both interfaces.
 The choice table displays unavailable fields explicitly and preserves source array
 indices/order. Failed files have no decoded choices; if extraction succeeded before
 normalization failed, their original headers and source remain available.
@@ -175,6 +177,8 @@ unsupported programs, and CLI error behavior. This is software verification and 
 consistency checking, not general scientific validation of Med-PC or PRL analysis.
 An actual early-stopped/timed-out recording is still useful additional evidence.
 
-No behavioral metric suite, batch analysis runner, Excel export, general Med-PC
-dialect support, or MATLAB reader is implemented here. Session/choice CSV tables
-export existing normalized observations without adding scientific calculations.
+Six PRL session-summary metrics are implemented separately from extraction and
+normalization. Additional metric families, configurable batch analysis, Excel export,
+general Med-PC dialect support, and a MATLAB reader remain future work.
+Session CSV schema 2 includes the six calculated values with versioned definitions,
+strict withholding reasons, and diagnostics; raw observations remain unchanged.

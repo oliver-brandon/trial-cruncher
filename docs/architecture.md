@@ -9,8 +9,8 @@ Selected paths → discovery → format detection/readers → normalization
 
 Discovery, selection, Med-PC text extraction, and normalization of two confirmed PRL
 programs are implemented, along with session/choice table builders and CSV export.
-The metric protocol remains a contract only; there are no behavioral metric algorithms
-or batch analysis runners. The Med-PC reader is exposed through Python, `--inspect-medpc`, and GUI
+Six owner-approved PRL session-summary calculations are implemented with strict
+withholding. Additional metric families and configurable batch analysis remain future work. The Med-PC reader is exposed through Python, `--inspect-medpc`, and GUI
 import review with per-file results.
 
 ## Current components
@@ -41,14 +41,20 @@ line provenance. `normalization.py` defines the canonical conversion contract;
 data, and reports invalid choices and saved-count inconsistencies. See
 [the Med-PC specification](medpc.md) for supported encodings and missing-data policy.
 `paradigms.py` carries a named, versioned
-configuration without assuming automatic task identification. `metrics.py` consumes
-canonical sessions and explicit task configuration. `tables.py` builds versioned
+configuration without assuming automatic task identification. `metrics.py` defines
+the extensible metric contract. `prl_metrics.py` implements the six approved PRL
+summaries under a fixed, versioned eligibility policy, without configurable overrides.
+It consumes canonical choices and structured source/normalizer facts, returning
+`MetricResult` values and separate diagnostics. Values never replace raw observations;
+missing values carry reasons and availability status. `tables.py` builds versioned
 session and choice pandas tables with object dtype to preserve optional integers.
 `exporters.py` implements the exporter protocol with an exclusive-create CSV writer
 and orchestrates new export bundles with a manifest. See [CSV export](csv-export.md).
 
 `processing.py` provides `ImportResult` and `import_medpc_file()`, independent of Qt.
-Expected read/normalization failures become explicit errors; raw extraction survives
+It calculates the PRL summary after normalization and retains it in `ImportResult`,
+so GUI/export use the same result. Expected read/normalization/calculation failures
+become explicit errors; raw extraction survives
 an unsupported program so its headers and source text can still be inspected.
 
 `gui/` runs discovery, imports, and export in separate `QRunnable` jobs. The import worker
@@ -76,7 +82,7 @@ in the window. This skeleton does not yet persist logs to disk.
 
 ## Next components and extension boundaries
 
-Extend `processing.py` when batch metric analysis is implemented. Keep orchestration
+Extend `processing.py` when additional configurable metric analysis is implemented. Keep orchestration
 independent of Qt and preserve per-input success/failure records. Do not represent a
 failed file as a successful empty dataset. GUI imports currently process files serially
 in one worker; parallel analysis and persistent result caching are not implemented.
@@ -87,8 +93,10 @@ lineage listing every contributing source. Do not fabricate trials for non-trial
 
 The current export manifest records software versions, source status/hash/warnings,
 scope and serialization rules. Per-session metadata retains reader/normalizer versions,
-raw acquisition fields, and time units/origin. Future metric exports must additionally
-record versioned metric definitions and complete analysis configuration. Excel export
+raw acquisition fields, and time units/origin. Schema 2 adds the six calculated
+session columns and their status/reasons/diagnostics; the manifest records metric
+definition IDs/versions and the strict withholding policy. Future metrics must also
+record their definitions and complete analysis configuration. Excel export
 is not implemented. Both future formats and row levels must retain missing-versus-zero
 distinctions and input/overwrite protection.
 

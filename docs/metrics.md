@@ -1,16 +1,21 @@
 # Behavioral metric conventions
 
-No behavioral metrics are implemented or scientifically validated in this release.
-The [PRL normalizer](medpc.md) extracts task duration and choice outcomes and checks
-their counts against saved summaries. These are extraction/consistency checks, not
-a new metric suite. Stored `A[5]` is preserved as the source's `A[0] / Y` fraction;
-it must not be relabeled as an independently calculated percent correct. Head entries
-are not recorded, so head-entry and retrieval/response latency calculations are
-unavailable for the current protocol.
+Six owner-approved PRL session-summary metrics are implemented: recorded choices,
+correct/incorrect choices, rewarded/unrewarded choices, and percent correct. Their
+versioned formulas, strict withholding rules, and hand-calculated acceptance cases
+are specified in [PRL session-summary metrics](prl-session-metrics.md). The GUI
+calculates them during import; session CSV exports retain values and diagnostics.
 
-The names below describe potential work, not universal definitions: percent correct,
-completed trials, rewards, response/retrieval latency, win-stay, lose-shift,
-perseverative/regressive errors, trials to criterion, acquisition/reversal performance,
+The [PRL normalizer](medpc.md) extracts task duration and choice outcomes and checks
+their counts against saved summaries. Calculated metrics remain separate from these
+source observations. Stored `A[5]` retains its `A[0] / Y` meaning and is not the new
+percent-correct metric. Head entries are not recorded, so head-entry and latency
+calculations remain unavailable. Owner approval and software tests do not establish
+general scientific validity; actual partial-session validation remains outstanding.
+
+Beyond the six implemented PRL definitions, the names below describe possible
+future work, not universal definitions: completed trials, response/retrieval latency,
+win-stay, lose-shift, perseverative/regressive errors, trials to criterion, acquisition/reversal performance,
 progressive ratio breakpoint, presses/rates, and session duration.
 
 Each metric belongs to a documented paradigm. A name alone is insufficient: for

@@ -38,6 +38,11 @@ CSV export tests cover provenance/JSON round trips, missing versus zero/false,
 empty and invalid choices, excluded inputs, no-overwrite behavior, partial-write
 cleanup, GUI background export, failure/retry, and deferred close. See
 [csv-export.md](csv-export.md) for the versioned schema and limits.
+`tests/test_prl_metrics.py` covers the approved hand-calculated examples, strict
+withholding, saved-count disagreements, missing versus empty choices, independent
+unavailability reasons, and warning-only cases. GUI/CSV integration checks cover
+metric display, full export precision, per-result reasons/status, background
+calculation, failed-file isolation, and clearing stale summaries on re-import.
 All fixtures are synthetic. The GUI suite selects Qt's offscreen platform before
 creating the application; this checks widgets and signals, not interactive desktop
 rendering or native file dialog behavior.
@@ -80,8 +85,8 @@ discarding observations. Never commit real research files or secrets; ignored
 Dependencies use compatible minimum versions rather than a lockfile in this initial
 foundation. For reproducible research deployments, record the actual resolved
 environment and all analysis configuration. Current CSV manifests record runtime
-versions and import/export scope; future metric configuration must be added when
-implemented. Do not describe a passing development build as scientific validation.
+versions, import/export scope, and the PRL definition set/version and strict
+eligibility policy. Additional metric configuration must be recorded when implemented. Do not describe a passing development build as scientific validation.
 
 No license or author identity has been assigned. Publishing and licensing decisions
 remain with the repository owner.

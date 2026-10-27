@@ -1,4 +1,4 @@
-# Session and choice CSV export (schema 1)
+# Session and choice CSV export (schema 2)
 
 ## GUI workflow
 
@@ -19,8 +19,10 @@ export to finish; an active export cannot be cancelled halfway through.
 
 Exports use the **reviewed in-memory snapshot**. They do not re-read inputs or claim
 the recorded hash describes a file subsequently changed on disk. Re-import first
-when a newer source version is wanted. Export does not calculate metrics or infer
-trial boundaries, trial/session IDs, or task parameters.
+when a newer source version is wanted. PRL metrics are calculated during import;
+export preserves those results without recalculating or inferring trial boundaries,
+trial/session IDs, or task parameters. Re-import is required for an in-memory result
+without a calculated summary.
 
 ## Schemas and provenance
 
@@ -48,6 +50,18 @@ Additional `sessions.csv` columns:
 | `head_entries_recorded`, `latency_available` | Availability flags; false does not mean measured zero |
 | `summary_checks_json` | Saved-count comparisons: true, false, or null (unavailable) |
 | `metadata_json` | Complete session metadata, including raw Med-PC headers, scalars, arrays, source text, line numbers, warnings, and versions |
+| `prl.choice_count`, `prl.correct_choice_count`, `prl.incorrect_choice_count` | Calculated recorded/correct/incorrect choice counts |
+| `prl.rewarded_choice_count`, `prl.unrewarded_choice_count`, `prl.percent_correct` | Calculated outcome counts and percent correct using recorded choices |
+| `metric_definition_set`, `metric_definition_version`, `metric_policy` | `prl-session-summary`, `1`, and `strict-withholding-v1` |
+| `metric_results_json` | All six results: stable name, definition version, numeric value or null, unit, availability status, reasons, and warnings |
+| `metric_diagnostics_json` | C presence, terminator observation, observed/decoded/invalid record counts, post-terminator entries, index gaps, and saved-count checks |
+
+The six calculated columns follow [the approved definitions](prl-session-metrics.md).
+Strict withholding leaves all six blank for incomplete/invalid C or a saved-count
+mismatch; raw choices and diagnostic counts are retained. Explicit empty eligible C
+has five zero counts and a blank percentage, while missing C gives six blank values.
+Availability reasons stay in `metric_results_json`. GUI percentage rounding does not
+affect CSV precision. Saved `A[5]` remains raw and separate.
 
 Additional `choices.csv` columns:
 
@@ -88,8 +102,11 @@ The files contain original paths, identifiers, and source text: review before sh
 The manifest records UTC export time, application/Python/dependency versions, row
 counts and columns, input statuses/errors/hashes/warnings, scope/order/filtering
 rules, and serialization conventions. Reader/normalizer versions and acquisition
-configuration are retained per session. There are no metric definitions or analysis
-configuration overrides in this milestone; the manifest records an empty metric list.
+configuration are retained per session. The manifest lists all six metric IDs, units,
+definition version, definition set, strict eligibility policy, and the recorded-choice
+percentage denominator. There are no user-configurable policy overrides. Schema 2
+extends schema 1 with the calculated session columns and metric metadata; choice
+columns are unchanged apart from their bundle schema-version value.
 
 ## Overwrite and failure guarantees
 

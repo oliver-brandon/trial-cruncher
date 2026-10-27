@@ -1,7 +1,8 @@
-"""Versioned session and choice tables; no behavioral metrics are calculated."""
+"""Versioned tables of imported observations and previously calculated metrics."""
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import asdict
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -10,8 +11,9 @@ import pandas as pd
 
 from trial_cruncher import __version__
 from trial_cruncher.models import Session
+from trial_cruncher.prl_metrics import METRIC_LABELS, PRLSessionSummary
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 PROVENANCE_COLUMNS = (
     "schema_version",
     "application_version",
@@ -27,12 +29,23 @@ PROVENANCE_COLUMNS = (
     "time_unit",
     "warnings_json",
 )
-SESSION_COLUMNS = PROVENANCE_COLUMNS + (
-    "duration_s",
-    "head_entries_recorded",
-    "latency_available",
-    "summary_checks_json",
-    "metadata_json",
+SESSION_COLUMNS = (
+    PROVENANCE_COLUMNS
+    + (
+        "duration_s",
+        "head_entries_recorded",
+        "latency_available",
+        "summary_checks_json",
+        "metadata_json",
+    )
+    + tuple(METRIC_LABELS)
+    + (
+        "metric_definition_set",
+        "metric_definition_version",
+        "metric_policy",
+        "metric_results_json",
+        "metric_diagnostics_json",
+    )
 )
 CHOICE_COLUMNS = PROVENANCE_COLUMNS + (
     "event_name",
@@ -80,9 +93,13 @@ def _provenance(session: Session) -> dict[str, Any]:
     }
 
 
-def build_session_table(sessions: Sequence[Session]) -> pd.DataFrame:
+def build_session_table(
+    sessions: Sequence[Session], summaries: Mapping[Path, PRLSessionSummary] | None = None
+) -> pd.DataFrame:
     rows = []
     for session in sessions:
+        summary = summaries.get(session.source_file) if summaries is not None else None
+        metric_values = {metric.name: metric.value for metric in summary.metrics} if summary else {}
         rows.append(
             {
                 **_provenance(session),
@@ -91,6 +108,18 @@ def build_session_table(sessions: Sequence[Session]) -> pd.DataFrame:
                 "latency_available": session.metadata.get("latency_available"),
                 "summary_checks_json": json_text(session.metadata.get("summary_checks")),
                 "metadata_json": json_text(session.metadata),
+                **metric_values,
+                "metric_definition_set": summary.definition_set if summary else None,
+                "metric_definition_version": summary.definition_version if summary else None,
+                "metric_policy": summary.eligibility_policy if summary else None,
+                "metric_results_json": json_text(
+                    [{**asdict(metric), "status": metric.status} for metric in summary.metrics]
+                )
+                if summary
+                else None,
+                "metric_diagnostics_json": json_text(asdict(summary.diagnostics))
+                if summary
+                else None,
             }
         )
     # Object dtype prevents optional integer indices/codes from becoming floats.

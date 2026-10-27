@@ -7,6 +7,7 @@ from pathlib import Path
 from trial_cruncher.medpc import MedPCData, MedPCReader
 from trial_cruncher.models import Session
 from trial_cruncher.prl import PRLNormalizer
+from trial_cruncher.prl_metrics import PRLSessionSummary, calculate_prl_summary
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ class ImportResult:
     raw: MedPCData | None = None
     session: Session | None = None
     error: str | None = None
+    summary: PRLSessionSummary | None = None
 
 
 def import_medpc_file(path: Path) -> ImportResult:
@@ -25,7 +27,8 @@ def import_medpc_file(path: Path) -> ImportResult:
     try:
         raw = MedPCReader().read(path)
         (session,) = PRLNormalizer().normalize(raw, path)
+        summary = calculate_prl_summary(session)
     except (ValueError, OSError) as exc:
         logger.warning(str(exc), extra={"path": path, "operation": "import_medpc"})
         return ImportResult(path, raw=raw, error=str(exc))
-    return ImportResult(path, raw=raw, session=session)
+    return ImportResult(path, raw=raw, session=session, summary=summary)

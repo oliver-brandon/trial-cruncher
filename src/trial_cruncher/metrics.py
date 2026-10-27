@@ -1,4 +1,4 @@
-"""Task-specific metric interface; no scientific calculations implemented yet."""
+"""Task-specific metric interface; approved PRL summaries live in prl_metrics.py."""
 
 from typing import Protocol
 
