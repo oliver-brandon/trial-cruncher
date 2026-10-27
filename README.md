@@ -22,10 +22,13 @@ not need to have trials.
   consistency checks. Use the GUI, `--inspect-medpc FILE`, or the Python API.
 - Background imports with progress, per-file failure isolation, and cancellation
   after the current file. Completed results remain available for review.
+- Background CSV export to new folders with source metadata, warnings, missing values,
+  and a manifest accounting for failed/unimported inputs.
 - Synthetic unit tests, offscreen GUI integration tests, Ruff, and GitHub Actions.
 
 **Med-PC import review is available in the GUI, CLI, and Python API.**
-No behavioral metric suite or CSV/Excel exports are implemented.
+GUI CSV export of sessions and choices is available with provenance and an export
+manifest. No behavioral metric suite or Excel exporter is implemented.
 Extensions identify candidates only. Other formats/programs require representative
 example files and documented schemas. Synthetic tests verify software behavior, not
 scientific validity. See [Med-PC support and confirmed rules](docs/medpc.md).
@@ -41,7 +44,8 @@ to two confirmed PRL programs; it does not impose their conventions on other tas
 
 The eventual workflow is **Import Files → Select Paradigm → Configure Metrics →
 Process Batch → Review Results → Export Tables**. The desktop currently supports file
-selection and Med-PC import review; task configuration, metrics, and export are future work.
+selection, Med-PC import review, and session/choice CSV export; task configuration
+and metrics are future work.
 
 ## Installation and launch
 
@@ -87,6 +91,14 @@ results and leaves the remaining files unimported. Re-importing re-reads all lis
 files and replaces their previous results; **Clear selection** clears the in-memory
 review. Closing during import cancels remaining files and waits for the current file.
 
+Click **Export CSV…** to export all successful imports, including warnings, then
+choose a parent folder. A new uniquely named folder holds `sessions.csv`,
+`choices.csv`, and `manifest.json`; the saved location appears above the file list.
+Existing files are never overwritten. Failed/unimported files are recorded in the
+manifest. Blank fields mean missing observations, while zero and false stay explicit.
+Exports use the reviewed snapshot; re-import first to reflect source changes. See
+[CSV schemas, provenance, and limitations](docs/csv-export.md).
+
 Discovery never writes to inputs. It does not check content validity or readability
 beyond filesystem metadata. Full resolved paths are displayed and may appear in logs;
 review logs before sharing them outside the laboratory.
@@ -119,14 +131,15 @@ src/trial_cruncher/
   processing.py            GUI-independent single-file import results/errors
   paradigms.py              Explicit task configuration
   metrics.py               Task-specific calculation contract
-  exporters.py             Table export contract
+  tables.py                Versioned session/choice table schemas
+  exporters.py             Exclusive-create CSV writer and export bundles
   gui/                     PySide6 review panels, choice table, background workers
 tests/                     Synthetic core and offscreen GUI checks
 docs/                      Architecture, metric standards, development
 .github/workflows/ci.yml    Python 3.12/3.14 lint and test jobs
 ```
 
-Batch analysis and output table generation are documented next-stage components,
+Batch metric analysis and aggregate tables are documented next-stage components,
 not empty executable stages. See [architecture](docs/architecture.md) and
 [metric conventions](docs/metrics.md).
 
@@ -134,7 +147,7 @@ not empty executable stages. See [architecture](docs/architecture.md) and
 
 1. Validate further session variants, including an actual early-stopped or timed-out recording.
 2. Agree on independently checkable PRL metric definitions before calculating metrics.
-3. Add batch metric calculation, output table builders, and export manifests.
-4. Extend the GUI with task/configuration controls and export.
+3. Add batch metric calculation and trial/subject/group tables.
+4. Extend the GUI with task/configuration controls and Excel export.
 
 No software license has been selected. No author identity is declared.

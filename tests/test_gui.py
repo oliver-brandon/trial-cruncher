@@ -263,3 +263,110 @@ def test_unexpected_worker_failure_keeps_selection_and_restores_controls(
         assert warnings and "Could not discover" in warnings[0]
     finally:
         window.close()
+
+
+def test_gui_csv_export_all_results_and_dialog_cancel(app, write_export, monkeypatch):
+    import csv
+    import json
+
+    path = write_export()
+    bad = path.with_name("bad.txt")
+    bad.write_text("malformed export")
+    before = path.read_bytes(), path.stat().st_mtime_ns
+    window = MainWindow()
+    try:
+        assert not window.export_button.isEnabled()
+        window.add_paths([str(path), str(bad)])
+        wait_for_discovery(app, window)
+        assert not window.export_button.isEnabled()
+        window.import_button.click()
+        assert not window.export_button.isEnabled()
+        wait_until(app, lambda: window._import_worker is None)
+        assert window.export_button.isEnabled()
+        monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: "")
+        window.export_button.click()
+        assert window._export_worker is None
+        assert not list(path.parent.glob("trial-cruncher-export-*"))
+        monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(path.parent))
+        choose_path(window, bad)  # Export scope is all successes, not the highlighted file.
+        window.export_button.click()
+        wait_until(app, lambda: window._export_worker is None)
+        (destination,) = path.parent.glob("trial-cruncher-export-*")
+        with (destination / "sessions.csv").open(newline="") as stream:
+            rows = list(csv.DictReader(stream))
+        assert len(rows) == 1 and rows[0]["subject_id"] == "0007"
+        manifest = json.loads((destination / "manifest.json").read_text())
+        assert [entry["status"] for entry in manifest["inputs"]] == ["failed", "exported"]
+        assert str(destination) in window.export_status.text()
+        assert window.statusBar().currentMessage() == "CSV export complete"
+        assert (path.read_bytes(), path.stat().st_mtime_ns) == before
+        window.clear_button.click()
+        assert not window.export_button.isEnabled()
+    finally:
+        window.close()
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_export_background_controls_failure_retry_and_close(app, write_export, monkeypatch, fail):
+    from trial_cruncher.exporters import export_import_results
+    from trial_cruncher.gui import export_worker as export_module
+
+    path = write_export()
+    entered, release = ThreadEvent(), ThreadEvent()
+    warnings = []
+
+    def controlled_export(*args):
+        assert QThread.currentThread() != app.thread()
+        entered.set()
+        assert release.wait(5)
+        if fail:
+            raise OSError("Synthetic export failure")
+        return export_import_results(*args)
+
+    monkeypatch.setattr(export_module, "export_import_results", controlled_export)
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(path.parent))
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: warnings.append(args[2]))
+    window = MainWindow()
+    window.show()
+    try:
+        window.add_paths([str(path)])
+        wait_for_discovery(app, window)
+        window.import_button.click()
+        wait_until(app, lambda: window._import_worker is None)
+        window.export_button.click()
+        wait_until(app, entered.is_set)
+        assert not window.export_button.isEnabled()
+        assert not window.import_button.isEnabled()
+        assert not window.clear_button.isEnabled()
+        assert not window.add_files_button.isEnabled()
+        assert not window.cancel_button.isEnabled()
+        # Programmatic calls are guarded as well as buttons.
+        window.clear_selection()
+        window.import_selected_files()
+        window.add_paths([str(path)])
+        assert window.selected_files == {path}
+        assert window._import_worker is window._worker is None
+        choose_path(window, path)
+        assert window.review.choice_model.rowCount() == 4
+        if not fail:
+            window.close()
+            assert window.isVisible()
+        release.set()
+        wait_until(app, lambda: window._export_worker is None)
+        if fail:
+            assert warnings and "Synthetic export failure" in warnings[0]
+            assert window.export_button.isEnabled()
+            assert window.review.choice_model.rowCount() == 4
+            assert not list(path.parent.glob("trial-cruncher-export-*"))
+            monkeypatch.setattr(export_module, "export_import_results", export_import_results)
+            window.export_button.click()
+            wait_until(app, lambda: window._export_worker is None)
+            assert window.statusBar().currentMessage() == "CSV export complete"
+        else:
+            wait_until(app, lambda: not window.isVisible())
+            (destination,) = path.parent.glob("trial-cruncher-export-*")
+            assert (destination / "manifest.json").exists()
+    finally:
+        release.set()
+        wait_until(app, lambda: window._export_worker is None)
+        window.close()

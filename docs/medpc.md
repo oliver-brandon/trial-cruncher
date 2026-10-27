@@ -41,8 +41,11 @@ normalization failed, their original headers and source remain available.
 
 Imports run in the background with per-file progress. Cancel stops before the next
 file, retaining completed results. Re-importing replaces prior results, including
-when a file has changed or become unreadable. This review is read-only and does not
-save/export results. Closing waits for the active file and cancels remaining imports.
+when a file has changed or become unreadable. Source review is read-only.
+**Export CSV…** saves the reviewed sessions and choices to a fresh folder, preserving
+raw metadata, warnings, and missing values; see [CSV export](csv-export.md).
+Closing waits for the active file and cancels remaining imports; during export it
+waits for the export to finish.
 
 Programmatic use keeps raw extraction independent of PRL interpretation:
 
@@ -172,5 +175,6 @@ unsupported programs, and CLI error behavior. This is software verification and 
 consistency checking, not general scientific validation of Med-PC or PRL analysis.
 An actual early-stopped/timed-out recording is still useful additional evidence.
 
-No behavioral metric suite, batch analysis runner, output table generation,
-CSV/Excel export, general Med-PC dialect support, or MATLAB reader is implemented here.
+No behavioral metric suite, batch analysis runner, Excel export, general Med-PC
+dialect support, or MATLAB reader is implemented here. Session/choice CSV tables
+export existing normalized observations without adding scientific calculations.

@@ -34,6 +34,10 @@ through mocked native dialogs plus actual background discovery and Qt signals.
 GUI import tests also cover mixed successes/warnings/failures, visible decoded values,
 raw review after unsupported-program failures, stale-result removal on re-import,
 background-thread execution, cancellation, and deferred close while a file is active.
+CSV export tests cover provenance/JSON round trips, missing versus zero/false,
+empty and invalid choices, excluded inputs, no-overwrite behavior, partial-write
+cleanup, GUI background export, failure/retry, and deferred close. See
+[csv-export.md](csv-export.md) for the versioned schema and limits.
 All fixtures are synthetic. The GUI suite selects Qt's offscreen platform before
 creating the application; this checks widgets and signals, not interactive desktop
 rendering or native file dialog behavior.
@@ -53,7 +57,9 @@ extensions and recursion, verify deduplication/messages, and clear the selection
 Import supported Med-PC files, switch between all four review tabs, and include a
 malformed/unsupported file to verify other sessions still import. Check warnings and
 unavailable values, cancel a multi-file import, and re-import after a file changes.
-Confirm inputs remain unchanged. Current CI uses Ubuntu with Python 3.12 and 3.14;
+Export CSV twice to the same parent folder, verify distinct folders and all three
+files, inspect warnings and blank values, and test cancelling the folder picker.
+Confirm inputs and the first export remain unchanged. Current CI uses Ubuntu with Python 3.12 and 3.14;
 macOS and Windows interactive behavior requires separate verification. Linux Qt may
 require EGL/OpenGL libraries (`libegl1` and `libopengl0` on Ubuntu). Remote desktops
 may need additional platform-specific Qt/X11 libraries.
@@ -73,8 +79,9 @@ discarding observations. Never commit real research files or secrets; ignored
 
 Dependencies use compatible minimum versions rather than a lockfile in this initial
 foundation. For reproducible research deployments, record the actual resolved
-environment and all analysis configuration; reproducible export manifests are a
-future milestone. Do not describe a passing development build as scientific validation.
+environment and all analysis configuration. Current CSV manifests record runtime
+versions and import/export scope; future metric configuration must be added when
+implemented. Do not describe a passing development build as scientific validation.
 
 No license or author identity has been assigned. Publishing and licensing decisions
 remain with the repository owner.

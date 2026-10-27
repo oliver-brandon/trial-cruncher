@@ -1,4 +1,4 @@
-"""File selection and read-only Med-PC import review."""
+"""File selection, read-only Med-PC review, and CSV export."""
 
 import logging
 from pathlib import Path
@@ -28,6 +28,7 @@ from trial_cruncher.discovery import (
     discover_files,
     normalize_extensions,
 )
+from trial_cruncher.gui.export_worker import ExportWorker
 from trial_cruncher.gui.import_worker import ImportWorker
 from trial_cruncher.gui.review import ReviewPanel
 from trial_cruncher.processing import ImportResult
@@ -71,6 +72,7 @@ class MainWindow(QMainWindow):
         self.selected_files: set[Path] = set()
         self._worker: DiscoveryWorker | None = None
         self._import_worker: ImportWorker | None = None
+        self._export_worker: ExportWorker | None = None
         self._closing = False
         self.import_results: dict[Path, ImportResult] = {}
         self._items: dict[Path, QListWidgetItem] = {}
@@ -104,16 +106,29 @@ class MainWindow(QMainWindow):
         self.import_button.setToolTip("Import or re-read all files in the list")
         self.cancel_button = QPushButton("Cancel after current file")
         self.cancel_button.setEnabled(False)
+        self.export_button = QPushButton("Export CSV…")
+        self.export_button.setToolTip(
+            "Export all successfully imported sessions and choices to a new folder; "
+            "failed and unimported files are listed in the manifest"
+        )
         for button in (
             self.add_files_button,
             self.add_folder_button,
             self.clear_button,
             self.import_button,
             self.cancel_button,
+            self.export_button,
         ):
             buttons.addWidget(button)
         buttons.addStretch()
         layout.addLayout(buttons)
+        self.export_status = QLabel(
+            "CSV export includes all successfully imported files in the list."
+        )
+        self.export_status.setWordWrap(True)
+        self.export_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.export_status.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self.export_status)
         self.file_list = QListWidget()
         self.file_list.setAccessibleName("Files and import status")
         self.review = ReviewPanel()
@@ -139,6 +154,7 @@ class MainWindow(QMainWindow):
         self.clear_button.clicked.connect(self.clear_selection)
         self.import_button.clicked.connect(self.import_selected_files)
         self.cancel_button.clicked.connect(self.cancel_import)
+        self.export_button.clicked.connect(self.export_csv)
         self.file_list.currentRowChanged.connect(self.review_current_file)
         self._set_busy(False)
 
@@ -157,7 +173,7 @@ class MainWindow(QMainWindow):
             self.add_paths([path])
 
     def add_paths(self, paths: list[str]) -> None:
-        if self._closing or self._worker is not None or self._import_worker is not None:
+        if self._closing or self._is_working():
             return
         try:
             extensions = normalize_extensions(self.extensions.text().split(","))
@@ -248,6 +264,7 @@ class MainWindow(QMainWindow):
             or not self.selected_files
             or self._worker is not None
             or self._import_worker is not None
+            or self._export_worker is not None
         ):
             return
         paths = tuple(sorted(self.selected_files, key=str))
@@ -307,8 +324,66 @@ class MainWindow(QMainWindow):
                 "Cancelling after the current file; finished results are kept."
             )
 
+    def _is_working(self) -> bool:
+        return any(
+            worker is not None
+            for worker in (self._worker, self._import_worker, self._export_worker)
+        )
+
+    @Slot()
+    def export_csv(self) -> None:
+        if self._closing or self._is_working():
+            return
+        count = sum(
+            result.session is not None and not result.error
+            for result in self.import_results.values()
+        )
+        if not count:
+            return
+        parent = QFileDialog.getExistingDirectory(
+            self, "Choose parent folder — a new CSV export folder will be created"
+        )
+        if not parent:
+            return
+        self._export_worker = ExportWorker(
+            self.import_results, tuple(self.selected_files), Path(parent)
+        )
+        self._export_worker.signals.finished.connect(self._export_finished)
+        self._export_worker.signals.failed.connect(self._export_failed)
+        self._set_busy(True)
+        self.progress.setRange(0, 0)
+        self.progress.show()
+        self.export_status.setText(
+            f"Exporting {count} session(s); {len(self.selected_files) - count} failed or "
+            "unimported file(s) will be recorded in the manifest."
+        )
+        self.statusBar().showMessage("Exporting sessions and choices…")
+        self._pool.start(self._export_worker)
+
+    @Slot(object)
+    def _export_finished(self, destination: Path) -> None:
+        self._export_worker = None
+        self.progress.hide()
+        self._set_busy(False)
+        self.export_status.setText(
+            f"Saved sessions.csv, choices.csv, and manifest.json in: {destination}"
+        )
+        self.statusBar().showMessage("CSV export complete")
+        self._finish_close()
+
+    @Slot(str)
+    def _export_failed(self, message: str) -> None:
+        self._export_worker = None
+        self.progress.hide()
+        self._set_busy(False)
+        self.export_status.setText(message)
+        self.statusBar().showMessage("CSV export failed; imported results retained")
+        if not self._closing:
+            QMessageBox.warning(self, "CSV export failed", message)
+        self._finish_close()
+
     def closeEvent(self, event: QCloseEvent) -> None:
-        if self._worker is not None or self._import_worker is not None:
+        if self._is_working():
             self._closing = True
             self.cancel_import()
             self.statusBar().showMessage("Finishing the current operation before closing…")
@@ -331,10 +406,18 @@ class MainWindow(QMainWindow):
             widget.setEnabled(not busy and not self._closing)
         self.import_button.setEnabled(not busy and not self._closing and bool(self.selected_files))
         self.cancel_button.setEnabled(busy and self._import_worker is not None)
+        self.export_button.setEnabled(
+            not busy
+            and not self._closing
+            and any(
+                result.session is not None and not result.error
+                for result in self.import_results.values()
+            )
+        )
 
     @Slot()
     def clear_selection(self) -> None:
-        if self._worker is not None or self._import_worker is not None:
+        if self._closing or self._is_working():
             return
         self.selected_files.clear()
         self.import_results.clear()
