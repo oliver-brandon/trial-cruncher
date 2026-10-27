@@ -10,7 +10,8 @@ Selected paths → discovery → format detection/readers → normalization
 Discovery, selection, Med-PC text extraction, and normalization of two confirmed PRL
 programs are implemented, along with session/choice table builders and CSV export.
 Six owner-approved PRL session-summary calculations are implemented with strict
-withholding. Additional metric families and configurable batch analysis remain future work. The Med-PC reader is exposed through Python, `--inspect-medpc`, and GUI
+withholding. Additional metric families and configurable batch analysis remain future
+work. The Med-PC reader is exposed through Python, `--inspect-medpc`, and GUI
 import review with per-file results.
 
 ## Current components
@@ -65,6 +66,17 @@ Re-import replaces previous results before starting, so failed re-reads cannot d
 stale choices. Cancellation retains completed results. Close requests defer destruction
 until the worker finishes; discovery and export are not cancellable, and a single file read is
 not interruptible. No worker touches widgets or the choice table model.
+
+`gui/overview.py` supplies a read-only `QAbstractTableModel` of per-file imported
+snapshots and lifecycle states, plus a sorting/filtering proxy. Only GUI-thread
+signal handlers update its rows. Typed numeric sorting uses unrounded values and
+places missing values last in both directions; source date/ID strings stay textual.
+Quality comes from structured summary diagnostics and existing availability/warnings,
+not warning-text parsing or new calculations. Proxy rows carry full source paths so
+sorting and duplicate filenames cannot misdirect the review. Filtering out a selected
+source clears the review. Import/export operate on the authoritative complete path
+set, never on proxy-visible rows. The model clears stale values at re-import start
+and retains explicit cancelled/failed states. See [batch overview](batch-overview.md).
 
 `gui/review.py` presents read-only details, source text, warnings/checks, and a
 `QAbstractTableModel` backed by canonical events. The model is updated only on the

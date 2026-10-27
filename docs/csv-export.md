@@ -5,9 +5,11 @@
 Import files, review the results, then click **Export CSV…** and choose a parent
 folder. The application creates a fresh `trial-cruncher-export-<unique suffix>`
 subfolder containing `sessions.csv`, `choices.csv`, and `manifest.json`. The saved
-folder path is displayed as selectable text above the file list. Export always
+folder path is displayed as selectable text above the overview. Export always
 includes **all successfully imported sessions in the list**, including those with
-warnings, regardless of which file is highlighted. The button is disabled until a
+warnings, regardless of which file is highlighted or hidden by overview filters. Sorting and
+filtering change only the GUI view; the visible/total file count states that import
+and export use the full batch. The button is disabled until a
 successful import exists, and while discovery, import, or export is active.
 
 Failed and unimported inputs have explicit statuses in the manifest; they are not

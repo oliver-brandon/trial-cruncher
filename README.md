@@ -13,6 +13,8 @@ not need to have trials.
 - PySide6 window with individual file and folder selection, configurable extensions,
   optional recursive discovery, duplicate removal, and clear selection. Import Med-PC
   sessions and review details, decoded choices, warnings/checks, and source text.
+- Batch session overview with numeric sorting, text/program/quality filters, explicit
+  missing and withheld values, and click-through review of each source.
 - Filesystem discovery in a background worker, with visible discovery messages and
   structured JSON logs on standard error when a console is available.
 - Canonical event/session/trial records and small reader, normalizer, metric, and
@@ -46,8 +48,7 @@ to two confirmed PRL programs; it does not impose their conventions on other tas
 The eventual workflow is **Import Files → Select Paradigm → Configure Metrics →
 Process Batch → Review Results → Export Tables**. The desktop currently supports file
 selection, Med-PC import review, six PRL summary metrics, and session/choice CSV
-export; task configuration
-and additional metrics are future work.
+export; task configuration and additional metrics are future work.
 
 ## Installation and launch
 
@@ -78,7 +79,10 @@ re-add to filter an existing selection. Folder traversal ignores files with othe
 extensions. Explicit mismatches, inaccessible paths, and skipped directory symlinks
 appear in Discovery messages. Symlinked folders must be selected explicitly.
 
-Click **Import Med-PC** to read all files in the list, then click a file to review it:
+Click **Import Med-PC** to read the full batch. The overview shows one row per file
+with subject, program, recorded date, duration, six metrics, and quality status. Sort
+by clicking column headings; combine search, program, and quality filters to find
+sessions needing attention. Click a row to review it below:
 
 - **Session details:** identifiers, task duration from `S`, original headers, and provenance.
 - **Session metrics:** five choice/outcome counts and percent correct, with status,
@@ -88,16 +92,23 @@ Click **Import Med-PC** to read all files in the list, then click a file to revi
 - **Warnings and checks:** per-file problems and saved-count comparisons.
 - **Source text:** the read-only original decoded export text.
 
-Each file is marked Imported, Warnings, or Failed; a failed file does not stop other
-imports. Unsupported formats/programs, `.MPC` program source, and `._*` sidecars are
+Quality distinguishes Available, Warnings, Withheld, Unavailable metrics, Failed,
+and unimported/pending files. Missing values remain **Unavailable**, withheld metrics
+say **Withheld**, and real zeroes stay numeric. A failed file does not stop other imports.
+See [batch overview](docs/batch-overview.md) for status meanings and sorting rules.
+Unsupported formats/programs, `.MPC` program source, and `._*` sidecars are
 reported as failures if included. **Cancel after current file** keeps completed
 results and leaves the remaining files unimported. Re-importing re-reads all listed
 files and replaces their previous results; **Clear selection** clears the in-memory
-review. Closing during import cancels remaining files and waits for the current file.
+review and overview filters. Closing during import cancels remaining files and waits for the current file.
 
-Click **Export CSV…** to export all successful imports, including warnings, then
-choose a parent folder. A new uniquely named folder holds `sessions.csv`,
-`choices.csv`, and `manifest.json`; the saved location appears above the file list.
+**Overview filters affect the view only: import and export use the full batch.**
+The visible/total count makes hidden rows explicit. Dates retain the source header
+text and sort as text; no calendar format is inferred.
+
+Click **Export CSV…** to export all successful imports, including hidden rows and
+warnings, then choose a parent folder. A new uniquely named folder holds `sessions.csv`,
+`choices.csv`, and `manifest.json`; the saved location appears above the overview.
 Existing files are never overwritten. Failed/unimported files are recorded in the
 manifest. Blank fields mean missing observations, while zero and false stay explicit.
 Session CSV includes the six calculated metrics and their versioned status/reasons;
@@ -140,7 +151,7 @@ src/trial_cruncher/
   prl_metrics.py           Approved PRL summaries and strict eligibility diagnostics
   tables.py                Versioned session/choice table schemas
   exporters.py             Exclusive-create CSV writer and export bundles
-  gui/                     PySide6 review panels, choice table, background workers
+  gui/                     Batch overview, review panels, tables, background workers
 tests/                     Synthetic core and offscreen GUI checks
 docs/                      Architecture, metric standards, development
 .github/workflows/ci.yml    Python 3.12/3.14 lint and test jobs

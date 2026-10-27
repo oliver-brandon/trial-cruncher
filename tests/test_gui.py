@@ -36,7 +36,7 @@ def wait_until(app, predicate):
 
 
 def choose_path(window, path):
-    window.file_list.setCurrentItem(window._items[path])
+    window.overview.select_path(path)
 
 
 def cell(window, row, column):
@@ -58,10 +58,10 @@ def test_file_and_folder_dialogs_add_candidates(app, tmp_path, monkeypatch):
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(tmp_path))
         window.add_folder_button.click()
         wait_for_discovery(app, window)
-        assert window.file_list.count() == 1
+        assert window.overview.model.rowCount() == 1
         assert window.add_files_button.isEnabled()
         window.clear_button.click()
-        assert window.file_list.count() == 0
+        assert window.overview.model.rowCount() == 0
         assert not window.selected_files
     finally:
         window.close()
@@ -105,7 +105,10 @@ def test_import_review_mixed_results_and_no_source_changes(app, write_export):
             & Qt.ItemFlag.ItemIsEditable
         )
         choose_path(window, warning)
-        assert "Warnings" in window._items[warning].text()
+        assert (
+            window.overview.model.rows[window.overview.model._row_by_path[warning]].quality
+            == "Withheld"
+        )
         assert cell(window, 1, 1) == "Unavailable"
         assert cell(window, 1, 2) == "Unavailable"
         assert "C[1]" in window.review.warnings.toPlainText()
@@ -188,7 +191,10 @@ def test_import_stays_responsive_and_cancels_between_files(
         assert calls == [first]
         assert window.import_results[first].session is not None
         assert second not in window.import_results
-        assert "cancelled" in window._items[second].text()
+        assert (
+            "cancelled"
+            in window.overview.model.rows[window.overview.model._row_by_path[second]].quality
+        )
         if close_window:
             wait_until(app, lambda: not window.isVisible())
         else:

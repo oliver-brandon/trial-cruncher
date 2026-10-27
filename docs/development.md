@@ -43,6 +43,10 @@ withholding, saved-count disagreements, missing versus empty choices, independen
 unavailability reasons, and warning-only cases. GUI/CSV integration checks cover
 metric display, full export precision, per-result reasons/status, background
 calculation, failed-file isolation, and clearing stale summaries on re-import.
+`tests/test_overview.py` adds synthetic status/filter/numeric-sort checks and actual
+Qt mouse selection through proxy rows, including duplicate filenames, hidden review
+clearing, mid-import sorting/filtering and cancellation, malformed re-reads, and
+full-batch export while filters hide rows. No new scientific definitions are added.
 All fixtures are synthetic. The GUI suite selects Qt's offscreen platform before
 creating the application; this checks widgets and signals, not interactive desktop
 rendering or native file dialog behavior.
@@ -64,7 +68,11 @@ malformed/unsupported file to verify other sessions still import. Check warnings
 unavailable values, cancel a multi-file import, and re-import after a file changes.
 Export CSV twice to the same parent folder, verify distinct folders and all three
 files, inspect warnings and blank values, and test cancelling the folder picker.
-Confirm inputs and the first export remain unchanged. Current CI uses Ubuntu with Python 3.12 and 3.14;
+Sort the overview numerically in both directions; verify missing values sort last.
+Combine search/program/quality filters and confirm the visible/total count, select
+rows with duplicate filenames from different folders, and check that filtering out
+the selected row clears its review. Export with a filter active and confirm all
+successful imports remain included. Confirm inputs and the first export remain unchanged. Current CI uses Ubuntu with Python 3.12 and 3.14;
 macOS and Windows interactive behavior requires separate verification. Linux Qt may
 require EGL/OpenGL libraries (`libegl1` and `libopengl0` on Ubuntu). Remote desktops
 may need additional platform-specific Qt/X11 libraries.
