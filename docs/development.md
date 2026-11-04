@@ -38,6 +38,11 @@ CSV export tests cover provenance/JSON round trips, missing versus zero/false,
 empty and invalid choices, excluded inputs, no-overwrite behavior, partial-write
 cleanup, GUI background export, failure/retry, and deferred close. See
 [csv-export.md](csv-export.md) for the versioned schema and limits.
+`tests/test_excel.py` reloads Excel workbooks to verify native types, exact source
+text/Decimal strings, missing and withheld values, quality reasons, complete long-text
+chunks, formula-like literals, worksheet limits, invalid XML, and no-overwrite/write
+failure safeguards. Export GUI and filtered-batch tests run for both CSV and Excel.
+See [Excel export](excel-export.md) for the workbook schema and limitations.
 `tests/test_prl_metrics.py` covers the approved hand-calculated examples, strict
 withholding, saved-count disagreements, missing versus empty choices, independent
 unavailability reasons, and warning-only cases. GUI/CSV integration checks cover
@@ -72,7 +77,11 @@ Sort the overview numerically in both directions; verify missing values sort las
 Combine search/program/quality filters and confirm the visible/total count, select
 rows with duplicate filenames from different folders, and check that filtering out
 the selected row clears its review. Export with a filter active and confirm all
-successful imports remain included. Confirm inputs and the first export remain unchanged. Current CI uses Ubuntu with Python 3.12 and 3.14;
+successful imports remain included. Confirm inputs and the first export remain unchanged.
+Repeat with **Export Excel…**: inspect all four sheets, filters/frozen headers, source
+IDs, missing/zero/false values, Quality reasons, and complete Provenance chunks. Open
+`results.xlsx` in Microsoft Excel for native rendering verification when available.
+Current CI uses Ubuntu with Python 3.12 and 3.14;
 macOS and Windows interactive behavior requires separate verification. Linux Qt may
 require EGL/OpenGL libraries (`libegl1` and `libopengl0` on Ubuntu). Remote desktops
 may need additional platform-specific Qt/X11 libraries.
@@ -92,7 +101,7 @@ discarding observations. Never commit real research files or secrets; ignored
 
 Dependencies use compatible minimum versions rather than a lockfile in this initial
 foundation. For reproducible research deployments, record the actual resolved
-environment and all analysis configuration. Current CSV manifests record runtime
+environment and all analysis configuration. Current CSV and Excel manifests record runtime
 versions, import/export scope, and the PRL definition set/version and strict
 eligibility policy. Additional metric configuration must be recorded when implemented. Do not describe a passing development build as scientific validation.
 

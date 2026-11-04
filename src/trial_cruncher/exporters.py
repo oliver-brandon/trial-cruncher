@@ -1,4 +1,4 @@
-"""Exclusive-create CSV writer and complete session/choice export bundles."""
+"""Exclusive-create writers and complete session/choice export bundles."""
 
 import csv
 import logging
@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
-from typing import Protocol
+from typing import Literal, Protocol
 
 import pandas as pd
 
@@ -29,6 +29,7 @@ from trial_cruncher.tables import (
 )
 
 logger = logging.getLogger(__name__)
+ExportFormat = Literal["csv", "xlsx"]
 
 
 class Exporter(Protocol):
@@ -69,13 +70,18 @@ class CSVExporter:
 
 
 def export_import_results(
-    results: Mapping[Path, ImportResult], selected_paths: Sequence[Path], parent: Path
+    results: Mapping[Path, ImportResult],
+    selected_paths: Sequence[Path],
+    parent: Path,
+    export_format: ExportFormat = "csv",
 ) -> Path:
     """Export the reviewed snapshot into a fresh folder; record excluded inputs.
 
     All tables are built before writing. An ordinary write failure removes this
     attempt's folder. The manifest is written last as the completion marker.
     """
+    if export_format not in ("csv", "xlsx"):
+        raise ValueError("Export format must be csv or xlsx.")
     paths = tuple(sorted(set(selected_paths), key=str))
     sessions = []
     summaries = {}
@@ -152,12 +158,23 @@ def export_import_results(
         },
         "inputs": inputs,
     }
+    workbook = None
+    if export_format == "xlsx":
+        from trial_cruncher.excel import build_workbook
+
+        workbook = build_workbook(tables["sessions.csv"], tables["choices.csv"], manifest)
     manifest_text = json_text(manifest)
     destination = Path(tempfile.mkdtemp(prefix="trial-cruncher-export-", dir=parent.resolve()))
     try:
-        writer = CSVExporter((*paths, *(session.source_file for session in sessions)))
-        for name, table in tables.items():
-            writer.export(table, destination / name)
+        source_paths = (*paths, *(session.source_file for session in sessions))
+        if workbook is not None:
+            from trial_cruncher.excel import save_workbook
+
+            save_workbook(workbook, destination / "results.xlsx", source_paths)
+        else:
+            writer = CSVExporter(source_paths)
+            for name, table in tables.items():
+                writer.export(table, destination / name)
         with (destination / "manifest.json").open("x", encoding="utf-8") as stream:
             stream.write(manifest_text + "\n")
     except Exception:
@@ -166,4 +183,7 @@ def export_import_results(
         except OSError:
             logger.exception("Could not remove incomplete export folder %s", destination)
         raise
+    finally:
+        if workbook is not None:
+            workbook.close()
     return destination

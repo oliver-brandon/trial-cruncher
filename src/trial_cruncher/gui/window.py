@@ -1,4 +1,4 @@
-"""File selection, read-only Med-PC review, and CSV export."""
+"""File selection, read-only Med-PC review, and CSV/Excel export."""
 
 import logging
 from pathlib import Path
@@ -27,6 +27,7 @@ from trial_cruncher.discovery import (
     discover_files,
     normalize_extensions,
 )
+from trial_cruncher.exporters import ExportFormat
 from trial_cruncher.gui.export_worker import ExportWorker
 from trial_cruncher.gui.import_worker import ImportWorker
 from trial_cruncher.gui.overview import BatchOverview
@@ -108,9 +109,15 @@ class MainWindow(QMainWindow):
         self.cancel_button = QPushButton("Cancel after current file")
         self.cancel_button.setEnabled(False)
         self.export_button = QPushButton("Export CSV…")
+        self.excel_button = QPushButton("Export Excel…")
+        self._export_label = "CSV"
         self.export_button.setToolTip(
             "Export all successfully imported sessions and choices to a new folder; "
             "filters do not limit export; failed and unimported files are listed in the manifest"
+        )
+        self.excel_button.setToolTip(
+            "Export all successful imports to Sessions, Choices, Quality, and Provenance sheets "
+            "in a new folder; filters do not limit export"
         )
         for button in (
             self.add_files_button,
@@ -119,12 +126,14 @@ class MainWindow(QMainWindow):
             self.import_button,
             self.cancel_button,
             self.export_button,
+            self.excel_button,
         ):
             buttons.addWidget(button)
         buttons.addStretch()
         layout.addLayout(buttons)
         self.export_status = QLabel(
-            "CSV export includes all successfully imported files, including rows hidden by filters."
+            "CSV and Excel exports include all successfully imported files, "
+            "including rows hidden by filters."
         )
         self.export_status.setWordWrap(True)
         self.export_status.setTextFormat(Qt.TextFormat.PlainText)
@@ -155,6 +164,7 @@ class MainWindow(QMainWindow):
         self.import_button.clicked.connect(self.import_selected_files)
         self.cancel_button.clicked.connect(self.cancel_import)
         self.export_button.clicked.connect(self.export_csv)
+        self.excel_button.clicked.connect(self.export_excel)
         self.overview.path_selected.connect(self.review_path)
         self._set_busy(False)
 
@@ -299,6 +309,13 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def export_csv(self) -> None:
+        self._start_export("csv")
+
+    @Slot()
+    def export_excel(self) -> None:
+        self._start_export("xlsx")
+
+    def _start_export(self, export_format: ExportFormat) -> None:
         if self._closing or self._is_working():
             return
         count = sum(
@@ -307,13 +324,14 @@ class MainWindow(QMainWindow):
         )
         if not count:
             return
+        self._export_label = "Excel" if export_format == "xlsx" else "CSV"
         parent = QFileDialog.getExistingDirectory(
-            self, "Choose parent folder — a new CSV export folder will be created"
+            self, f"Choose parent folder — a new {self._export_label} export folder will be created"
         )
         if not parent:
             return
         self._export_worker = ExportWorker(
-            self.import_results, tuple(self.selected_files), Path(parent)
+            self.import_results, tuple(self.selected_files), Path(parent), export_format
         )
         self._export_worker.signals.finished.connect(self._export_finished)
         self._export_worker.signals.failed.connect(self._export_failed)
@@ -333,9 +351,11 @@ class MainWindow(QMainWindow):
         self.progress.hide()
         self._set_busy(False)
         self.export_status.setText(
-            f"Saved sessions.csv, choices.csv, and manifest.json in: {destination}"
+            f"Saved results.xlsx and manifest.json in: {destination}"
+            if self._export_label == "Excel"
+            else f"Saved sessions.csv, choices.csv, and manifest.json in: {destination}"
         )
-        self.statusBar().showMessage("CSV export complete")
+        self.statusBar().showMessage(f"{self._export_label} export complete")
         self._finish_close()
 
     @Slot(str)
@@ -344,9 +364,11 @@ class MainWindow(QMainWindow):
         self.progress.hide()
         self._set_busy(False)
         self.export_status.setText(message)
-        self.statusBar().showMessage("CSV export failed; imported results retained")
+        self.statusBar().showMessage(
+            f"{self._export_label} export failed; imported results retained"
+        )
         if not self._closing:
-            QMessageBox.warning(self, "CSV export failed", message)
+            QMessageBox.warning(self, f"{self._export_label} export failed", message)
         self._finish_close()
 
     def closeEvent(self, event: QCloseEvent) -> None:
@@ -381,6 +403,7 @@ class MainWindow(QMainWindow):
                 for result in self.import_results.values()
             )
         )
+        self.excel_button.setEnabled(self.export_button.isEnabled())
 
     @Slot()
     def clear_selection(self) -> None:

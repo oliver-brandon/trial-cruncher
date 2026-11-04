@@ -24,14 +24,14 @@ not need to have trials.
   consistency checks. Use the GUI, `--inspect-medpc FILE`, or the Python API.
 - Background imports with progress, per-file failure isolation, and cancellation
   after the current file. Completed results remain available for review.
-- Background CSV export to new folders with source metadata, warnings, missing values,
+- Background CSV and Excel export to new folders with source metadata, warnings, missing values,
   and a manifest accounting for failed/unimported inputs.
 - Synthetic unit tests, offscreen GUI integration tests, Ruff, and GitHub Actions.
 
 **Med-PC import review is available in the GUI, CLI, and Python API.**
-GUI CSV export of sessions and choices is available with provenance and an export
+GUI CSV and Excel export of sessions and choices is available with provenance and an export
 manifest. Six PRL session-summary metrics are implemented with the approved strict
-withholding policy. Excel export and other behavioral metrics remain future work.
+withholding policy. Additional behavioral metrics remain future work.
 Extensions identify candidates only. Other formats/programs require representative
 example files and documented schemas. Synthetic tests verify software behavior, not
 scientific validity. See [Med-PC support and confirmed rules](docs/medpc.md).
@@ -47,7 +47,7 @@ to two confirmed PRL programs; it does not impose their conventions on other tas
 
 The eventual workflow is **Import Files → Select Paradigm → Configure Metrics →
 Process Batch → Review Results → Export Tables**. The desktop currently supports file
-selection, Med-PC import review, six PRL summary metrics, and session/choice CSV
+selection, Med-PC import review, six PRL summary metrics, and session/choice CSV/Excel
 export; task configuration and additional metrics are future work.
 
 ## Installation and launch
@@ -120,6 +120,13 @@ Discovery never writes to inputs. It does not check content validity or readabil
 beyond filesystem metadata. Full resolved paths are displayed and may appear in logs;
 review logs before sharing them outside the laboratory.
 
+Click **Export Excel…** for a workbook with **Sessions**, **Choices**, **Quality**,
+and **Provenance** sheets plus a companion manifest in a fresh folder. Identifiers
+and raw decimals remain text; missing values stay blank, zero/false remain explicit,
+and withheld metrics retain reasons. Long text is preserved in numbered provenance
+chunks. Both export buttons include the full batch regardless of overview filters.
+See [Excel export and safeguards](docs/excel-export.md).
+
 ## Development
 
 ```sh
@@ -150,7 +157,8 @@ src/trial_cruncher/
   metrics.py               Task-specific calculation contract
   prl_metrics.py           Approved PRL summaries and strict eligibility diagnostics
   tables.py                Versioned session/choice table schemas
-  exporters.py             Exclusive-create CSV writer and export bundles
+  exporters.py             Exclusive-create CSV writer and CSV/Excel export bundles
+  excel.py                 Literal Excel cells, quality sheet, and provenance chunks
   gui/                     Batch overview, review panels, tables, background workers
 tests/                     Synthetic core and offscreen GUI checks
 docs/                      Architecture, metric standards, development
@@ -166,6 +174,6 @@ not empty executable stages. See [architecture](docs/architecture.md) and
 1. Validate further session variants, including an actual early-stopped or timed-out recording.
 2. Review the six implemented PRL summaries against additional independent examples.
 3. Define additional metrics and trial/subject/group tables before implementing them.
-4. Extend the GUI with task/configuration controls and Excel export.
+4. Extend the GUI with task/configuration controls.
 
 No software license has been selected. No author identity is declared.

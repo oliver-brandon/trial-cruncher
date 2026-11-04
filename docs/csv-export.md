@@ -141,3 +141,7 @@ timestamps/outcomes, source text/headers, hashes, warnings, and 28 matching save
 checks were compared with the imported results. Input hashes and modification times
 were unchanged. The completed export screen was visually inspected. Local outputs
 remain under ignored `outputs/`; research recordings are not committed as fixtures.
+
+Excel export is also available with the same session/choice schema and a dedicated
+Quality sheet, literal text cells, and complete provenance chunks. See
+[Excel export](excel-export.md) for its distinct serialization rules.

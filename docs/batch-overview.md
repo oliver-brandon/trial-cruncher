@@ -82,11 +82,11 @@ strict policy, not a different calculation or export value. See
 
 **Filters change the view only. Import and export use the full batch.** This scope is
 stated beside the filters and in button tooltips. Import re-reads all listed files,
-including hidden rows. CSV export includes every successful imported session, with
+including hidden rows. CSV and Excel exports include every successful imported session, with
 failed and unimported paths recorded in the manifest. The CSV schema, row order,
 missing-value rules, and overwrite protection remain unchanged; displayed **Withheld**
 values are still missing numeric values plus attached reasons in CSV schema 2.
-See [CSV export](csv-export.md).
+See [CSV export](csv-export.md) and [Excel export](excel-export.md).
 
 Sorting, filtering, and detailed review remain available during background work.
 Re-import immediately clears old results from every row. Cancellation retains newly

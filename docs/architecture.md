@@ -8,7 +8,7 @@ Selected paths → discovery → format detection/readers → normalization
 ```
 
 Discovery, selection, Med-PC text extraction, and normalization of two confirmed PRL
-programs are implemented, along with session/choice table builders and CSV export.
+programs are implemented, along with session/choice table builders and CSV/Excel export.
 Six owner-approved PRL session-summary calculations are implemented with strict
 withholding. Additional metric families and configurable batch analysis remain future
 work. The Med-PC reader is exposed through Python, `--inspect-medpc`, and GUI
@@ -50,7 +50,8 @@ It consumes canonical choices and structured source/normalizer facts, returning
 missing values carry reasons and availability status. `tables.py` builds versioned
 session and choice pandas tables with object dtype to preserve optional integers.
 `exporters.py` implements the exporter protocol with an exclusive-create CSV writer
-and orchestrates new export bundles with a manifest. See [CSV export](csv-export.md).
+and orchestrates new export bundles with a manifest. See [CSV export](csv-export.md)
+and [Excel export](excel-export.md).
 
 `processing.py` provides `ImportResult` and `import_medpc_file()`, independent of Qt.
 It calculates the PRL summary after normalization and retains it in `ImportResult`,
@@ -107,9 +108,13 @@ The current export manifest records software versions, source status/hash/warnin
 scope and serialization rules. Per-session metadata retains reader/normalizer versions,
 raw acquisition fields, and time units/origin. Schema 2 adds the six calculated
 session columns and their status/reasons/diagnostics; the manifest records metric
-definition IDs/versions and the strict withholding policy. Future metrics must also
-record their definitions and complete analysis configuration. Excel export
-is not implemented. Both future formats and row levels must retain missing-versus-zero
+definition IDs/versions and the strict withholding policy. Excel workbook layout
+version 1 reuses schema 2 tables and adds Quality and
+Provenance sheets. `excel.py` stores literal text, chunks long metadata, checks
+worksheet/XML limits, and exclusively creates `results.xlsx`; the shared export
+orchestrator writes its manifest last and cleans up failed attempts.
+Future metrics must record their definitions and complete analysis configuration.
+Future formats and row levels must retain missing-versus-zero
 distinctions and input/overwrite protection.
 
 For a new format, implement `Reader` and `Normalizer` using documented, de-identified

@@ -271,7 +271,8 @@ def test_unexpected_worker_failure_keeps_selection_and_restores_controls(
         window.close()
 
 
-def test_gui_csv_export_all_results_and_dialog_cancel(app, write_export, monkeypatch):
+@pytest.mark.parametrize("export_format", ["csv", "xlsx"])
+def test_gui_export_all_results_and_dialog_cancel(app, write_export, monkeypatch, export_format):
     import csv
     import json
 
@@ -280,40 +281,53 @@ def test_gui_csv_export_all_results_and_dialog_cancel(app, write_export, monkeyp
     bad.write_text("malformed export")
     before = path.read_bytes(), path.stat().st_mtime_ns
     window = MainWindow()
+    button = window.excel_button if export_format == "xlsx" else window.export_button
+    label = "Excel" if export_format == "xlsx" else "CSV"
     try:
-        assert not window.export_button.isEnabled()
+        assert not button.isEnabled()
         window.add_paths([str(path), str(bad)])
         wait_for_discovery(app, window)
-        assert not window.export_button.isEnabled()
+        assert not button.isEnabled()
         window.import_button.click()
-        assert not window.export_button.isEnabled()
+        assert not button.isEnabled()
         wait_until(app, lambda: window._import_worker is None)
-        assert window.export_button.isEnabled()
+        assert button.isEnabled()
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: "")
-        window.export_button.click()
+        button.click()
         assert window._export_worker is None
         assert not list(path.parent.glob("trial-cruncher-export-*"))
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(path.parent))
         choose_path(window, bad)  # Export scope is all successes, not the highlighted file.
-        window.export_button.click()
+        button.click()
         wait_until(app, lambda: window._export_worker is None)
         (destination,) = path.parent.glob("trial-cruncher-export-*")
-        with (destination / "sessions.csv").open(newline="") as stream:
-            rows = list(csv.DictReader(stream))
+        if export_format == "xlsx":
+            from openpyxl import load_workbook
+
+            book = load_workbook(destination / "results.xlsx")
+            header, *body = book["Sessions"].values
+            rows = [dict(zip(header, row, strict=True)) for row in body]
+            book.close()
+        else:
+            with (destination / "sessions.csv").open(newline="") as stream:
+                rows = list(csv.DictReader(stream))
         assert len(rows) == 1 and rows[0]["subject_id"] == "0007"
         manifest = json.loads((destination / "manifest.json").read_text())
         assert [entry["status"] for entry in manifest["inputs"]] == ["failed", "exported"]
         assert str(destination) in window.export_status.text()
-        assert window.statusBar().currentMessage() == "CSV export complete"
+        assert window.statusBar().currentMessage() == f"{label} export complete"
         assert (path.read_bytes(), path.stat().st_mtime_ns) == before
         window.clear_button.click()
-        assert not window.export_button.isEnabled()
+        assert not button.isEnabled()
     finally:
         window.close()
 
 
+@pytest.mark.parametrize("export_format", ["csv", "xlsx"])
 @pytest.mark.parametrize("fail", [False, True])
-def test_export_background_controls_failure_retry_and_close(app, write_export, monkeypatch, fail):
+def test_export_background_controls_failure_retry_and_close(
+    app, write_export, monkeypatch, fail, export_format
+):
     from trial_cruncher.exporters import export_import_results
     from trial_cruncher.gui import export_worker as export_module
 
@@ -333,14 +347,18 @@ def test_export_background_controls_failure_retry_and_close(app, write_export, m
     monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(path.parent))
     monkeypatch.setattr(QMessageBox, "warning", lambda *args: warnings.append(args[2]))
     window = MainWindow()
+    button = window.excel_button if export_format == "xlsx" else window.export_button
+    label = "Excel" if export_format == "xlsx" else "CSV"
     window.show()
     try:
         window.add_paths([str(path)])
         wait_for_discovery(app, window)
         window.import_button.click()
         wait_until(app, lambda: window._import_worker is None)
-        window.export_button.click()
+        button.click()
         wait_until(app, entered.is_set)
+        assert not button.isEnabled()
+        assert not window.excel_button.isEnabled()
         assert not window.export_button.isEnabled()
         assert not window.import_button.isEnabled()
         assert not window.clear_button.isEnabled()
@@ -361,13 +379,13 @@ def test_export_background_controls_failure_retry_and_close(app, write_export, m
         wait_until(app, lambda: window._export_worker is None)
         if fail:
             assert warnings and "Synthetic export failure" in warnings[0]
-            assert window.export_button.isEnabled()
+            assert button.isEnabled()
             assert window.review.choice_model.rowCount() == 4
             assert not list(path.parent.glob("trial-cruncher-export-*"))
             monkeypatch.setattr(export_module, "export_import_results", export_import_results)
-            window.export_button.click()
+            button.click()
             wait_until(app, lambda: window._export_worker is None)
-            assert window.statusBar().currentMessage() == "CSV export complete"
+            assert window.statusBar().currentMessage() == f"{label} export complete"
         else:
             wait_until(app, lambda: not window.isVisible())
             (destination,) = path.parent.glob("trial-cruncher-export-*")

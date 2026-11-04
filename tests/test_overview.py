@@ -264,7 +264,10 @@ def test_sorted_click_through_duplicate_names_and_hidden_selection_clear(app, ma
         window.close()
 
 
-def test_filters_do_not_limit_export_or_import_and_clear_resets_view(app, make_input, monkeypatch):
+@pytest.mark.parametrize("export_format", ["csv", "xlsx"])
+def test_filters_do_not_limit_export_or_import_and_clear_resets_view(
+    app, make_input, monkeypatch, export_format
+):
     first = make_input("one.txt")
     second = make_input("two.txt", n=10, program="PRL_OPTO_CORSTIM")
     failed = make_input("failed.txt", program="OTHER")
@@ -286,11 +289,19 @@ def test_filters_do_not_limit_export_or_import_and_clear_resets_view(app, make_i
         assert window.overview.proxy.rowCount() == 1
         assert "Showing 1 of 4" in window.overview.count_label.text()
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(first.parent))
-        window.export_button.click()
+        (window.excel_button if export_format == "xlsx" else window.export_button).click()
         wait_until(app, lambda: window._export_worker is None)
         (destination,) = first.parent.glob("trial-cruncher-export-*")
-        with (destination / "sessions.csv").open(newline="") as stream:
-            exported = list(csv.DictReader(stream))
+        if export_format == "xlsx":
+            from openpyxl import load_workbook
+
+            book = load_workbook(destination / "results.xlsx")
+            header, *body = book["Sessions"].values
+            exported = [dict(zip(header, row, strict=True)) for row in body]
+            book.close()
+        else:
+            with (destination / "sessions.csv").open(newline="") as stream:
+                exported = list(csv.DictReader(stream))
         assert {row["source_file"] for row in exported} == {str(first), str(second)}
         manifest = json.loads((destination / "manifest.json").read_text())
         assert {entry["source_file"]: entry["status"] for entry in manifest["inputs"]} == {
