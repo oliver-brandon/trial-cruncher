@@ -12,12 +12,13 @@ from pathlib import Path
 from typing import Any
 
 from trial_cruncher import __version__, phase_metrics, prl_metrics
+from trial_cruncher.analysis_metadata import AnalysisMetadata, analysis_metadata_from_dict
 from trial_cruncher.discovery import normalize_extensions
 from trial_cruncher.prl import CHOICE_STORAGE_POLICY, NORMALIZER_VERSION
 from trial_cruncher.source_tracking import SourceCheck, check_sources, source_sha256
 
 PROJECT_FORMAT = "trial-cruncher-project"
-PROJECT_VERSION = "1"
+PROJECT_VERSION = "2"
 PROJECT_SUFFIX = ".tcproj.json"
 MAX_PROJECT_BYTES = 16 * 1024 * 1024
 _HASH = re.compile(r"[0-9a-f]{64}")
@@ -48,6 +49,7 @@ class ProjectSource:
     path: Path
     phase: str | None
     sha256: str | None
+    analysis_metadata: AnalysisMetadata = AnalysisMetadata()
 
 
 @dataclass(frozen=True)
@@ -101,7 +103,7 @@ def _parse(payload: bytes, project_path: Path) -> Project:
         },
         "project",
     )
-    if obj["format"] != PROJECT_FORMAT or obj["schema_version"] != PROJECT_VERSION:
+    if obj["format"] != PROJECT_FORMAT or obj["schema_version"] not in ("1", PROJECT_VERSION):
         raise ValueError("Unsupported project format or version.")
     current_configuration = analysis_configuration()
     percentage_configuration = {
@@ -117,13 +119,23 @@ def _parse(payload: bytes, project_path: Path) -> Project:
         if obj["analysis_configuration"] == proportion_configuration
         else None
     )
-    configuration_updated = update_message is not None
-    if obj["analysis_configuration"] != current_configuration and not configuration_updated:
+    if obj["analysis_configuration"] != current_configuration and update_message is None:
         raise ValueError(
             "Project analysis configuration is incompatible with this version. "
             "No settings were applied; use a compatible application "
             "or an explicitly reviewed migration."
         )
+    if obj["schema_version"] == "1":
+        update_message = " ".join(
+            filter(
+                None,
+                (
+                    update_message,
+                    "Added manual analysis metadata; inclusion is not reviewed until assigned.",
+                ),
+            )
+        )
+    configuration_updated = update_message is not None
     if not isinstance(obj["application_version"], str) or not isinstance(obj["saved_at_utc"], str):
         raise ValueError("Project version and save time must be text.")
     try:
@@ -144,7 +156,15 @@ def _parse(payload: bytes, project_path: Path) -> Project:
         raise ValueError("Project sources must be a list.")
     sources, seen = [], set()
     for item in obj["sources"]:
-        _keys(item, {"path", "phase", "sha256"}, "source")
+        keys = {"path", "phase", "sha256"}
+        if obj["schema_version"] == PROJECT_VERSION:
+            keys.add("analysis_metadata")
+        _keys(item, keys, "source")
+        annotation = (
+            analysis_metadata_from_dict(item["analysis_metadata"])
+            if "analysis_metadata" in item
+            else AnalysisMetadata()
+        )
         if not isinstance(item["path"], str) or "\x00" in item["path"]:
             raise ValueError("Invalid source path.")
         path = Path(item["path"])
@@ -161,7 +181,7 @@ def _parse(payload: bytes, project_path: Path) -> Project:
         digest = item["sha256"]
         if digest is not None and (not isinstance(digest, str) or not _HASH.fullmatch(digest)):
             raise ValueError("Source SHA-256 must be 64 lowercase hex digits or null.")
-        sources.append(ProjectSource(path, phase, digest))
+        sources.append(ProjectSource(path, phase, digest, annotation))
     return Project(
         tuple(sources), extensions, discovery["recursive"], configuration_updated, update_message
     )
@@ -195,6 +215,7 @@ def save_project(
     extensions: Sequence[str],
     recursive: bool,
     expected_project_sha256: str | None = None,
+    analysis_metadata: Mapping[Path, AnalysisMetadata] | None = None,
 ) -> ProjectResult:
     """Save setup only. Existing baselines never advance merely because of a save.
 
@@ -208,14 +229,22 @@ def save_project(
         raise ValueError("Saving over a symbolic link is not supported.")
     sources = tuple(
         ProjectSource(
-            p.absolute(), phase_metrics.phase_config(phases.get(p)).phase, baseline_hashes.get(p)
+            p.absolute(),
+            phase_metrics.phase_config(phases.get(p)).phase,
+            baseline_hashes.get(p),
+            (analysis_metadata or {}).get(p, AnalysisMetadata()),
         )
         for p in sorted(set(paths), key=str)
     )
     _protect_sources(path, sources)
+    if any(not isinstance(s.analysis_metadata, AnalysisMetadata) for s in sources):
+        raise ValueError("Analysis metadata must contain validated AnalysisMetadata records.")
     checks = check_sources({s.path: s.sha256 for s in sources})
     observed = {c.path: c.current_sha256 for c in checks}
-    sources = tuple(ProjectSource(s.path, s.phase, s.sha256 or observed[s.path]) for s in sources)
+    sources = tuple(
+        ProjectSource(s.path, s.phase, s.sha256 or observed[s.path], s.analysis_metadata)
+        for s in sources
+    )
     checks = tuple(
         SourceCheck(
             c.path,
@@ -241,7 +270,13 @@ def save_project(
                     "recursive": recursive,
                 },
                 "sources": [
-                    {"path": str(s.path), "phase": s.phase, "sha256": s.sha256} for s in sources
+                    {
+                        "path": str(s.path),
+                        "phase": s.phase,
+                        "sha256": s.sha256,
+                        "analysis_metadata": asdict(s.analysis_metadata),
+                    }
+                    for s in sources
                 ],
             },
             ensure_ascii=False,

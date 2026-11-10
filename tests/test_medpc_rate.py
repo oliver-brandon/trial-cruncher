@@ -132,7 +132,7 @@ def test_rate_export_precision_provenance_and_manifest(phase_input, tmp_path, fo
     detail = next(m for m in json.loads(row["metric_results_json"]) if m["name"] == MEDPC_RATE)
     assert detail["unit"] == "choices/min" and detail["status"] == "available"
     manifest = json.loads((dest / "manifest.json").read_text())
-    assert manifest["schema_version"] == "6"
+    assert manifest["schema_version"] == "7"
     assert manifest["configuration"]["medpc_trials_per_minute"]["scope"] == "whole session"
     assert "S" in manifest["configuration"]["medpc_trials_per_minute"]["duration_source"]
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before

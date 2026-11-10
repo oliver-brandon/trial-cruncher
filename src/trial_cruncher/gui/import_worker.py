@@ -6,6 +6,7 @@ from threading import Event
 
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot
 
+from trial_cruncher.analysis_metadata import AnalysisMetadata
 from trial_cruncher.processing import ImportResult, import_medpc_file
 
 logger = logging.getLogger(__name__)
@@ -18,10 +19,16 @@ class ImportSignals(QObject):
 
 
 class ImportWorker(QRunnable):
-    def __init__(self, paths: tuple[Path, ...], phases: dict[Path, str] | None = None) -> None:
+    def __init__(
+        self,
+        paths: tuple[Path, ...],
+        phases: dict[Path, str] | None = None,
+        metadata: dict[Path, AnalysisMetadata] | None = None,
+    ) -> None:
         super().__init__()
         self.paths = paths
         self.phases = dict(phases or {})
+        self.metadata = dict(metadata or {})
         self.signals = ImportSignals()
         self._cancel = Event()
 
@@ -37,16 +44,22 @@ class ImportWorker(QRunnable):
                     break
                 try:
                     phase = self.phases.get(path)
+                    annotation = self.metadata.get(path)
                     result = (
-                        import_medpc_file(path, phase)
-                        if phase is not None
-                        else import_medpc_file(path)
+                        import_medpc_file(path, phase, annotation)
+                        if annotation is not None
+                        else (
+                            import_medpc_file(path, phase)
+                            if phase is not None
+                            else import_medpc_file(path)
+                        )
                     )
                 except Exception:
                     logger.exception("Unexpected import failure", extra={"path": path})
                     result = ImportResult(
                         path,
                         error="Unexpected import failure. See the application log for details.",
+                        analysis_metadata=self.metadata.get(path, AnalysisMetadata()),
                     )
                 self.signals.result.emit(result)
                 completed += 1

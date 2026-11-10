@@ -130,3 +130,9 @@ validated choices and S. It sorts numerically and shows rate-specific unavailabi
 reasons in tooltips. Missing/zero duration can make this rate unavailable while the
 choice counts and accuracy remain available. For a focused count/duration/rate
 comparison, choose **Session rate** in the upper Phase results tab.
+
+Manual condition/treatment, cohort, positive session order, inclusion status, and
+reason are also available as columns in Sessions. They are separate from Quality.
+Unassigned metadata is not inferred from raw headers and remains visible while
+recordings are unimported or stale. Metadata text is included in literal search;
+session order sorts numerically. See [manual metadata](analysis-metadata.md).

@@ -1,6 +1,7 @@
 """File selection, read-only Med-PC review, and CSV/Excel export."""
 
 import logging
+from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal, Slot
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from trial_cruncher.analysis_metadata import AnalysisMetadata
 from trial_cruncher.discovery import (
     DEFAULT_EXTENSIONS,
     DiscoveryResult,
@@ -32,6 +34,7 @@ from trial_cruncher.discovery import (
 from trial_cruncher.exporters import ExportFormat
 from trial_cruncher.gui.export_worker import ExportWorker
 from trial_cruncher.gui.import_worker import ImportWorker
+from trial_cruncher.gui.metadata import MetadataDialog
 from trial_cruncher.gui.overview import BatchOverview
 from trial_cruncher.gui.phase_overview import BatchPhaseOverview
 from trial_cruncher.gui.phases import PhaseDialog
@@ -79,6 +82,7 @@ class MainWindow(QMainWindow):
         self.resize(1300, 900)
         self.selected_files: set[Path] = set()
         self.phase_assignments: dict[Path, str] = {}
+        self.metadata_assignments: dict[Path, AnalysisMetadata] = {}
         self._worker: DiscoveryWorker | None = None
         self._import_worker: ImportWorker | None = None
         self._export_worker: ExportWorker | None = None
@@ -138,6 +142,7 @@ class MainWindow(QMainWindow):
         self.clear_button = QPushButton("Clear selection")
         self.import_button = QPushButton("Import Med-PC")
         self.phase_button = QPushButton("Assign phases…")
+        self.metadata_button = QPushButton("Session metadata…")
         self.phase_button.setToolTip(
             "Assign phases for all files before import, including hidden rows"
         )
@@ -162,6 +167,7 @@ class MainWindow(QMainWindow):
             self.add_folder_button,
             self.clear_button,
             self.phase_button,
+            self.metadata_button,
             self.import_button,
             self.cancel_button,
             self.export_button,
@@ -171,8 +177,8 @@ class MainWindow(QMainWindow):
         buttons.addStretch()
         layout.addLayout(buttons)
         self.export_status = QLabel(
-            "CSV and Excel exports include all successfully imported files, "
-            "including rows hidden by filters."
+            "Exports retain all successful files with inclusion flags, including Excluded, "
+            "Not reviewed, and rows hidden by filters."
         )
         self.export_status.setWordWrap(True)
         self.export_status.setTextFormat(Qt.TextFormat.PlainText)
@@ -206,6 +212,7 @@ class MainWindow(QMainWindow):
         self.clear_button.clicked.connect(self.clear_selection)
         self.import_button.clicked.connect(self.import_selected_files)
         self.phase_button.clicked.connect(self.assign_phases)
+        self.metadata_button.clicked.connect(self.assign_metadata)
         self.cancel_button.clicked.connect(self.cancel_import)
         self.export_button.clicked.connect(self.export_csv)
         self.excel_button.clicked.connect(self.export_excel)
@@ -260,7 +267,9 @@ class MainWindow(QMainWindow):
         self.selected_files.update(result.files)
         if result.files:
             self._mark_project_dirty()
-        self.overview.set_files(tuple(self.selected_files), self.import_results)
+        self.overview.set_files(
+            tuple(self.selected_files), self.import_results, self.metadata_assignments
+        )
         self.issue_list.addItems(f"{issue.path}: {issue.message}" for issue in result.issues)
         if not result.files and not result.issues:
             self.issue_list.addItem("No files matched the configured extensions in this selection.")
@@ -294,10 +303,16 @@ class MainWindow(QMainWindow):
             return
         if path in self._source_issues:
             self.review.clear(f"{path.name} — {self._source_issues[path]}")
+            self.review.show_analysis_metadata(
+                path, self.metadata_assignments.get(path, AnalysisMetadata())
+            )
             return
         result = self.import_results.get(path)
         if result is None:
             self.review.clear(f"{path.name} — No import result yet.")
+            self.review.show_analysis_metadata(
+                path, self.metadata_assignments.get(path, AnalysisMetadata())
+            )
         else:
             self.review.show_result(result)
 
@@ -315,6 +330,13 @@ class MainWindow(QMainWindow):
             return
         self.review_path(path)
         result = self.import_results.get(path)
+        if (
+            view is self.phase_overview
+            and path is not None
+            and view.column_view.currentText() == "Experiment metadata"
+        ):
+            self.review.tabs.setCurrentWidget(self.review.analysis_details)
+            return
         if (
             view is self.phase_overview
             and result
@@ -344,6 +366,33 @@ class MainWindow(QMainWindow):
             )
 
     @Slot()
+    def assign_metadata(self) -> None:
+        if self._closing or self._is_working() or not self.selected_files:
+            return
+        dialog = MetadataDialog(
+            tuple(sorted(self.selected_files, key=str)), self.metadata_assignments, self
+        )
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            selected = self._active_batch().current_path()
+            self.metadata_assignments = dialog.assignments()
+            self.import_results = {
+                path: replace(
+                    result,
+                    analysis_metadata=self.metadata_assignments.get(path, AnalysisMetadata()),
+                )
+                for path, result in self.import_results.items()
+            }
+            self.overview.set_files(
+                tuple(self.selected_files), self.import_results, self.metadata_assignments
+            )
+            self.overview.model.set_source_issues(self._source_issues)
+            self._active_batch().select_path(selected)
+            self._mark_project_dirty()
+            self.statusBar().showMessage(
+                "Metadata applied. All recordings remain in exports with their inclusion flags."
+            )
+
+    @Slot()
     def import_selected_files(self) -> None:
         if self._closing or not self.selected_files or self._is_working():
             return
@@ -353,7 +402,7 @@ class MainWindow(QMainWindow):
         self._update_project_label()
         self.overview.start_import()
         self.review_path(self._active_batch().current_path())
-        self._import_worker = ImportWorker(paths, self.phase_assignments)
+        self._import_worker = ImportWorker(paths, self.phase_assignments, self.metadata_assignments)
         self._import_worker.signals.result.connect(self._import_result)
         self._import_worker.signals.progress.connect(self._import_progress)
         self._import_worker.signals.finished.connect(self._import_finished)
@@ -442,7 +491,11 @@ class MainWindow(QMainWindow):
         if not parent:
             return
         self._export_worker = ExportWorker(
-            self.import_results, tuple(self.selected_files), Path(parent), export_format
+            self.import_results,
+            tuple(self.selected_files),
+            Path(parent),
+            export_format,
+            self.metadata_assignments,
         )
         self._export_worker.signals.finished.connect(self._export_finished)
         self._export_worker.signals.failed.connect(self._export_failed)
@@ -510,6 +563,7 @@ class MainWindow(QMainWindow):
             widget.setEnabled(not busy and not self._closing)
         self.import_button.setEnabled(not busy and not self._closing and bool(self.selected_files))
         self.phase_button.setEnabled(self.import_button.isEnabled())
+        self.metadata_button.setEnabled(self.import_button.isEnabled())
         self.check_sources_button.setEnabled(self.import_button.isEnabled())
         self.cancel_button.setEnabled(busy and self._import_worker is not None)
         self.export_button.setEnabled(
@@ -528,6 +582,7 @@ class MainWindow(QMainWindow):
             return
         self.selected_files.clear()
         self.phase_assignments.clear()
+        self.metadata_assignments.clear()
         self._source_hashes.clear()
         self._source_issues.clear()
         self._mark_project_dirty()
@@ -563,7 +618,9 @@ class MainWindow(QMainWindow):
                 self.issue_list.addItem(f"{check.path}: {check.message}")
             else:
                 self._source_issues.pop(check.path, None)
-        self.overview.set_files(tuple(self.selected_files), self.import_results)
+        self.overview.set_files(
+            tuple(self.selected_files), self.import_results, self.metadata_assignments
+        )
         self.overview.model.set_source_issues(self._source_issues)
         if current is not None:
             self._active_batch().select_path(current)
@@ -634,6 +691,7 @@ class MainWindow(QMainWindow):
                 extensions=extensions,
                 recursive=self.recursive.isChecked(),
                 expected_project_sha256=expected,
+                metadata=self.metadata_assignments,
             )
         )
 
@@ -663,6 +721,11 @@ class MainWindow(QMainWindow):
             if mode == "load":
                 self.selected_files = {s.path for s in project.sources}
                 self.phase_assignments = {s.path: s.phase for s in project.sources if s.phase}
+                self.metadata_assignments = {
+                    s.path: s.analysis_metadata
+                    for s in project.sources
+                    if s.analysis_metadata.is_assigned
+                }
                 self.import_results.clear()
                 self._source_issues.clear()
                 self.overview.set_files((), {})

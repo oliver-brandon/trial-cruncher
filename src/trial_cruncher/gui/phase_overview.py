@@ -25,7 +25,7 @@ from trial_cruncher.prl_metrics import MEDPC_RATE
 HEADERS = (
     "File",
     "Subject",
-    "Phase (imported)",
+    "Phase\n(imported)",
     "Phase status",
     "Choices\n(N)",
     "Proportion\ncorrect",
@@ -54,14 +54,20 @@ HEADERS = (
     "Task duration\nS (seconds)",
     "Trials/min\n(Med-PC)",
     "Rate status",
+    "Condition /\ntreatment",
+    "Cohort",
+    "Session\norder",
+    "Analysis\ninclusion",
+    "Inclusion reason",
 )
 METRIC_COLUMNS = {5: 0, 6: 1, 7: 2, 8: 3, 13: 4, 16: 5, 19: 6, 22: 7}
 RATIO_COLUMNS = {c: i for i, start in enumerate((13, 16, 19, 22)) for c in range(start, start + 3)}
 VIEWS = {
-    "Errors and criterion": tuple(range(11)),
-    "Win-stay": (*range(4), 12, *range(13, 19)),
-    "Lose-shift": (*range(4), 12, *range(19, 25)),
-    "Session rate": (0, 1, 2, 27, 28, 29, 30),
+    "Errors and criterion": (*range(11), 34),
+    "Win-stay": (*range(4), 12, *range(13, 19), 34),
+    "Lose-shift": (*range(4), 12, *range(19, 25), 34),
+    "Session rate": (0, 1, 2, 27, 28, 29, 30, 34),
+    "Experiment metadata": (0, 1, 2, 31, 32, 33, 34, 35),
     "All metrics": tuple(range(len(HEADERS))),
 }
 PHASE_STATES = {
@@ -146,6 +152,8 @@ class PhaseRow:
         return self.phase.diagnostics.adjusted_regressive if column in (8, 9) else None
 
     def value(self, column: int) -> str | int | float | bool | None:
+        if 31 <= column <= 35:
+            return self.source.value(column - 17)
         if column == 0:
             return self.path.name
         if column == 3:
@@ -190,6 +198,8 @@ class PhaseRow:
             if isinstance(value, bool):
                 return "Yes" if value else "No"
             return f"{value:.4f}" if isinstance(value, float) else str(value)
+        if 31 <= column <= 35:
+            return "Unassigned"
         if column == 2 and self.phase:
             return "Unassigned"
         if 4 <= column <= 24 and self.status == "Withheld":
@@ -201,6 +211,8 @@ class PhaseRow:
         return "Unavailable"
 
     def tooltip(self, column: int) -> str:
+        if 31 <= column <= 35:
+            return self.source.tooltip(column - 17)
         lines = [str(self.path), f"Phase status: {self.status}"]
         if column >= 27:
             lines = [
@@ -279,6 +291,7 @@ class PhaseRow:
                 self.text(25),
                 self.text(26),
                 self.tooltip(3),
+                *(self.source.text(c) for c in range(14, 19)),
             )
         ).casefold()
 
@@ -327,7 +340,7 @@ class PhaseModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.UserRole:
             return row.path
         if role == Qt.ItemDataRole.TextAlignmentRole and (
-            4 <= index.column() <= 24 or 27 <= index.column() <= 29
+            4 <= index.column() <= 24 or 27 <= index.column() <= 29 or index.column() == 33
         ):
             return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         return None
@@ -354,10 +367,20 @@ class PhaseProxy(QSortFilterProxyModel):
         self.phase: str | None = None
         self.status = "All statuses"
         self.rate_view = False
+        self.condition: str | None = None
+        self.cohort: str | None = None
+        self.inclusion: str | None = None
         self.setDynamicSortFilter(True)
 
     def filterAcceptsRow(self, index, parent) -> bool:
         row = self.sourceModel().row(index)
+        annotation = row.source.annotation
+        if self.condition is not None and (annotation.condition or "") != self.condition:
+            return False
+        if self.cohort is not None and (annotation.cohort or "") != self.cohort:
+            return False
+        if self.inclusion is not None and annotation.inclusion_status != self.inclusion:
+            return False
         status = row.rate_status if self.rate_view else row.status
         status = "Not imported" if status.startswith("Not imported") else status
         if self.status == "Needs attention":
@@ -429,6 +452,24 @@ class BatchPhaseOverview(QWidget):
         ):
             filters.addWidget(widget, 1 if widget is self.search else 0)
         layout.addLayout(filters)
+        metadata_filters = QHBoxLayout()
+        self.condition_filter = QComboBox()
+        self.condition_filter.addItem("All conditions", None)
+        self.condition_filter.setAccessibleName("Filter analysis condition")
+        self.cohort_filter = QComboBox()
+        self.cohort_filter.addItem("All cohorts", None)
+        self.cohort_filter.setAccessibleName("Filter analysis cohort")
+        self.inclusion_filter = QComboBox()
+        self.inclusion_filter.addItem("All inclusion states", None)
+        for state in ("Included", "Excluded", "Not reviewed"):
+            self.inclusion_filter.addItem(state, state)
+        self.inclusion_filter.setAccessibleName("Filter analysis inclusion")
+        for widget in (self.condition_filter, self.cohort_filter, self.inclusion_filter):
+            metadata_filters.addWidget(widget)
+        metadata_filters.addWidget(
+            QLabel("Display filters only — excluded records remain in exports."), 1
+        )
+        layout.addLayout(metadata_filters)
         self.count_label = QLabel()
         self.count_label.setWordWrap(True)
         layout.addWidget(self.count_label)
@@ -446,38 +487,44 @@ class BatchPhaseOverview(QWidget):
         self.table.verticalHeader().hide()
         self.table.setAlternatingRowColors(True)
         self.table.horizontalHeader().setMinimumHeight(48)
+        self.table.horizontalHeader().moveSection(34, 3)
         widths = (
-            180,
+            155,
             70,
-            110,
-            165,
-            60,
             100,
+            145,
+            55,
             95,
-            95,
-            135,
-            110,
-            80,
+            90,
+            90,
+            130,
+            100,
+            75,
             100,
             80,
             115,
-            85,
-            95,
+            80,
+            90,
             115,
-            85,
-            95,
+            80,
+            90,
             115,
-            85,
-            95,
+            80,
+            90,
             115,
-            85,
-            95,
+            80,
+            90,
             160,
             130,
             100,
             130,
             130,
             175,
+            160,
+            120,
+            90,
+            115,
+            260,
         )
         for column, width in enumerate(widths):
             self.table.setColumnWidth(column, width)
@@ -486,6 +533,9 @@ class BatchPhaseOverview(QWidget):
         self.search.textChanged.connect(self._filter_changed)
         self.phase_filter.currentIndexChanged.connect(self._filter_changed)
         self.status_filter.currentIndexChanged.connect(self._filter_changed)
+        self.condition_filter.currentIndexChanged.connect(self._filter_changed)
+        self.cohort_filter.currentIndexChanged.connect(self._filter_changed)
+        self.inclusion_filter.currentIndexChanged.connect(self._filter_changed)
         self.column_view.currentTextChanged.connect(self._columns_changed)
         self.reset_filters.clicked.connect(self.clear_filters)
         self.model.about_to_refresh.connect(self._remember_selection)
@@ -530,6 +580,21 @@ class BatchPhaseOverview(QWidget):
             self.phase_filter.addItem(phase or "Unassigned phase", phase)
         self.phase_filter.setCurrentIndex(max(0, self.phase_filter.findData(selected)))
         self.phase_filter.blockSignals(False)
+        for combo, field, all_label in (
+            (self.condition_filter, "condition", "All conditions"),
+            (self.cohort_filter, "cohort", "All cohorts"),
+        ):
+            selected_value = combo.currentData()
+            values = {getattr(row.annotation, field) or "" for row in self.model.source.rows}
+            if selected_value is not None:
+                values.add(selected_value)
+            combo.blockSignals(True)
+            combo.clear()
+            combo.addItem(all_label, None)
+            for value in sorted(values):
+                combo.addItem(value or "Unassigned", value)
+            combo.setCurrentIndex(max(0, combo.findData(selected_value)))
+            combo.blockSignals(False)
         self._refreshing = False
         self.select_path(self._saved_path)
         self._view_changed()
@@ -538,6 +603,9 @@ class BatchPhaseOverview(QWidget):
         self.search.clear()
         self.phase_filter.setCurrentIndex(0)
         self.status_filter.setCurrentIndex(0)
+        self.condition_filter.setCurrentIndex(0)
+        self.cohort_filter.setCurrentIndex(0)
+        self.inclusion_filter.setCurrentIndex(0)
 
     def _filter_changed(self, *args) -> None:
         selected = self.current_path()
@@ -545,6 +613,9 @@ class BatchPhaseOverview(QWidget):
         self.proxy.search = self.search.text().strip().casefold()
         self.proxy.phase = self.phase_filter.currentData()
         self.proxy.status = self.status_filter.currentText()
+        self.proxy.condition = self.condition_filter.currentData()
+        self.proxy.cohort = self.cohort_filter.currentData()
+        self.proxy.inclusion = self.inclusion_filter.currentData()
         self.proxy.invalidate()
         self._refreshing = False
         self.select_path(selected)
@@ -564,6 +635,8 @@ class BatchPhaseOverview(QWidget):
             self.table.setColumnHidden(column, column not in columns)
         if self.proxy.sortColumn() not in columns:
             self.table.sortByColumn(0, Qt.SortOrder.AscendingOrder)
+        self._view_changed()
+        self._selection_changed()
 
     def _selection_changed(self, *args) -> None:
         if not self._refreshing:
@@ -573,11 +646,13 @@ class BatchPhaseOverview(QWidget):
         visible, total = self.proxy.rowCount(), self.model.rowCount()
         prefix = "No files match the filters. " if total and not visible else ""
         units = (
-            "Med-PC rate uses whole-session choices and S (seconds)."
+            "Manual metadata; inclusion is separate from data quality."
+            if self.column_view.currentText() == "Experiment metadata"
+            else "Med-PC rate uses whole-session choices and S (seconds)."
             if self.proxy.rate_view
             else "Phase ratios use 0–1."
         )
         self.count_label.setText(
             f"{prefix}Showing {visible} of {total} files. Import/export use the full batch. "
-            f"{units} Unavailable is not zero. Labels are from the last import."
+            f"{units} Phase labels follow import; metadata edits apply immediately."
         )

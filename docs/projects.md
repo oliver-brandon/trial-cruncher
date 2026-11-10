@@ -1,7 +1,7 @@
 # Saved projects and source verification
 
 Trial Cruncher projects save the analysis setup so it can be restored in a later
-window. Project format version **1** uses a UTF-8 JSON file ending in `.tcproj.json`.
+window. Project format version **2** uses a UTF-8 JSON file ending in `.tcproj.json`.
 Project files contain source paths, phase labels, settings, and hashes; keep them
 private alongside the research workspace. They are ignored by Git by default.
 
@@ -23,7 +23,9 @@ private alongside the research workspace. They are ignored by Git by default.
 
 The project label shows the current file, unsaved setup changes, and source issues.
 Phase edits are pending configuration for the next import. Saving a project preserves
-those pending assignments, while an export still uses the reviewed import's phase.
+those pending phase assignments, while an export still uses the reviewed import's phase.
+Manual analysis metadata edits apply immediately to review/export and are saved with
+the project; they do not require metric recalculation.
 Re-import applies edits to the analysis. The source freshness guard applies regardless
 of whether a project has been saved or loaded.
 
@@ -38,7 +40,7 @@ View filters are cleared on load and are not stored in the project.
 | Field | Meaning |
 |---|---|
 | `format` | Exact marker `trial-cruncher-project` |
-| `schema_version` | Project schema `1`, independent of export schemas |
+| `schema_version` | Project schema `2`, independent of export schemas |
 | `application_version` | Application version that wrote the project |
 | `saved_at_utc` | Save timestamp with time zone |
 | `analysis_configuration` | Reader/normalizer versions, storage policy, session and phase definition sets/versions/policies, and the confirmed phase protocol profile |
@@ -47,6 +49,7 @@ View filters are cleared on load and are not stored in the project.
 | `sources[].path` | Full absolute source path; identical filenames in different folders remain separate |
 | `sources[].phase` | Explicit normalized phase label or null when unassigned |
 | `sources[].sha256` | Reference content fingerprint, or null when no readable reference has been recorded |
+| `sources[].analysis_metadata` | Versioned manual condition, cohort, session order, inclusion flag, and reason |
 
 The phase protocol profile preserves its configuration version, owner-confirmation
 date, fixed-contingency/no-omission interpretation, and evidence text. These analysis
@@ -161,3 +164,12 @@ older percentage configuration receives both notices. Both preserve source paths
 phase labels, and reference hashes; import is required and Save explicitly records
 the current configuration. The phase definition remains 2. Unrecognized policy or
 profile changes are still rejected. See [Med-PC rate](medpc-trials-per-minute.md).
+
+## Manual metadata in project format 2
+
+Each source stores a validated analysis metadata version-1 object. Exclude requires
+a reason; missing inclusion remains Not reviewed. Loading a format-1 project retains
+its paths, phases, and hashes and adds unassigned metadata, with an explicit unsaved
+upgrade notice. Loading does not write the file; Save persists format 2. Imported
+results are still rebuilt on load. Inclusion never bypasses source freshness or
+strict withholding. See [manual metadata](analysis-metadata.md).

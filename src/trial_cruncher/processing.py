@@ -4,6 +4,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
+from trial_cruncher.analysis_metadata import AnalysisMetadata
 from trial_cruncher.medpc import MedPCData, MedPCReader
 from trial_cruncher.models import Session
 from trial_cruncher.phase_metrics import PhaseSummary, calculate_phase_metrics
@@ -21,10 +22,16 @@ class ImportResult:
     error: str | None = None
     summary: PRLSessionSummary | None = None
     phase_summary: PhaseSummary | None = None
+    analysis_metadata: AnalysisMetadata = AnalysisMetadata()
 
 
-def import_medpc_file(path: Path, phase: str | None = None) -> ImportResult:
+def import_medpc_file(
+    path: Path, phase: str | None = None, analysis_metadata: AnalysisMetadata | None = None
+) -> ImportResult:
     """Retain raw extraction even when the program cannot be normalized."""
+    annotation = AnalysisMetadata() if analysis_metadata is None else analysis_metadata
+    if not isinstance(annotation, AnalysisMetadata):
+        raise ValueError("Analysis metadata must be an AnalysisMetadata record.")
     raw = None
     try:
         raw = MedPCReader().read(path)
@@ -33,7 +40,12 @@ def import_medpc_file(path: Path, phase: str | None = None) -> ImportResult:
         phase_summary = calculate_phase_metrics(session, phase)
     except (ValueError, OSError) as exc:
         logger.warning(str(exc), extra={"path": path, "operation": "import_medpc"})
-        return ImportResult(path, raw=raw, error=str(exc))
+        return ImportResult(path, raw=raw, error=str(exc), analysis_metadata=annotation)
     return ImportResult(
-        path, raw=raw, session=session, summary=summary, phase_summary=phase_summary
+        path,
+        raw=raw,
+        session=session,
+        summary=summary,
+        phase_summary=phase_summary,
+        analysis_metadata=annotation,
     )

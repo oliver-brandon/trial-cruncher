@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from html import escape
 from pathlib import Path
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QSortFilterProxyModel, Qt, Signal
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from trial_cruncher.analysis_metadata import AnalysisMetadata
 from trial_cruncher.models import MetricResult
 from trial_cruncher.prl_metrics import METRIC_LABELS
 from trial_cruncher.processing import ImportResult
@@ -36,6 +38,11 @@ HEADERS = (
     "Proportion correct",
     "Warnings",
     "Trials/min\n(Med-PC)",
+    "Condition / treatment",
+    "Cohort",
+    "Session order",
+    "Analysis inclusion",
+    "Inclusion reason",
 )
 METRIC_NAMES = tuple(METRIC_LABELS)
 ATTENTION_STATES = frozenset(
@@ -49,6 +56,15 @@ class OverviewRow:
     result: ImportResult | None = None
     state: str = "Not imported"
     source_issue: str | None = None
+    analysis_metadata: AnalysisMetadata | None = None
+
+    @property
+    def annotation(self) -> AnalysisMetadata:
+        return (
+            self.analysis_metadata
+            if self.analysis_metadata is not None
+            else (self.result.analysis_metadata if self.result else AnalysisMetadata())
+        )
 
     @property
     def withheld(self) -> bool:
@@ -90,6 +106,11 @@ class OverviewRow:
         return None
 
     def value(self, column: int) -> str | int | float | None:
+        if 14 <= column <= 18:
+            a = self.annotation
+            return (a.condition, a.cohort, a.session_order, a.inclusion_status, a.inclusion_reason)[
+                column - 14
+            ]
         result = self.result
         session = result.session if result else None
         headers = result.raw["headers"] if result and result.raw else {}
@@ -118,6 +139,8 @@ class OverviewRow:
             if column in (11, 13):
                 return f"{value:.4f}"
             return str(value)
+        if 14 <= column <= 18:
+            return "Unassigned"
         if (6 <= column <= 11 or column == 13) and self.withheld:
             return "Withheld"
         if column >= 5 and self.result is None:
@@ -126,6 +149,16 @@ class OverviewRow:
 
     def tooltip(self, column: int) -> str:
         lines = [str(self.path), f"Quality: {self.quality}"]
+        if column >= 14:
+            a = self.annotation
+            lines += [
+                "Manual analysis metadata; independent of metric validity.",
+                f"Condition / treatment: {a.condition or 'Unassigned'}",
+                f"Cohort: {a.cohort or 'Unassigned'}",
+                f"Session order: {a.session_order}",
+                f"Analysis inclusion: {a.inclusion_status}",
+                f"Reason: {a.inclusion_reason or 'Not assigned'}",
+            ]
         if self.source_issue:
             lines.append(self.source_issue)
         if self.result and self.result.error:
@@ -148,6 +181,7 @@ class OverviewRow:
     @property
     def search_text(self) -> str:
         fields = [str(self.path), *(self.text(column) for column in range(1, 5)), *self.warnings]
+        fields.extend(self.text(column) for column in range(14, 19))
         if self.source_issue:
             fields.append(self.source_issue)
         if self.result and self.result.error:
@@ -173,16 +207,32 @@ class OverviewModel(QAbstractTableModel):
                 row.result,
                 "Re-import required" if row.path in issues else row.state,
                 issues.get(row.path),
+                row.annotation,
             )
             for row in self.rows
         ]
         self.endResetModel()
 
-    def set_files(self, paths: Sequence[Path], results: Mapping[Path, ImportResult]) -> None:
+    def set_files(
+        self,
+        paths: Sequence[Path],
+        results: Mapping[Path, ImportResult],
+        annotations: Mapping[Path, AnalysisMetadata] | None = None,
+    ) -> None:
         old_states = {row.path: row.state for row in self.rows}
+        old_annotations = {row.path: row.annotation for row in self.rows}
         self.beginResetModel()
         self.rows = [
-            OverviewRow(path, results.get(path), old_states.get(path, "Not imported"))
+            OverviewRow(
+                path,
+                results.get(path),
+                old_states.get(path, "Not imported"),
+                analysis_metadata=annotations.get(path, AnalysisMetadata())
+                if annotations is not None
+                else results[path].analysis_metadata
+                if path in results
+                else old_annotations.get(path, AnalysisMetadata()),
+            )
             for path in sorted(set(paths), key=str)
         ]
         self._row_by_path = {row.path: i for i, row in enumerate(self.rows)}
@@ -190,7 +240,10 @@ class OverviewModel(QAbstractTableModel):
 
     def start_import(self) -> None:
         self.beginResetModel()
-        self.rows = [OverviewRow(row.path, state="Pending") for row in self.rows]
+        self.rows = [
+            OverviewRow(row.path, state="Pending", analysis_metadata=row.annotation)
+            for row in self.rows
+        ]
         self.endResetModel()
 
     def set_result(self, result: ImportResult) -> None:
@@ -201,7 +254,9 @@ class OverviewModel(QAbstractTableModel):
     def finish_import(self) -> None:
         for index, row in enumerate(self.rows):
             if row.result is None:
-                self.rows[index] = OverviewRow(row.path, state="Not imported (cancelled)")
+                self.rows[index] = OverviewRow(
+                    row.path, state="Not imported (cancelled)", analysis_metadata=row.annotation
+                )
         if self.rows:
             self.dataChanged.emit(
                 self.index(0, 0), self.index(len(self.rows) - 1, len(HEADERS) - 1)
@@ -220,10 +275,12 @@ class OverviewModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.DisplayRole:
             return row.text(index.column())
         if role == Qt.ItemDataRole.ToolTipRole:
-            return row.tooltip(index.column())
+            return "<qt>" + escape(row.tooltip(index.column())).replace("\n", "<br>") + "</qt>"
         if role == Qt.ItemDataRole.UserRole:
             return row.path
-        if role == Qt.ItemDataRole.TextAlignmentRole and index.column() >= 5:
+        if role == Qt.ItemDataRole.TextAlignmentRole and (
+            5 <= index.column() <= 13 or index.column() == 16
+        ):
             return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         return None
 
@@ -332,7 +389,27 @@ class BatchOverview(QWidget):
         # Keep the percentage visible before the five count columns on narrow windows.
         self.table.horizontalHeader().moveSection(11, 6)
         for column, width in enumerate(
-            (220, 150, 80, 160, 130, 105, 95, 95, 95, 100, 110, 145, 90, 130)
+            (
+                220,
+                150,
+                80,
+                160,
+                130,
+                105,
+                95,
+                95,
+                95,
+                100,
+                110,
+                145,
+                90,
+                130,
+                160,
+                130,
+                100,
+                130,
+                250,
+            )
         ):
             self.table.setColumnWidth(column, width)
         layout.addWidget(self.table)
@@ -367,9 +444,14 @@ class BatchOverview(QWidget):
         if previous == self.current_path():
             self._selection_changed()
 
-    def set_files(self, paths: Sequence[Path], results: Mapping[Path, ImportResult]) -> None:
+    def set_files(
+        self,
+        paths: Sequence[Path],
+        results: Mapping[Path, ImportResult],
+        annotations: Mapping[Path, AnalysisMetadata] | None = None,
+    ) -> None:
         selected = self.current_path()
-        self.model.set_files(paths, results)
+        self.model.set_files(paths, results, annotations)
         self._update_programs()
         self.select_path(selected)
         if self.current_path() is None and self.proxy.rowCount():

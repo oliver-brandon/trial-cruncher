@@ -1,4 +1,4 @@
-# Session, choice, and phase CSV export (schema 6)
+# Session, choice, and phase CSV export (schema 7)
 
 ## GUI workflow
 
@@ -210,7 +210,7 @@ record the formula, whole-session scope, source, unit, availability, and reasons
 Invalid duration or a choice beyond S makes the rate blank without withholding
 otherwise eligible choice/phase metrics. See [rate definition](medpc-trials-per-minute.md).
 
-## Whole-session rate alongside phase metrics (schema 6)
+## Whole-session rate alongside phase metrics (schema 7)
 
 `phase_metrics.csv` now includes the same reviewed session rate for convenience:
 
@@ -233,3 +233,14 @@ blank; a genuine zero remains numeric zero. Both copies use the same stored resu
 not a calculation during export. The manifest describes this column mapping.
 Session/phase scientific definitions and saved-project configurations are unchanged;
 only the export layout advances. Create a new export to obtain the additional columns.
+
+## Manual metadata in schema 7
+
+Sessions, Choices, and Phase metrics now include `analysis_condition`, `analysis_cohort`,
+`analysis_session_order`, nullable boolean `analysis_included`, readable
+`analysis_inclusion_status`, `analysis_inclusion_reason`, and annotation version/source/hash.
+All successful recordings remain, including excluded and not-reviewed recordings.
+The manifest includes the same assignments for failed/unimported inputs. Display
+filters do not select the exported analysis set. An inclusion flag is independent
+of metric validity; no calculations or raw headers are changed. See
+[the complete metadata contract](analysis-metadata.md).

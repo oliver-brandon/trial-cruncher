@@ -46,7 +46,7 @@ def test_project_round_trip_setup_hashes_and_duplicate_filenames(phase_input, tm
     data = json.loads(result.path.read_text())
     assert data["analysis_configuration"] == analysis_configuration()
     assert data["discovery"] == {"extensions": [".med", ".txt"], "recursive": True}
-    assert set(data["sources"][0]) == {"path", "phase", "sha256"}
+    assert set(data["sources"][0]) == {"path", "phase", "sha256", "analysis_metadata"}
     assert not any(key in data for key in ("results", "metrics", "source_text", "events"))
     assert before == {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in (a, b)}
 

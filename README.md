@@ -16,7 +16,7 @@ not need to have trials.
 - Batch session overview with numeric sorting, text/program/quality filters, explicit
   missing and withheld values, and click-through review of each source.
 - Batch phase-results comparison with error/criterion, win-stay, and lose-shift
-  layouts, numerator/denominator columns, phase/status filters, and numeric sorting.
+  layouts, numerator/denominator columns, phase/status and metadata filters, and numeric sorting.
 - Filesystem discovery in a background worker, with visible discovery messages and
   structured JSON logs on standard error when a console is available.
 - Canonical event/session/trial records and small reader, normalizer, metric, and
@@ -26,6 +26,8 @@ not need to have trials.
   consistency checks. Use the GUI, `--inspect-medpc FILE`, or the Python API.
 - Background imports with progress, per-file failure isolation, and cancellation
   after the current file. Completed results remain available for review.
+- Manual condition/treatment, cohort, session order, and Include/Exclude/Not reviewed
+  assignments with exclusion reasons, saved in projects and retained in all exports.
 - Save/load `.tcproj.json` projects with per-file phases, fixed analysis configuration,
   source hashes, and discovery settings; changed sources require re-import.
 - Background CSV and Excel export to new folders with source metadata, warnings, missing values,
@@ -86,6 +88,12 @@ are case-insensitive. They apply to subsequent additions; **Clear selection** an
 re-add to filter an existing selection. Folder traversal ignores files with other
 extensions. Explicit mismatches, inaccessible paths, and skipped directory symlinks
 appear in Discovery messages. Symlinked folders must be selected explicitly.
+
+Use **Session metadata…** to assign condition/treatment, cohort, session order, and
+study inclusion. Exclusions require a reason; the default is Not reviewed. Save
+applies these annotations immediately, including to already reviewed results, without
+changing calculations. Excluded recordings remain in exports with their flags.
+See [manual analysis metadata](docs/analysis-metadata.md).
 
 Click **Assign phases…** to label each file as Acquisition, Reversal, or a custom
 phase (for example, Reversal 2). Full paths distinguish duplicate filenames; **Apply
@@ -156,7 +164,7 @@ See [Excel export and safeguards](docs/excel-export.md).
 ## Save and reopen an analysis
 
 Use **Save project** to store the selected paths, phase assignments, analysis
-configuration, source hashes, and discovery settings in a `.tcproj.json` file.
+configuration, source hashes, manual analysis metadata/inclusion, and discovery settings in a `.tcproj.json` file.
 **Open project…** restores the setup and reports changed or missing sources. Click
 **Import Med-PC** after opening to rebuild results; project files contain setup,
 not cached calculations. **Check sources** refreshes source status without importing.

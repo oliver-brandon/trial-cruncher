@@ -1,5 +1,7 @@
 """Read-only session review. All widget/model updates happen on the GUI thread."""
 
+from pathlib import Path
+
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -14,6 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from trial_cruncher.analysis_metadata import AnalysisMetadata
 from trial_cruncher.models import Event
 from trial_cruncher.phase_metrics import METRIC_LABELS as PHASE_LABELS
 from trial_cruncher.phase_metrics import PhaseSummary
@@ -125,6 +128,7 @@ class ReviewPanel(QWidget):
         self.phase_diagnostics.setReadOnly(True)
         phase_layout.addWidget(self.phase_diagnostics, 1)
         self.tabs.addTab(self.phase_page, "Phase metrics")
+        self.analysis_details = self._text_tab("Analysis metadata")
         self.choice_model = ChoiceTableModel(self)
         self.choices = QTableView()
         self.choices.setAccessibleName("Decoded choices")
@@ -154,6 +158,7 @@ class ReviewPanel(QWidget):
         self.phase_table.setRowCount(0)
         self.phase_label.setText("No imported phase results.")
         self.phase_diagnostics.clear()
+        self.analysis_details.clear()
         self.metric_diagnostics.setPlainText("No calculated metrics available.")
         self.tabs.setTabText(self.tabs.indexOf(self.choices), "Decoded choices")
 
@@ -262,6 +267,27 @@ class ReviewPanel(QWidget):
             )
         )
 
+    def show_analysis_metadata(self, path: Path, a: AnalysisMetadata) -> None:
+        order = a.session_order if a.session_order is not None else "Unassigned"
+        self.analysis_details.setPlainText(
+            "\n".join(
+                (
+                    f"Source file: {path}",
+                    "Manual study annotations — independent of metric validity.",
+                    "Included, Excluded, and Not reviewed records all remain in exports.",
+                    "",
+                    f"Condition / treatment: {a.condition or 'Unassigned'}",
+                    f"Cohort: {a.cohort or 'Unassigned'}",
+                    f"Session order: {order}",
+                    f"Analysis inclusion: {a.inclusion_status}",
+                    f"Reason: {a.inclusion_reason or 'Not assigned'}",
+                    "",
+                    f"Metadata version: {a.version}",
+                    f"Metadata SHA-256: {a.sha256}",
+                )
+            )
+        )
+
     def show_result(self, result: ImportResult) -> None:
         self.clear()
         raw, session = result.raw, result.session
@@ -326,6 +352,20 @@ class ReviewPanel(QWidget):
             ]
             if session is not None:
                 lines += [f"Normalizer version: {session.metadata['normalizer_version']}"]
+        a = result.analysis_metadata
+        self.show_analysis_metadata(result.source_file, a)
+        self.summary.setText(self.summary.text() + f" · Analysis: {a.inclusion_status}")
+        lines += [
+            "",
+            "Manual analysis metadata (separate from original headers):",
+            f"Condition / treatment: {a.condition or 'Unassigned'}",
+            f"Cohort: {a.cohort or 'Unassigned'}",
+            f"Session order: {a.session_order if a.session_order is not None else 'Unassigned'}",
+            f"Analysis inclusion: {a.inclusion_status}",
+            f"Reason: {a.inclusion_reason or 'Not assigned'}",
+            f"Analysis metadata version: {a.version}",
+            f"Analysis metadata SHA-256: {a.sha256}",
+        ]
         self.details.setPlainText("\n".join(lines))
         self.warnings.setPlainText("\n".join(messages))
         if session is None:

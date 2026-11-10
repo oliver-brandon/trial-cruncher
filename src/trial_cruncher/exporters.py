@@ -15,6 +15,7 @@ from typing import Literal, Protocol
 import pandas as pd
 
 from trial_cruncher import __version__, phase_metrics
+from trial_cruncher.analysis_metadata import AnalysisMetadata
 from trial_cruncher.prl import CHOICE_STORAGE_POLICY, NORMALIZER_VERSION
 from trial_cruncher.prl_metrics import (
     DEFINITION_SET,
@@ -80,6 +81,8 @@ def export_import_results(
     selected_paths: Sequence[Path],
     parent: Path,
     export_format: ExportFormat = "csv",
+    *,
+    assignments: Mapping[Path, AnalysisMetadata] | None = None,
 ) -> Path:
     """Export the reviewed snapshot into a fresh folder; record excluded inputs.
 
@@ -92,9 +95,19 @@ def export_import_results(
     sessions = []
     summaries = {}
     phases = {}
+    annotations = {}
     inputs = []
     for path in paths:
         result = results.get(path)
+        annotation = (
+            result.analysis_metadata
+            if result
+            else (assignments or {}).get(path, AnalysisMetadata())
+        )
+        if not isinstance(annotation, AnalysisMetadata):
+            raise ValueError(
+                "Invalid manual analysis metadata; review assignments before exporting."
+            )
         session = result.session if result and not result.error else None
         if session is not None:
             if result.summary is None:
@@ -111,6 +124,7 @@ def export_import_results(
                     "Session interpretation versions have changed; re-import before exporting."
                 )
             sessions.append(session)
+            annotations[session.source_file] = annotation
             summaries[session.source_file] = result.summary
             phase = result.phase_summary
             if phase is None:
@@ -139,6 +153,10 @@ def export_import_results(
                 "error": result.error if result else None,
                 "source_sha256": raw.get("source_sha256") if raw else None,
                 "warnings": session.warnings if session else raw.get("warnings", ()) if raw else (),
+                "analysis_metadata": asdict(annotation),
+                "analysis_metadata_sha256": annotation.sha256,
+                "analysis_metadata_source": "manual" if annotation.is_assigned else "unassigned",
+                "analysis_inclusion_status": annotation.inclusion_status,
             }
         )
     if not sessions:
@@ -150,9 +168,9 @@ def export_import_results(
     }
     require_current_sources(expected_hashes)
     tables = {
-        "sessions.csv": build_session_table(sessions, summaries),
-        "choices.csv": build_choice_table(sessions, phases),
-        "phase_metrics.csv": build_phase_table(sessions, phases, summaries),
+        "sessions.csv": build_session_table(sessions, summaries, annotations),
+        "choices.csv": build_choice_table(sessions, phases, annotations),
+        "phase_metrics.csv": build_phase_table(sessions, phases, summaries, annotations),
     }
     manifest = {
         "schema_version": SCHEMA_VERSION,
@@ -169,6 +187,11 @@ def export_import_results(
         "configuration": {
             "row_levels": ["session", "choice", "phase"],
             "session_filter": "Successful imports, including sessions with warnings",
+            "analysis_inclusion": (
+                "Manual study flags only: all successful recordings are exported, including "
+                "Excluded and Not reviewed. Display filters do not change "
+                "inclusion or export scope."
+            ),
             "choice_filter": "All normalized choice events, including invalid decoded choices",
             "order": "Source path, then normalizer event order (Med-PC C index)",
             "metrics": [

@@ -173,3 +173,12 @@ in both formats. Coverage includes unassigned phases, zero choices, invalid dura
 strict withholding, and warning-only results. Phase metric JSON remains eight metrics,
 and Quality does not duplicate the rate as a phase metric. No recalculation occurs
 in the export path. Export table/workbook versions are 6/5; scientific versions stay 4/2.
+
+`tests/test_analysis_metadata.py` and `tests/test_metadata_gui.py` cover typed manual
+metadata, reason validation, missing/false flags, no raw inference, unchanged metric
+objects, immediate edits, numeric order sorting, view-only filters, all-record exports,
+failed/unimported assignments, literal Excel text, project persistence/migration, and
+background snapshots. For desktop review, set mixed inclusion states, filter to
+Included, and confirm exports still contain every source with its explicit flag.
+Save/load a project and verify annotations before and after re-import. Native dialogs
+and native Excel rendering still need platform-specific verification.

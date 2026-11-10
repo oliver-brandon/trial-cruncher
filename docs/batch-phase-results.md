@@ -13,6 +13,7 @@ aggregation, phase assignment, or export schema.
 | Win-stay | File, subject, phase/status, eligible pair count, and correct/incorrect-conditioned probabilities with separate numerators and denominators |
 | Lose-shift | File, subject, phase/status, eligible pair count, and correct/incorrect-conditioned probabilities with separate numerators and denominators |
 | Session rate | Whole-session choices, duration S, Med-PC trials/min, and rate status; independent of phase assignment |
+| Experiment metadata | Manual condition/treatment, cohort, session order, inclusion and reason beside source identity |
 | All metrics | Every metric and ratio count, plus one-based criterion choice ordinal, program, and original date text |
 
 Ratios use 0–1 and display four decimals; sorting uses full stored precision.
@@ -38,7 +39,9 @@ resets the status filter because it changes from phase status to rate status. If
   warnings, unavailable metrics, unassigned phases, withheld results, failures, stale
   sources, and unimported files. It excludes pending work.
 
-Filters combine and the visible/total count stays explicit. Reset filters clears
+Condition, cohort, and inclusion filters use current manual annotations and combine
+with phase/status/search. They affect display only and never select analysis inclusion
+or export scope. Filters combine and the visible/total count stays explicit. Reset filters clears
 search, phase, and status while retaining the layout and sort. A chosen phase filter
 remains selected during re-import even before its new results arrive. Filters are
 independent between the upper tabs, are not saved in projects, and reset on Clear
@@ -78,7 +81,9 @@ If criterion was reached on the last choice, the denominator is also zero but cr
 reached is **Yes**. Neither demonstrates postcriterion maintenance. See
 [phase definitions](medpc-behavioral-metrics-spec.md).
 
-Labels and values come from the **last import**, not pending phase edits. Re-import
+Phase labels and metric values come from the **last import**, not pending phase edits.
+Manual metadata edits apply immediately and remain visible even before import or
+after source invalidation; they are not calculated observations. Re-import
 applies edits and clears old values before work begins. Cancellation keeps only newly
 completed results. Failed re-reads, project loads, and source checks clear affected
 values in both views. A stale source may disappear under a phase filter when its
@@ -124,3 +129,9 @@ The label includes Med-PC and the whole-session scope to avoid suggesting a new
 phase rate or the deferred MAT definition. Exported rate values are in Sessions and are copied into Phase metrics with
 explicit whole-session labels;
 see [rate definition](medpc-trials-per-minute.md).
+
+The inclusion column is visible in the focused comparison layouts. **Experiment
+metadata** opens the read-only Analysis metadata detail tab on row selection.
+Include/Exclude/Not reviewed is distinct from phase/rate availability, and Include
+never overrides strict withholding. Reset filters and project loading also clear the
+metadata view filters. See [manual metadata](analysis-metadata.md).

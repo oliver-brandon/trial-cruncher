@@ -15,6 +15,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
+from trial_cruncher.analysis_metadata import ANNOTATION_COLUMNS, analysis_metadata_from_dict
 from trial_cruncher.tables import WHOLE_SESSION_RATE_COLUMN, json_text
 
 MAX_ROWS = 1_048_576
@@ -38,7 +39,7 @@ QUALITY_COLUMNS = (
     "reasons_json",
     "definition_version",
     "policy",
-)
+) + ANNOTATION_COLUMNS
 
 
 def _text_parts(text: str) -> list[str]:
@@ -140,6 +141,7 @@ def build_workbook(
             "source_sha256": item["source_sha256"],
             "error": item["error"],
             "warnings_json": json_text(item["warnings"]),
+            **analysis_metadata_from_dict(item["analysis_metadata"]).export_fields(),
         }
         quality.append({**common, "record_type": "input"})
         session = by_source.get(item["source_file"])
@@ -163,6 +165,7 @@ def build_workbook(
             quality.append(
                 {
                     "record_type": "phase_metric",
+                    **{key: row[key] for key in ANNOTATION_COLUMNS},
                     "source_file": row["source_file"],
                     "input_status": "exported",
                     "source_sha256": row["source_sha256"],
@@ -188,7 +191,7 @@ def build_workbook(
         "Quality": quality_table,
     }
     manifest["format"] = "xlsx"
-    manifest["workbook_schema_version"] = "5"
+    manifest["workbook_schema_version"] = "6"
     manifest["workbook"] = "results.xlsx"
     manifest["sheets"] = [*tables, "Provenance"]
     manifest["tables"] = {

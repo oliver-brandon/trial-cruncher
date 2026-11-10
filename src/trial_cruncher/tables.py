@@ -10,12 +10,13 @@ from typing import Any
 import pandas as pd
 
 from trial_cruncher import __version__
+from trial_cruncher.analysis_metadata import ANNOTATION_COLUMNS, AnalysisMetadata
 from trial_cruncher.models import Session
 from trial_cruncher.phase_metrics import METRIC_LABELS as PHASE_METRIC_LABELS
 from trial_cruncher.phase_metrics import STRATEGIES, PhaseSummary
 from trial_cruncher.prl_metrics import MEDPC_RATE, METRIC_LABELS, PRLSessionSummary
 
-SCHEMA_VERSION = "6"
+SCHEMA_VERSION = "7"
 WHOLE_SESSION_RATE_COLUMN = "whole_session_medpc_trials_per_minute"
 PROVENANCE_COLUMNS = (
     "schema_version",
@@ -31,7 +32,7 @@ PROVENANCE_COLUMNS = (
     "time_origin",
     "time_unit",
     "warnings_json",
-)
+) + ANNOTATION_COLUMNS
 SESSION_COLUMNS = (
     PROVENANCE_COLUMNS
     + (
@@ -125,7 +126,7 @@ def json_text(value: Any) -> str:
     return json.dumps(value, default=encode, ensure_ascii=False, allow_nan=False)
 
 
-def _provenance(session: Session) -> dict[str, Any]:
+def _provenance(session: Session, annotation: AnalysisMetadata | None = None) -> dict[str, Any]:
     metadata = session.metadata
     raw = metadata.get("raw_medpc", {})
     return {
@@ -142,11 +143,14 @@ def _provenance(session: Session) -> dict[str, Any]:
         "time_origin": metadata.get("time_origin"),
         "time_unit": metadata.get("time_unit"),
         "warnings_json": json_text(session.warnings),
+        **(annotation or AnalysisMetadata()).export_fields(),
     }
 
 
 def build_session_table(
-    sessions: Sequence[Session], summaries: Mapping[Path, PRLSessionSummary] | None = None
+    sessions: Sequence[Session],
+    summaries: Mapping[Path, PRLSessionSummary] | None = None,
+    annotations: Mapping[Path, AnalysisMetadata] | None = None,
 ) -> pd.DataFrame:
     rows = []
     for session in sessions:
@@ -154,7 +158,7 @@ def build_session_table(
         metric_values = {metric.name: metric.value for metric in summary.metrics} if summary else {}
         rows.append(
             {
-                **_provenance(session),
+                **_provenance(session, (annotations or {}).get(session.source_file)),
                 "duration_s": session.duration_s,
                 "head_entries_recorded": session.metadata.get("head_entries_recorded"),
                 "latency_available": session.metadata.get("latency_available"),
@@ -179,11 +183,13 @@ def build_session_table(
 
 
 def build_choice_table(
-    sessions: Sequence[Session], phases: Mapping[Path, PhaseSummary] | None = None
+    sessions: Sequence[Session],
+    phases: Mapping[Path, PhaseSummary] | None = None,
+    annotations: Mapping[Path, AnalysisMetadata] | None = None,
 ) -> pd.DataFrame:
     rows = []
     for session in sessions:
-        provenance = _provenance(session)
+        provenance = _provenance(session, (annotations or {}).get(session.source_file))
         phase = phases.get(session.source_file) if phases is not None else None
         for ordinal, event in enumerate(session.events):
             if event.name != "choice":
@@ -220,6 +226,7 @@ def build_phase_table(
     sessions: Sequence[Session],
     phases: Mapping[Path, PhaseSummary],
     summaries: Mapping[Path, PRLSessionSummary],
+    annotations: Mapping[Path, AnalysisMetadata] | None = None,
 ) -> pd.DataFrame:
     rows = []
     for session in sessions:
@@ -231,7 +238,7 @@ def build_phase_table(
             raise ValueError("Med-PC session rate is missing; re-import before exporting.")
         diagnostic = phase.diagnostics
         row = {
-            **_provenance(session),
+            **_provenance(session, (annotations or {}).get(session.source_file)),
             "phase": phase.config.phase,
             "phase_status": phase.status,
             "phase_definition_set": phase.definition_set,

@@ -123,7 +123,7 @@ scope and serialization rules. Per-session metadata retains reader/normalizer ve
 raw acquisition fields, and time units/origin. Schema 2 adds the six calculated
 session columns and their status/reasons/diagnostics; the manifest records metric
 definition IDs/versions and the strict withholding policy. Excel workbook layout
-version 5 uses schema 6 tables, including Phase metrics, Quality, and
+version 6 uses schema 7 tables, including Phase metrics, Quality, and
 Provenance sheets. Phase configurations and definitions are recorded independently
 of the existing session definitions. `excel.py` stores literal text, chunks long metadata, checks
 worksheet/XML limits, and exclusively creates `results.xlsx`; the shared export
@@ -191,3 +191,21 @@ The rate is exported in Sessions and copied into Phase metrics under an explicit
 whole-session column, with scope/formula and copy-column mapping in the manifest.
 The table builder copies the stored MetricResult without invoking calculations;
 phase metric JSON and Quality phase rows remain the original eight phase metrics.
+
+## Manual study annotations
+
+`analysis_metadata.py` provides an immutable, validated annotation record with
+nullable condition/cohort/order/inclusion, exclusion reason, version, and stable
+content hash. It never reads raw Group/Experiment fields. `ImportResult` holds
+annotations separately from Session and calculated results, including on failed
+imports. Metadata edits replace only this field on existing results; metrics and
+raw objects are retained. Pending/unimported annotations remain in a path-keyed map.
+`gui/metadata.py` validates all edits before applying them; busy guards and worker
+copies provide operation snapshots. The shared overview rows hold live manual
+annotations even when imported results are invalidated.
+
+Project format 2 adds per-source annotations; format 1 migrates with unknown fields
+and Not reviewed inclusion. Table schema 7/workbook layout 6 repeat annotations in
+all result tables and Quality; manifests account for failed/unimported inputs. The
+boolean flag is study intent only: all imports/exports retain their existing full-batch
+scope, and strict metric withholding remains independent. See [metadata](analysis-metadata.md).
