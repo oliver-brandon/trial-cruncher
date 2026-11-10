@@ -170,3 +170,15 @@ Accuracy now uses explicit proportion-correct metric IDs (0–1): session defini
 configuration as a supported upgrade, flag it visibly, and require re-import and an
 explicit save to persist it. Other mismatches still fail closed. See
 [scale migration](proportion-correct.md).
+
+## Batch phase-results projection
+
+`gui/phase_overview.py` projects the authoritative `OverviewRow` snapshots through a
+second model/proxy. It reads existing phase metrics and diagnostic counts without
+recalculating or maintaining a second import-result store. Source resets and changes
+propagate pending/cancelled/failed/stale states to both tabs on the GUI thread.
+Phase-specific filters and focused column layouts affect display only. MainWindow
+routes detail selection from the active upper tab, preserving full source-path identity
+through sorting, filtering, and tab changes. Hidden selections clear review and
+inactive-tab events cannot switch the reviewed source. See
+[batch phase results](batch-phase-results.md).

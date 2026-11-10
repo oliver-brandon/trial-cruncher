@@ -1,5 +1,9 @@
 # Batch session overview
 
+The upper batch area has **Sessions** and **Phase results** tabs. This document
+describes Sessions; see [batch phase results](batch-phase-results.md) for the
+behavioral metric/denominator comparison view. Both share the same imported rows.
+
 The batch overview is the file selector above the existing detailed review. It shows
 one row per discovered file, including failed and unimported files. It uses the same
 imported session and metric snapshot as the detail tabs and CSV export. It does not

@@ -15,6 +15,8 @@ not need to have trials.
   sessions and review details, decoded choices, warnings/checks, and source text.
 - Batch session overview with numeric sorting, text/program/quality filters, explicit
   missing and withheld values, and click-through review of each source.
+- Batch phase-results comparison with error/criterion, win-stay, and lose-shift
+  layouts, numerator/denominator columns, phase/status filters, and numeric sorting.
 - Filesystem discovery in a background worker, with visible discovery messages and
   structured JSON logs on standard error when a console is available.
 - Canonical event/session/trial records and small reader, normalizer, metric, and
@@ -118,6 +120,12 @@ review and overview filters. Closing during import cancels remaining files and w
 **Overview filters affect the view only: import and export use the full batch.**
 The visible/total count makes hidden rows explicit. Dates retain the source header
 text and sort as text; no calendar format is inferred.
+
+Choose **Phase results** in the upper batch area to compare behavioral metrics across
+sessions. Select **Errors and criterion**, **Win-stay**, **Lose-shift**, or **All metrics**
+to see the relevant values and denominators together. Search or filter by imported
+phase/status; click a row for details. Zero denominators remain zero while undefined
+ratios say **Unavailable**. See [batch phase results](docs/batch-phase-results.md).
 
 Click **Export CSV…** to export all successful imports, including hidden rows and
 warnings, then choose a parent folder. A new uniquely named folder holds `sessions.csv`,

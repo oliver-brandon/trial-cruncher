@@ -151,3 +151,12 @@ and externally edited project rejection. Never alter research originals for test
 plain numeric Excel formatting, renamed schema-4 columns and units, rejection of
 old calculated snapshots, and safe percentage-project configuration upgrades. GUI
 checks verify proportion labels/values and the explicit re-import/save migration flow.
+
+`tests/test_phase_overview.py` checks stored metrics/ratio counts, missing/zero/withheld
+states, full-precision numeric/boolean sorting, literal search, phase/status filters,
+column layouts, mouse click-through, duplicate filenames, inactive-tab isolation,
+cancellation/failure, stale sources, project load, and full-batch import/export scope.
+For desktop review, select the upper **Phase results** tab, inspect each focused
+layout, sort a denominator in both directions, filter out the selected row, and
+switch upper tabs. The detailed review must never point to a hidden/different file.
+Use a disposable source copy when checking source-change invalidation.

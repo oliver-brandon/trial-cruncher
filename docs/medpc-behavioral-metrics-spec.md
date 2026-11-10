@@ -340,3 +340,10 @@ Final verification on November 10, 2026: **247 tests passed**, including the
 341-sequence independent comparison inside the suite. Ruff lint and format checks,
 dependency consistency, Markdown links, and diff whitespace checks passed. The phase
 assignment editor and eight-row review screen were visually inspected offscreen.
+
+## Batch comparison
+
+The upper **Phase results** tab now provides a read-only batch comparison of these
+same imported metrics and denominators, with focused error/win-stay/lose-shift layouts
+and independent phase/status filters. It introduces no new scientific definition or
+export version. See [batch phase results](batch-phase-results.md).

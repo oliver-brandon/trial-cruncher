@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSplitter,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -32,6 +33,7 @@ from trial_cruncher.exporters import ExportFormat
 from trial_cruncher.gui.export_worker import ExportWorker
 from trial_cruncher.gui.import_worker import ImportWorker
 from trial_cruncher.gui.overview import BatchOverview
+from trial_cruncher.gui.phase_overview import BatchPhaseOverview
 from trial_cruncher.gui.phases import PhaseDialog
 from trial_cruncher.gui.project_worker import ProjectWorker
 from trial_cruncher.gui.review import ReviewPanel
@@ -86,6 +88,7 @@ class MainWindow(QMainWindow):
         self._source_hashes: dict[Path, str | None] = {}
         self._source_issues: dict[Path, str] = {}
         self._project_dirty = False
+        self._reviewed_path: Path | None = None
         self._closing = False
         self.import_results: dict[Path, ImportResult] = {}
         self._pool = QThreadPool.globalInstance()
@@ -176,13 +179,17 @@ class MainWindow(QMainWindow):
         self.export_status.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self.export_status)
         self.overview = BatchOverview()
+        self.phase_overview = BatchPhaseOverview(self.overview.model)
+        self.batch_tabs = QTabWidget()
+        self.batch_tabs.addTab(self.overview, "Sessions")
+        self.batch_tabs.addTab(self.phase_overview, "Phase results")
         self.review = ReviewPanel()
         splitter = QSplitter(Qt.Orientation.Vertical)
-        splitter.addWidget(self.overview)
+        splitter.addWidget(self.batch_tabs)
         splitter.addWidget(self.review)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 2)
-        splitter.setSizes([280, 480])
+        splitter.setStretchFactor(0, 2)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([380, 300])
         layout.addWidget(splitter, 1)
         self.progress = QProgressBar()
         self.progress.hide()
@@ -202,7 +209,13 @@ class MainWindow(QMainWindow):
         self.cancel_button.clicked.connect(self.cancel_import)
         self.export_button.clicked.connect(self.export_csv)
         self.excel_button.clicked.connect(self.export_excel)
-        self.overview.path_selected.connect(self.review_path)
+        self.overview.path_selected.connect(
+            lambda path: self._batch_path_selected(self.overview, path)
+        )
+        self.phase_overview.path_selected.connect(
+            lambda path: self._batch_path_selected(self.phase_overview, path)
+        )
+        self.batch_tabs.currentChanged.connect(self._batch_tab_changed)
         self.open_project_button.clicked.connect(self.open_project)
         self.save_project_button.clicked.connect(self.save_project)
         self.save_project_as_button.clicked.connect(self.save_project_as)
@@ -270,10 +283,11 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def review_path(self, path: Path | None) -> None:
+        self._reviewed_path = path
         if path is None:
             message = (
                 "No files match the current filters. Reset filters to see the batch."
-                if self.selected_files and not self.overview.proxy.rowCount()
+                if self.selected_files and not self._active_batch().proxy.rowCount()
                 else "Select a row in the batch overview to review its source and results."
             )
             self.review.clear(message)
@@ -286,6 +300,31 @@ class MainWindow(QMainWindow):
             self.review.clear(f"{path.name} — No import result yet.")
         else:
             self.review.show_result(result)
+
+    def _active_batch(self) -> BatchOverview | BatchPhaseOverview:
+        return (
+            self.phase_overview
+            if self.batch_tabs.currentWidget() is self.phase_overview
+            else self.overview
+        )
+
+    def _batch_path_selected(
+        self, view: BatchOverview | BatchPhaseOverview, path: Path | None
+    ) -> None:
+        if self._active_batch() is not view:
+            return
+        self.review_path(path)
+        result = self.import_results.get(path)
+        if (
+            view is self.phase_overview
+            and result
+            and result.session
+            and path not in self._source_issues
+        ):
+            self.review.tabs.setCurrentWidget(self.review.phase_page)
+
+    def _batch_tab_changed(self, *args) -> None:
+        self._active_batch().select_path(self._reviewed_path)
 
     @Slot()
     def assign_phases(self) -> None:
@@ -311,7 +350,7 @@ class MainWindow(QMainWindow):
         self._source_issues.clear()
         self._update_project_label()
         self.overview.start_import()
-        self.review_path(self.overview.current_path())
+        self.review_path(self._active_batch().current_path())
         self._import_worker = ImportWorker(paths, self.phase_assignments)
         self._import_worker.signals.result.connect(self._import_result)
         self._import_worker.signals.progress.connect(self._import_progress)
@@ -492,6 +531,7 @@ class MainWindow(QMainWindow):
         self._mark_project_dirty()
         self.import_results.clear()
         self.overview.clear_filters()
+        self.phase_overview.clear_filters()
         self.overview.set_files((), {})
         self.issue_list.clear()
         self.review.clear()
@@ -511,7 +551,7 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _apply_source_checks(self, checks: tuple[SourceCheck, ...]) -> None:
-        current = self.overview.current_path()
+        current = self._active_batch().current_path()
         if current not in self.selected_files:
             current = None
         for check in checks:
@@ -524,8 +564,8 @@ class MainWindow(QMainWindow):
         self.overview.set_files(tuple(self.selected_files), self.import_results)
         self.overview.model.set_source_issues(self._source_issues)
         if current is not None:
-            self.overview.select_path(current)
-        self.review_path(current)
+            self._active_batch().select_path(current)
+        self.review_path(self._active_batch().current_path())
         self._update_project_label()
         self._set_busy(self._is_working())
 
@@ -623,7 +663,9 @@ class MainWindow(QMainWindow):
                 self.phase_assignments = {s.path: s.phase for s in project.sources if s.phase}
                 self.import_results.clear()
                 self._source_issues.clear()
+                self.overview.set_files((), {})
                 self.overview.clear_filters()
+                self.phase_overview.clear_filters()
                 self.issue_list.clear()
                 self.extensions.setText(", ".join(project.extensions))
                 self.recursive.setChecked(project.recursive)
