@@ -264,20 +264,21 @@ def test_competing_writers_do_not_overwrite(tmp_path):
     assert read_csv(destination) == [{"value": winner}]
 
 
-def test_export_uses_reviewed_snapshot_even_after_source_changes(write_export, tmp_path):
+@pytest.mark.parametrize("export_format", ["csv", "xlsx"])
+def test_export_requires_reimport_after_source_changes(write_export, tmp_path, export_format):
+    from trial_cruncher.source_tracking import SourcesChangedError
+
     path = write_export()
     result = import_medpc_file(path)
-    path.write_text("Different on-disk contents after import")
+    path.write_text(path.read_text().replace("Subject: 0007", "Subject: 0008"))
     changed = path.read_bytes(), path.stat().st_mtime_ns
-    destination = export_import_results({path: result}, [path], tmp_path)
-    (session,) = read_csv(destination / "sessions.csv")
-    assert session["source_sha256"] == result.raw["source_sha256"]
-    assert (
-        json.loads(session["metadata_json"])["raw_medpc"]["source_text"]
-        == result.raw["source_text"]
-    )
-    assert len(read_csv(destination / "choices.csv")) == 4
+    with pytest.raises(SourcesChangedError, match="re-import"):
+        export_import_results({path: result}, [path], tmp_path, export_format)
+    assert not list(tmp_path.glob("trial-cruncher-export-*"))
     assert (path.read_bytes(), path.stat().st_mtime_ns) == changed
+    refreshed = import_medpc_file(path)
+    destination = export_import_results({path: refreshed}, [path], tmp_path, export_format)
+    assert (destination / "manifest.json").exists()
 
 
 @pytest.mark.parametrize(

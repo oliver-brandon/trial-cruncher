@@ -108,7 +108,7 @@ failed file as a successful empty dataset. GUI imports currently process files s
 in one worker; parallel analysis and persistent result caching are not implemented.
 
 `gui/phases.py` provides a full-path per-file assignment dialog with custom/bulk labels.
-Assignments are in-memory pending import configuration. ImportWorker copies the
+Assignments are pending import configuration and can be persisted in project files. ImportWorker copies the
 mapping before work starts; phase editing is disabled during background operations.
 A cancelled/failed re-import cannot retain old phase results. The phase review tab
 shows its own availability, criterion evidence, and ratio counts without overwriting
@@ -146,3 +146,21 @@ implementations; use a plugin registry only if genuine extension needs emerge.
 
 The separation allows future GUI, CLI, and programmatic clients to share the same
 engine without importing GUI dependencies into calculations.
+
+## Project persistence and source freshness
+
+`projects.py` validates version 1 `.tcproj.json` setup files and writes atomically
+with exclusive creation or an expected-project-hash replacement guard. Files retain
+absolute source paths, nullable phase labels/reference hashes, discovery settings,
+and the fixed analysis configuration. Incompatible definitions/policies fail closed.
+Calculated results and raw recordings are not serialized; loading clears results
+and requires import. Unknown or missing sources stay explicit in the selection.
+
+`source_tracking.py` streams SHA-256 hashes with read-stability checks. Known baselines
+advance on import, not on save/check. ProjectWorker performs IO/hashing off the GUI
+thread, returning immutable records via signals; only GUI handlers restore widgets,
+clear stale results, and mark source issues. Busy/deferred-close behavior includes
+project operations. Exporters check source hashes before writing and before the final
+manifest; stale export failures clean up partial bundles and signal affected paths
+for GUI invalidation. Verification is point-in-time, not a filesystem watcher.
+See [project contract](projects.md).

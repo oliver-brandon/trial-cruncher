@@ -130,3 +130,19 @@ old reviewed phase is retained; re-import and confirm the new phase. Blank a pha
 re-import, and confirm session summaries still show while phase metrics are
 unavailable. Export both formats and verify phase rows, annotations, and manifest
 configuration hashes. Native Excel rendering needs separate verification.
+
+## Project and freshness verification
+
+`tests/test_projects.py` and `tests/test_project_gui.py` cover valid/malformed project
+round trips, fixed configuration compatibility, missing sources, content hashing,
+atomic saves, protection of originals/links/unrelated files, concurrent/external
+edits, load failure isolation, background IO, busy/deferred-close behavior, changed
+source invalidation, and re-import recovery. Export tests now require source hashes
+to match; an old reviewed snapshot cannot be exported after its source changes.
+
+For desktop review, save mixed per-file phases and discovery settings, open the
+project in a new window, and verify every path/phase before importing. Use disposable
+copies to test a changed and a missing input; confirm stale metrics clear and export
+requires re-import. Save before re-import and verify the old reference hash remains.
+Re-import and save again to update it. Check project Save As, picker cancellation,
+and externally edited project rejection. Never alter research originals for tests.

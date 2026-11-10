@@ -33,8 +33,11 @@ from trial_cruncher.gui.export_worker import ExportWorker
 from trial_cruncher.gui.import_worker import ImportWorker
 from trial_cruncher.gui.overview import BatchOverview
 from trial_cruncher.gui.phases import PhaseDialog
+from trial_cruncher.gui.project_worker import ProjectWorker
 from trial_cruncher.gui.review import ReviewPanel
 from trial_cruncher.processing import ImportResult
+from trial_cruncher.projects import PROJECT_SUFFIX, ProjectResult
+from trial_cruncher.source_tracking import SourceCheck
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +80,12 @@ class MainWindow(QMainWindow):
         self._worker: DiscoveryWorker | None = None
         self._import_worker: ImportWorker | None = None
         self._export_worker: ExportWorker | None = None
+        self._project_worker: ProjectWorker | None = None
+        self._project_path: Path | None = None
+        self._project_sha256: str | None = None
+        self._source_hashes: dict[Path, str | None] = {}
+        self._source_issues: dict[Path, str] = {}
+        self._project_dirty = False
         self._closing = False
         self.import_results: dict[Path, ImportResult] = {}
         self._pool = QThreadPool.globalInstance()
@@ -91,6 +100,24 @@ class MainWindow(QMainWindow):
         )
         description.setWordWrap(True)
         layout.addWidget(description)
+        project_bar = QHBoxLayout()
+        self.open_project_button = QPushButton("Open project…")
+        self.save_project_button = QPushButton("Save project")
+        self.save_project_as_button = QPushButton("Save project as…")
+        self.check_sources_button = QPushButton("Check sources")
+        for button in (
+            self.open_project_button,
+            self.save_project_button,
+            self.save_project_as_button,
+            self.check_sources_button,
+        ):
+            project_bar.addWidget(button)
+        project_bar.addStretch()
+        layout.addLayout(project_bar)
+        self.project_label = QLabel("Project: unsaved")
+        self.project_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.project_label.setWordWrap(True)
+        layout.addWidget(self.project_label)
         options = QHBoxLayout()
         label = QLabel("File extensions (comma-separated):")
         self.extensions = QLineEdit(", ".join(DEFAULT_EXTENSIONS))
@@ -160,7 +187,7 @@ class MainWindow(QMainWindow):
         self.progress = QProgressBar()
         self.progress.hide()
         layout.addWidget(self.progress)
-        layout.addWidget(QLabel("Discovery messages:"))
+        layout.addWidget(QLabel("File and project messages:"))
         self.issue_list = QListWidget()
         self.issue_list.setAccessibleName("Discovery messages")
         self.issue_list.setMaximumHeight(75)
@@ -176,6 +203,12 @@ class MainWindow(QMainWindow):
         self.export_button.clicked.connect(self.export_csv)
         self.excel_button.clicked.connect(self.export_excel)
         self.overview.path_selected.connect(self.review_path)
+        self.open_project_button.clicked.connect(self.open_project)
+        self.save_project_button.clicked.connect(self.save_project)
+        self.save_project_as_button.clicked.connect(self.save_project_as)
+        self.check_sources_button.clicked.connect(self.check_source_files)
+        self.extensions.textChanged.connect(self._mark_project_dirty)
+        self.recursive.toggled.connect(self._mark_project_dirty)
         self._set_busy(False)
 
     @Slot()
@@ -212,6 +245,8 @@ class MainWindow(QMainWindow):
     @Slot(object)
     def _discovery_finished(self, result: DiscoveryResult) -> None:
         self.selected_files.update(result.files)
+        if result.files:
+            self._mark_project_dirty()
         self.overview.set_files(tuple(self.selected_files), self.import_results)
         self.issue_list.addItems(f"{issue.path}: {issue.message}" for issue in result.issues)
         if not result.files and not result.issues:
@@ -243,6 +278,9 @@ class MainWindow(QMainWindow):
             )
             self.review.clear(message)
             return
+        if path in self._source_issues:
+            self.review.clear(f"{path.name} — {self._source_issues[path]}")
+            return
         result = self.import_results.get(path)
         if result is None:
             self.review.clear(f"{path.name} — No import result yet.")
@@ -258,6 +296,7 @@ class MainWindow(QMainWindow):
         )
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.phase_assignments = dialog.assignments()
+            self._mark_project_dirty()
             self.statusBar().showMessage(
                 "Phase assignments saved. Import Med-PC to apply; "
                 "exports use the last imported snapshot."
@@ -265,16 +304,12 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def import_selected_files(self) -> None:
-        if (
-            self._closing
-            or not self.selected_files
-            or self._worker is not None
-            or self._import_worker is not None
-            or self._export_worker is not None
-        ):
+        if self._closing or not self.selected_files or self._is_working():
             return
         paths = tuple(sorted(self.selected_files, key=str))
         self.import_results.clear()
+        self._source_issues.clear()
+        self._update_project_label()
         self.overview.start_import()
         self.review_path(self.overview.current_path())
         self._import_worker = ImportWorker(paths, self.phase_assignments)
@@ -292,6 +327,12 @@ class MainWindow(QMainWindow):
     @Slot(object)
     def _import_result(self, result: ImportResult) -> None:
         self.import_results[result.source_file] = result
+        self._source_issues.pop(result.source_file, None)
+        if result.raw is not None:
+            digest = result.raw["source_sha256"]
+            if self._source_hashes.get(result.source_file) != digest:
+                self._source_hashes[result.source_file] = digest
+                self._mark_project_dirty()
         self.overview.set_result(result)
 
     @Slot(int, int)
@@ -328,7 +369,12 @@ class MainWindow(QMainWindow):
     def _is_working(self) -> bool:
         return any(
             worker is not None
-            for worker in (self._worker, self._import_worker, self._export_worker)
+            for worker in (
+                self._worker,
+                self._import_worker,
+                self._export_worker,
+                self._project_worker,
+            )
         )
 
     @Slot()
@@ -359,6 +405,7 @@ class MainWindow(QMainWindow):
         )
         self._export_worker.signals.finished.connect(self._export_finished)
         self._export_worker.signals.failed.connect(self._export_failed)
+        self._export_worker.signals.sources_changed.connect(self._apply_source_checks)
         self._set_busy(True)
         self.progress.setRange(0, 0)
         self.progress.show()
@@ -389,7 +436,7 @@ class MainWindow(QMainWindow):
         self._set_busy(False)
         self.export_status.setText(message)
         self.statusBar().showMessage(
-            f"{self._export_label} export failed; imported results retained"
+            f"{self._export_label} export failed; check the reported issue"
         )
         if not self._closing:
             QMessageBox.warning(self, f"{self._export_label} export failed", message)
@@ -415,10 +462,14 @@ class MainWindow(QMainWindow):
             self.clear_button,
             self.extensions,
             self.recursive,
+            self.open_project_button,
+            self.save_project_button,
+            self.save_project_as_button,
         ):
             widget.setEnabled(not busy and not self._closing)
         self.import_button.setEnabled(not busy and not self._closing and bool(self.selected_files))
         self.phase_button.setEnabled(self.import_button.isEnabled())
+        self.check_sources_button.setEnabled(self.import_button.isEnabled())
         self.cancel_button.setEnabled(busy and self._import_worker is not None)
         self.export_button.setEnabled(
             not busy
@@ -436,6 +487,9 @@ class MainWindow(QMainWindow):
             return
         self.selected_files.clear()
         self.phase_assignments.clear()
+        self._source_hashes.clear()
+        self._source_issues.clear()
+        self._mark_project_dirty()
         self.import_results.clear()
         self.overview.clear_filters()
         self.overview.set_files((), {})
@@ -444,3 +498,157 @@ class MainWindow(QMainWindow):
         self.progress.hide()
         self._set_busy(False)
         self.statusBar().showMessage("0 candidate files selected")
+
+    def _update_project_label(self) -> None:
+        name = str(self._project_path) if self._project_path else "unsaved"
+        dirty = " · unsaved changes" if self._project_dirty else ""
+        issues = f" · {len(self._source_issues)} source issue(s)" if self._source_issues else ""
+        self.project_label.setText(f"Project: {name}{dirty}{issues}")
+
+    def _mark_project_dirty(self) -> None:
+        self._project_dirty = True
+        self._update_project_label()
+
+    @Slot(object)
+    def _apply_source_checks(self, checks: tuple[SourceCheck, ...]) -> None:
+        current = self.overview.current_path()
+        if current not in self.selected_files:
+            current = None
+        for check in checks:
+            if check.status != "unchanged":
+                self._source_issues[check.path] = check.message
+                self.import_results.pop(check.path, None)
+                self.issue_list.addItem(f"{check.path}: {check.message}")
+            else:
+                self._source_issues.pop(check.path, None)
+        self.overview.set_files(tuple(self.selected_files), self.import_results)
+        self.overview.model.set_source_issues(self._source_issues)
+        if current is not None:
+            self.overview.select_path(current)
+        self.review_path(current)
+        self._update_project_label()
+        self._set_busy(self._is_working())
+
+    def _start_project_worker(self, worker: ProjectWorker) -> None:
+        self._project_worker = worker
+        worker.signals.finished.connect(self._project_finished)
+        worker.signals.failed.connect(self._project_failed)
+        self._set_busy(True)
+        self.progress.setRange(0, 0)
+        self.progress.show()
+        self.statusBar().showMessage("Checking project and source files…")
+        self._pool.start(worker)
+
+    @Slot()
+    def open_project(self) -> None:
+        if self._closing or self._is_working():
+            return
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Open project — replaces the current selection on success",
+            "",
+            f"Trial Cruncher projects (*{PROJECT_SUFFIX})",
+        )
+        if path:
+            self._start_project_worker(ProjectWorker("load", Path(path)))
+
+    @Slot()
+    def save_project(self) -> None:
+        self._save_project(False)
+
+    @Slot()
+    def save_project_as(self) -> None:
+        self._save_project(True)
+
+    def _save_project(self, save_as: bool) -> None:
+        if self._closing or self._is_working():
+            return
+        try:
+            extensions = tuple(sorted(normalize_extensions(self.extensions.text().split(","))))
+        except ValueError as exc:
+            QMessageBox.warning(self, "Check file extensions", str(exc))
+            return
+        path = self._project_path
+        expected = self._project_sha256
+        if save_as or path is None:
+            text, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save project as a new file",
+                f"trial-cruncher{PROJECT_SUFFIX}",
+                f"Trial Cruncher projects (*{PROJECT_SUFFIX})",
+                options=QFileDialog.Option.DontConfirmOverwrite,
+            )
+            if not text:
+                return
+            path = Path(text if text.endswith(PROJECT_SUFFIX) else text + PROJECT_SUFFIX)
+            expected = None
+        self._start_project_worker(
+            ProjectWorker(
+                "save",
+                path,
+                paths=tuple(self.selected_files),
+                phases=self.phase_assignments,
+                hashes=self._source_hashes,
+                extensions=extensions,
+                recursive=self.recursive.isChecked(),
+                expected_project_sha256=expected,
+            )
+        )
+
+    @Slot()
+    def check_source_files(self) -> None:
+        if self._closing or self._is_working() or not self.selected_files:
+            return
+        self._start_project_worker(
+            ProjectWorker(
+                "check", hashes={p: self._source_hashes.get(p) for p in self.selected_files}
+            )
+        )
+
+    @Slot(object)
+    def _project_finished(self, result: ProjectResult | tuple[SourceCheck, ...]) -> None:
+        mode = self._project_worker.mode
+        self._project_worker = None
+        self.progress.hide()
+        if mode == "check":
+            self._apply_source_checks(result)
+            self.statusBar().showMessage(
+                f"Source check complete: {len(self._source_issues)} source issue(s). "
+                "Unimported files still need import."
+            )
+        else:
+            project = result.project
+            if mode == "load":
+                self.selected_files = {s.path for s in project.sources}
+                self.phase_assignments = {s.path: s.phase for s in project.sources if s.phase}
+                self.import_results.clear()
+                self._source_issues.clear()
+                self.overview.clear_filters()
+                self.issue_list.clear()
+                self.extensions.setText(", ".join(project.extensions))
+                self.recursive.setChecked(project.recursive)
+                self.export_status.setText(
+                    "Project restored. Import Med-PC to calculate and review results."
+                )
+            self._source_hashes = {s.path: s.sha256 for s in project.sources}
+            self._project_path, self._project_sha256 = result.path, result.file_sha256
+            self._apply_source_checks(result.checks)
+            self._project_dirty = False
+            self._update_project_label()
+            self.statusBar().showMessage(
+                "Project loaded; import required before export."
+                if mode == "load"
+                else "Project saved. Changed sources still require re-import."
+            )
+        self._set_busy(False)
+        self._finish_close()
+
+    @Slot(str)
+    def _project_failed(self, message: str) -> None:
+        self._project_worker = None
+        self.progress.hide()
+        self._set_busy(False)
+        self.statusBar().showMessage(message)
+        if not self._closing:
+            QMessageBox.warning(self, "Project operation failed", message)
+        self._finish_close()

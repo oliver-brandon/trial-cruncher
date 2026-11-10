@@ -38,7 +38,7 @@ HEADERS = (
 )
 METRIC_NAMES = tuple(METRIC_LABELS)
 ATTENTION_STATES = frozenset(
-    {"Warnings", "Withheld", "Unavailable metrics", "Failed", "Not imported"}
+    {"Warnings", "Withheld", "Unavailable metrics", "Failed", "Not imported", "Re-import required"}
 )
 
 
@@ -47,6 +47,7 @@ class OverviewRow:
     path: Path
     result: ImportResult | None = None
     state: str = "Not imported"
+    source_issue: str | None = None
 
     @property
     def withheld(self) -> bool:
@@ -124,6 +125,8 @@ class OverviewRow:
 
     def tooltip(self, column: int) -> str:
         lines = [str(self.path), f"Quality: {self.quality}"]
+        if self.source_issue:
+            lines.append(self.source_issue)
         if self.result and self.result.error:
             lines.append(self.result.error)
         if 6 <= column <= 11:
@@ -144,6 +147,8 @@ class OverviewRow:
     @property
     def search_text(self) -> str:
         fields = [str(self.path), *(self.text(column) for column in range(1, 5)), *self.warnings]
+        if self.source_issue:
+            fields.append(self.source_issue)
         if self.result and self.result.error:
             fields.append(self.result.error)
         if self.result and self.result.summary:
@@ -158,6 +163,19 @@ class OverviewModel(QAbstractTableModel):
         super().__init__(parent)
         self.rows: list[OverviewRow] = []
         self._row_by_path: dict[Path, int] = {}
+
+    def set_source_issues(self, issues: Mapping[Path, str]) -> None:
+        self.beginResetModel()
+        self.rows = [
+            OverviewRow(
+                row.path,
+                row.result,
+                "Re-import required" if row.path in issues else row.state,
+                issues.get(row.path),
+            )
+            for row in self.rows
+        ]
+        self.endResetModel()
 
     def set_files(self, paths: Sequence[Path], results: Mapping[Path, ImportResult]) -> None:
         old_states = {row.path: row.state for row in self.rows}

@@ -280,8 +280,10 @@ choice order. `processing.py` attaches `phase_summary` to each successful import
 `tables.py` builds phase rows and choice annotations. Exporters reject missing/stale
 phase definitions, policies, configurations, or source provenance and preserve
 literal text, missing/zero/false values, long metadata, and no-overwrite behavior.
-Assignments are in memory for this window; persistent project configuration and
-cross-file/group analysis remain future work.
+Assignments can now be saved in `.tcproj.json` projects together with analysis
+configuration and source hashes. Loading restores setup and requires re-import;
+source changes also block stale exports. See [projects](projects.md). Cross-file/group
+analysis remains future work.
 
 Python API example (explicit user assignment):
 

@@ -7,6 +7,7 @@ from PySide6.QtCore import QObject, QRunnable, Signal, Slot
 
 from trial_cruncher.exporters import ExportFormat, export_import_results
 from trial_cruncher.processing import ImportResult
+from trial_cruncher.source_tracking import SourcesChangedError
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 class ExportSignals(QObject):
     finished = Signal(object)
     failed = Signal(str)
+    sources_changed = Signal(object)
 
 
 class ExportWorker(QRunnable):
@@ -38,6 +40,8 @@ class ExportWorker(QRunnable):
                 self.results, self.paths, self.parent, self.export_format
             )
         except Exception as exc:
+            if isinstance(exc, SourcesChangedError):
+                self.signals.sources_changed.emit(exc.checks)
             label = "Excel" if self.export_format == "xlsx" else "CSV"
             logger.exception("%s export failed", label, extra={"operation": "export"})
             self.signals.failed.emit(f"{label} export failed: {exc}")

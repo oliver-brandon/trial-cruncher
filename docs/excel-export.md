@@ -7,8 +7,8 @@ The workbook has five sheets, frozen headers, filters, and formatted numeric cel
 
 Export uses the full reviewed batch, including rows hidden by overview filters.
 Successful imports with warnings or withheld metrics are included. Failed and
-unimported files are accounted for. The source files are not re-read: re-import to
-reflect changes made since review. Closing during export waits for completion;
+unimported files are accounted for. Source hashes are checked before writing and before the completion manifest;
+changes or unavailable sources block the attempt and require re-import. Closing during export waits for completion;
 errors retain imported results for retry. Cancelling the folder picker writes nothing.
 
 ## Sheets and versions
@@ -127,3 +127,7 @@ Blank values, zero numerators/denominators, and undefined flags preserve distinc
 meaning. Source strings and custom phase labels are literal text. Choices gains
 phase, error-classification, and criterion-completed annotations; see
 [CSV schema 3](csv-export.md) and [phase definitions](medpc-behavioral-metrics-spec.md).
+
+Saved projects restore file/phase setup and compatible analysis configuration. They
+require a new import before export and retain reference hashes for detecting changed
+sources. See [projects and source verification](projects.md).

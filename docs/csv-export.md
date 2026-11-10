@@ -19,12 +19,13 @@ folder picker writes nothing. Export errors retain the imported results for retr
 Export runs in a background worker, so review stays responsive. Closing waits for
 export to finish; an active export cannot be cancelled halfway through.
 
-Exports use the **reviewed in-memory snapshot**. They do not re-read inputs or claim
-the recorded hash describes a file subsequently changed on disk. Re-import first
-when a newer source version is wanted. PRL metrics are calculated during import;
-export preserves those results without recalculating or inferring trial boundaries,
-trial/session IDs, or task parameters. Re-import is required for an in-memory result
-without a calculated summary.
+Exports use the **reviewed in-memory snapshot**, with current source hashes verified
+before writing and again before the completion manifest. Changed, missing, unreadable,
+or unstable imported sources block that export attempt and require re-import. No new
+metric values are calculated during export. The GUI clears affected stale results;
+other successfully imported sources remain available. See [source verification](projects.md).
+Missing/stale interpretation versions also require re-import. Original source data
+is never overwritten, and phase labels come from the reviewed import snapshot.
 
 ## Schemas and provenance
 

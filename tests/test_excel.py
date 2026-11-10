@@ -46,8 +46,7 @@ def test_excel_round_trip_all_tables_and_source_snapshot(write_export, tmp_path)
         warnings=("#N/A", '+cmd|"x"', "@SUM(A1)", 'comma, "quote"\nμ'),
     )
     result = replace(result, session=session, summary=calculate_prl_summary(session))
-    # The export must use the reviewed snapshot even if the source changes.
-    path.write_text("Changed after import")
+    # Export the reviewed values only while source content still matches.
     before = path.read_bytes(), path.stat().st_mtime_ns
     destination = export_import_results({path: result}, [path], tmp_path, "xlsx")
     book = load_workbook(destination / "results.xlsx")

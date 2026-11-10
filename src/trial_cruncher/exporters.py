@@ -23,6 +23,7 @@ from trial_cruncher.prl_metrics import (
     METRIC_LABELS,
 )
 from trial_cruncher.processing import ImportResult
+from trial_cruncher.source_tracking import require_current_sources
 from trial_cruncher.tables import (
     SCHEMA_VERSION,
     build_choice_table,
@@ -139,6 +140,12 @@ def export_import_results(
         )
     if not sessions:
         raise ValueError("Import at least one supported session before exporting.")
+    expected_hashes = {
+        path: results[path].raw.get("source_sha256")
+        for path in paths
+        if results.get(path) and results[path].raw is not None
+    }
+    require_current_sources(expected_hashes)
     tables = {
         "sessions.csv": build_session_table(sessions, summaries),
         "choices.csv": build_choice_table(sessions, phases),
@@ -153,7 +160,9 @@ def export_import_results(
             name: version(name)
             for name in ("pandas", "numpy", "scipy", "h5py", "openpyxl", "PySide6")
         },
-        "snapshot": "In-memory import results; sources were not re-read at export time.",
+        "snapshot": (
+            "Reviewed import results; source hashes checked before export and before completion."
+        ),
         "configuration": {
             "row_levels": ["session", "choice", "phase"],
             "session_filter": "Successful imports, including sessions with warnings",
@@ -222,6 +231,7 @@ def export_import_results(
             writer = CSVExporter(source_paths)
             for name, table in tables.items():
                 writer.export(table, destination / name)
+        require_current_sources(expected_hashes)
         with (destination / "manifest.json").open("x", encoding="utf-8") as stream:
             stream.write(manifest_text + "\n")
     except Exception:

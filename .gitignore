@@ -22,3 +22,6 @@ Thumbs.db
 /data/
 /outputs/
 /local/
+*.tcproj.json
+*.tcproj.json.lock
+*.tcproj.json.*.tmp

@@ -24,6 +24,8 @@ not need to have trials.
   consistency checks. Use the GUI, `--inspect-medpc FILE`, or the Python API.
 - Background imports with progress, per-file failure isolation, and cancellation
   after the current file. Completed results remain available for review.
+- Save/load `.tcproj.json` projects with per-file phases, fixed analysis configuration,
+  source hashes, and discovery settings; changed sources require re-import.
 - Background CSV and Excel export to new folders with source metadata, warnings, missing values,
   and a manifest accounting for failed/unimported inputs.
 - Synthetic unit tests, offscreen GUI integration tests, Ruff, and GitHub Actions.
@@ -123,8 +125,8 @@ warnings, then choose a parent folder. A new uniquely named folder holds `sessio
 Existing files are never overwritten. Failed/unimported files are recorded in the
 manifest. Blank fields mean missing observations, while zero and false stay explicit.
 Session CSV includes the six calculated metrics and their versioned status/reasons;
-withheld values stay blank. Exports use the reviewed snapshot; re-import first to
-reflect source changes. See
+withheld values stay blank. Exports verify the reviewed snapshot against current source
+hashes; changed or unavailable sources require re-import. See
 [CSV schemas, provenance, and limitations](docs/csv-export.md).
 
 Discovery never writes to inputs. It does not check content validity or readability
@@ -137,6 +139,16 @@ and raw decimals remain text; missing values stay blank, zero/false remain expli
 and withheld metrics retain reasons. Long text is preserved in numbered provenance
 chunks. Both export buttons include the full batch regardless of overview filters.
 See [Excel export and safeguards](docs/excel-export.md).
+
+## Save and reopen an analysis
+
+Use **Save project** to store the selected paths, phase assignments, analysis
+configuration, source hashes, and discovery settings in a `.tcproj.json` file.
+**Open project…** restores the setup and reports changed or missing sources. Click
+**Import Med-PC** after opening to rebuild results; project files contain setup,
+not cached calculations. **Check sources** refreshes source status without importing.
+Both exports verify source content and require re-import of changed files.
+See [saved projects and source verification](docs/projects.md).
 
 ## Development
 
@@ -168,6 +180,8 @@ src/trial_cruncher/
   metrics.py               Task-specific calculation contract
   prl_metrics.py           Approved PRL summaries and strict eligibility diagnostics
   phase_metrics.py         Phase errors/strategies, configuration, and ratio evidence
+  projects.py              Validated project setup and atomic local saves
+  source_tracking.py       Content fingerprints and stale-source checks
   tables.py                Versioned session/choice table schemas
   exporters.py             Exclusive-create CSV writer and CSV/Excel export bundles
   excel.py                 Literal Excel cells, quality sheet, and provenance chunks

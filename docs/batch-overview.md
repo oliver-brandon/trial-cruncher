@@ -111,3 +111,12 @@ selection, and click-through source review. Filtering to one visible row still
 exported all four sessions, including original source text in CSV metadata. Input
 hashes and modification times remained unchanged. The overview was visually inspected;
 local verification artifacts remain under ignored `outputs/`.
+
+## Source freshness
+
+Project load/save, **Check sources**, and export can invalidate changed, missing,
+or unreadable inputs. Those rows remain visible as **Re-import required**, with
+reasons in tooltips and cleared stale review/metric values. **Needs attention**
+includes them. A fresh import replaces this state with the actual import result.
+Source checks do not infer phase labels or silently remove selected paths; see
+[projects](projects.md).
