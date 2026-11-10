@@ -1,7 +1,7 @@
-# PRL session-summary metrics — definition version 2
+# PRL session-summary metrics — definition version 3
 
 Status: **Approved by the project owner and implemented.**
-Definition set: `prl-session-summary`, version `2`.
+Definition set: `prl-session-summary`, version `3`.
 Eligibility policy: `strict-withholding-v2`.
 Approval: October 27, 2026, for the original formulas and strict withholding;
 November 4, 2026, for recognizing confirmed unused trailing slots while preserving raw data. This
@@ -40,8 +40,8 @@ correct/rewarded, correct/unrewarded, incorrect/rewarded, and incorrect/unreward
 Let `N = n1 + n2 + n6 + n7`.
 
 All six definitions use the eligibility rules below and definition version
-`2`. Each output has row level **session**. Counts are nonnegative integers with unit
-`count`; percentage has unit `%` and range 0–100 inclusive.
+`3`. Each output has row level **session**. Counts are nonnegative integers with unit
+`count`; proportion has unit `proportion` and range 0–1 inclusive.
 
 | Stable identifier | Display name | Formula | Interpretation |
 |---|---|---|---|
@@ -50,19 +50,19 @@ All six definitions use the eligibility rules below and definition version
 | `prl.incorrect_choice_count` | Incorrect choices | `n6 + n7` | Choices encoded as incorrect |
 | `prl.rewarded_choice_count` | Rewarded choices | `n1 + n6` | Choices encoded with a reward outcome |
 | `prl.unrewarded_choice_count` | Unrewarded choices | `n2 + n7` | Choices encoded without a reward outcome |
-| `prl.percent_correct` | Correct choices (%) | `100 × (n1 + n2) / N`, for `N > 0` | Correct choices as a percentage of recorded choices |
+| `prl.proportion_correct` | Proportion correct | `(n1 + n2) / N`, for `N > 0` | Correct choices as a proportion of recorded choices |
 
-The percent-correct denominator is **recorded choices**, not the configured maximum
+The proportion-correct denominator is **recorded choices**, not the configured maximum
 `Y`, elapsed time, rewards, or a guessed number of trials. Saved `A[5]` remains a raw
 source value with its documented `A[0] / Y` meaning. It is neither substituted for
-nor renamed as `prl.percent_correct`. No intermediate rounding is allowed; display
+nor renamed as `prl.proportion_correct`. No intermediate rounding is allowed; display
 rounding must not change exported calculation precision.
 
 ## Eligibility and missing-data rules
 
 Approved policy: **do not silently calculate standard session metrics from a
 valid subset of a damaged or conflicting choice record.** All five counts and the
-percentage share the same choice-record eligibility rule. Diagnostic counts remain
+proportion share the same choice-record eligibility rule. Diagnostic counts remain
 available separately where they can be observed reliably.
 
 Version 2 first identifies unused trailing slots under the fully corroborated
@@ -79,14 +79,14 @@ not assert that an acquisition export captured all behavior.
 | Valid nonempty `C`; available saved counts match | All six metrics available |
 | Valid prefix with fully corroborated unused zero tail | Exclude only confirmed storage slots, retain all raw values and exclusion metadata, calculate from the recorded prefix |
 | `C` absent | All six unavailable; absence is not an observed zero |
-| Explicitly empty `C`, or only a terminator at index zero; no saved-count mismatch | Five counts are zero; percent correct unavailable because `N = 0` |
+| Explicitly empty `C`, or only a terminator at index zero; no saved-count mismatch | Five counts are zero; proportion correct unavailable because `N = 0` |
 | Missing C indices, including a first index other than zero | All six unavailable; do not fill gaps or infer omitted choices |
-| Any invalid/unknown encoded choice before the terminator | All six unavailable; do not drop that record or shrink the percentage denominator |
+| Any invalid/unknown encoded choice before the terminator | All six unavailable; do not drop that record or shrink the proportion denominator |
 | Values after the terminator, including another terminator | All six unavailable; retain every raw value and warning |
 | Any valid saved `A[0]`, `A[1]`, `A[2]`, or `B[0:4]` comparison is false | All six unavailable pending review; neither source wins automatically |
 | Saved summary counts absent, negative, fractional, or otherwise not comparable, while `C` itself is eligible | Calculate from `C` with warnings; unavailable cross-checks alone do not invalidate the observed sequence |
-| Missing, invalid, or negative `S` | Duration unavailable; eligible choice counts and percentage remain available with warnings |
-| Decodable timestamps decrease or exceed valid `S` | Retain eligible counts/percentage with warnings: these metrics count encoded outcomes and do not use timing or reorder events |
+| Missing, invalid, or negative `S` | Duration unavailable; eligible choice counts and proportion remain available with warnings |
+| Decodable timestamps decrease or exceed valid `S` | Retain eligible counts/proportion with warnings: these metrics count encoded outcomes and do not use timing or reorder events |
 | Identical timestamps or identical encoded values at different valid indices | Count each indexed event; do not deduplicate or invent a duplicate-event interpretation |
 | Printed array rows out of index order, but indices complete and unique | Use source-index order, retain the warning; eligible metrics remain available |
 | Missing subject/session identifier | Do not invent an ID; eligible metrics remain available with source path/hash provenance |
@@ -149,7 +149,7 @@ saved counters, software/reader/normalizer versions, definition-set version, and
 fixed eligibility policy. Calculated columns must be distinct from raw fields.
 Existing session/choice exports and manifests must preserve these additions without
 overwriting saved data. No aggregation or weighting across sessions/subjects/groups
-is defined here; in particular, no automatic average or pooled percentage is implied.
+is defined here; in particular, no automatic average or pooled proportion is implied.
 
 ## Hand-calculated examples and acceptance cases
 
@@ -158,21 +158,21 @@ Unless otherwise stated, `C` indices start at zero, every value is valid, and an
 saved summary counts agree. Counts below are ordered as
 `(choices, correct, incorrect, rewarded, unrewarded)`.
 
-| Input | Expected counts | Expected correct choices (%) |
+| Input | Expected counts | Expected proportion correct |
 |---|---|---|
-| `C = [0.01, 1.22, 2.36, 4.57]` | `(4, 2, 2, 2, 2)` | `50` |
-| `C = [0.01, 1.22, 2.31]` | `(3, 3, 0, 2, 1)` | `100` |
-| `C = [0.06, 1.27]` | `(2, 0, 2, 1, 1)` | `0`, a real percentage rather than missing |
-| `C = [0.01, 1.26, 2.37]` | `(3, 1, 2, 2, 1)` | `100 / 3`, with no intermediate rounding |
+| `C = [0.01, 1.22, 2.36, 4.57]` | `(4, 2, 2, 2, 2)` | `0.5` |
+| `C = [0.01, 1.22, 2.31]` | `(3, 3, 0, 2, 1)` | `1` |
+| `C = [0.06, 1.27]` | `(2, 0, 2, 1, 1)` | `0`, a real proportion rather than missing |
+| `C = [0.01, 1.26, 2.37]` | `(3, 1, 2, 2, 1)` | `1 / 3`, with no intermediate rounding |
 | Explicit `C = []` | `(0, 0, 0, 0, 0)` | Unavailable: zero denominator |
 | No `C` variable | All unavailable | Unavailable: missing choice array |
-| `C = [0.01, 1.23, 2.36, 4.57]` | All unavailable; diagnostics: 4 records, 3 decoded, 1 invalid | Unavailable; do not report `100 / 3` from the valid subset |
+| `C = [0.01, 1.23, 2.36, 4.57]` | All unavailable; diagnostics: 4 records, 3 decoded, 1 invalid | Unavailable; do not report `1 / 3` from the valid subset |
 | Valid choices only at indices 0 and 2 | All unavailable; diagnostics: 2 observed records and an index gap | Unavailable |
-| `C = [0.01, 1.22, -987.987]` | `(2, 2, 0, 1, 1)` | `100`; terminator excluded |
+| `C = [0.01, 1.22, -987.987]` | `(2, 2, 0, 1, 1)` | `1`; terminator excluded |
 | `C = [0.01, -987.987, 2.36]` | All unavailable; diagnostics: 1 decoded record, 1 post-terminator entry | Unavailable |
 | Four-choice first example, but saved `A[2] = 5` | All unavailable; keep the disagreement visible | Unavailable |
-| Four-choice first example, but A and B absent | `(4, 2, 2, 2, 2)`, with unavailable-cross-check warnings | `50`, with warnings |
-| Three-choice second example, documented early stop with intact record | `(3, 3, 0, 2, 1)` | `100`; no assumed target denominator |
+| Four-choice first example, but A and B absent | `(4, 2, 2, 2, 2)`, with unavailable-cross-check warnings | `0.5`, with warnings |
+| Three-choice second example, documented early stop with intact record | `(3, 3, 0, 2, 1)` | `1`; no assumed target denominator |
 
 Additional automated acceptance cases cover missing/zero/invalid `S`,
 time reversals and out-of-duration timestamps, repeated timestamps at distinct indices,
@@ -201,9 +201,9 @@ snapshots must be re-imported.
 `processing.import_medpc_file()` calculates once after normalization, in the existing
 background import worker when called through the GUI. `ImportResult.summary` holds
 the result separately from the raw `Session`. The Session metrics tab and CSV export
-consume that same snapshot. The GUI displays percentage values to two decimal places;
+consume that same snapshot. The GUI displays proportion values to four decimal places;
 exports retain the full calculated Python float. Counts are integers. Percentages
-are calculated as `100 * correct / total`, with no intermediate rounding.
+are calculated as `correct / total`, with no intermediate rounding.
 
 CSV schema 2 adds six columns named by stable metric ID to `sessions.csv` and stores
 per-metric status, reasons, warnings, units, and versions in `metric_results_json`.
@@ -216,6 +216,9 @@ Version history: version 1 is the initial owner-approved definition set, with st
 withholding for invalid/incomplete choice records and saved-count disagreements.
 Version 2 adds the owner-confirmed, corroborated unused-tail exclusion, leaving the
 six formulas unchanged. See [version 2 examples and guards](prl-unused-slots.md).
+Version 3 implements the owner-requested change from percentage to proportion
+correct on November 10, 2026, with a new metric ID and 0–1 scale. See
+[accuracy scale migration](proportion-correct.md). Counts and eligibility are unchanged.
 Future semantic changes require a new definition version.
 
 ## Local verification record

@@ -33,7 +33,7 @@ HEADERS = (
     "Incorrect",
     "Rewarded",
     "Unrewarded",
-    "Correct (%)",
+    "Proportion correct",
     "Warnings",
 )
 METRIC_NAMES = tuple(METRIC_LABELS)
@@ -115,7 +115,7 @@ class OverviewRow:
         value = self.value(column)
         if value is not None:
             if column == 11:
-                return f"{value:.2f}"
+                return f"{value:.4f}"
             return str(value)
         if 6 <= column <= 11 and self.withheld:
             return "Withheld"
@@ -331,7 +331,7 @@ class BatchOverview(QWidget):
         # Keep the percentage visible before the five count columns on narrow windows.
         self.table.horizontalHeader().moveSection(11, 6)
         for column, width in enumerate(
-            (220, 150, 80, 160, 130, 105, 95, 95, 95, 100, 110, 105, 90)
+            (220, 150, 80, 160, 130, 105, 95, 95, 95, 100, 110, 145, 90)
         ):
             self.table.setColumnWidth(column, width)
         layout.addWidget(self.table)

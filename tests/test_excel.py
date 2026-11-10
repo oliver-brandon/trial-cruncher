@@ -87,8 +87,8 @@ def test_excel_round_trip_all_tables_and_source_snapshot(write_export, tmp_path)
     )
     assert json.loads(embedded) == manifest
     assert manifest["tables"]["Choices"]["rows"] == 4
-    assert manifest["workbook_schema_version"] == "2"
-    assert manifest["schema_version"] == "3"
+    assert manifest["workbook_schema_version"] == "3"
+    assert manifest["schema_version"] == "4"
     assert manifest["configuration"]["metric_eligibility_policy"] == "strict-withholding-v2"
     assert all(
         cell.data_type not in ("f", "e") and cell.hyperlink is None
@@ -136,9 +136,9 @@ def test_missing_zero_withheld_and_excluded_inputs(write_export, tmp_path, varia
     if variant in ("invalid", "mismatch", "sparse", "missing"):
         assert all(session[name] is None for name in METRIC_LABELS)
     if variant == "zero":
-        assert session["prl.percent_correct"] == 0
+        assert session["prl.proportion_correct"] == 0
     if variant == "empty":
-        assert session["prl.percent_correct"] is None
+        assert session["prl.proportion_correct"] is None
     assert book["Choices"].max_row == len(result.session.events) + 1
     quality = records(book["Quality"])
     inputs = {row["source_file"]: row for row in quality if row["record_type"] == "input"}

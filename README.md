@@ -95,7 +95,7 @@ by clicking column headings; combine search, program, and quality filters to fin
 sessions needing attention. Click a row to review it below:
 
 - **Session details:** identifiers, task duration from `S`, original headers, and provenance.
-- **Session metrics:** five choice/outcome counts and percent correct, with status,
+- **Session metrics:** five choice/outcome counts and proportion correct, with status,
   withholding reasons, and separate recorded-data diagnostics.
 - **Phase metrics:** phase accuracy, perseverative/regressive errors, adjusted error
   proportion, and four win-stay/lose-shift probabilities, with criterion and

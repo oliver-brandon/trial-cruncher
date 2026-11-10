@@ -111,7 +111,7 @@ def test_quality_missing_withheld_zero_and_raw_metadata(app, make_input):
         assert [shown(overview, p, 1) for p in paths] == expected
         assert shown(overview, good, 2) == "0007"
         assert shown(overview, good, 6) == "2"
-        assert shown(overview, good, 11) == "100.00"
+        assert shown(overview, good, 11) == "1.0000"
         assert shown(overview, warning, 5) == "Unavailable"
         assert shown(overview, withheld, 6) == "Withheld"
         assert "Saved count mismatch: A[2]" in shown(
@@ -145,7 +145,7 @@ def test_numeric_sort_both_directions_keeps_unavailable_last(app, make_input, co
     results = {p: import_medpc_file(p) for p in (small, large, missing)}
     if column == 11:
         # Synthetic UI values exercise precision beneath identical display rounding.
-        for path, value in ((small, 33.331), (large, 33.334)):
+        for path, value in ((small, 0.33331), (large, 0.33334)):
             original = results[path]
             metrics = (
                 *original.summary.metrics[:-1],
@@ -164,7 +164,7 @@ def test_numeric_sort_both_directions_keeps_unavailable_last(app, make_input, co
             assert visible_paths(overview) == expected
             assert overview.current_path() == small
         if column == 11:
-            assert shown(overview, small, 11) == shown(overview, large, 11) == "33.33"
+            assert shown(overview, small, 11) == shown(overview, large, 11) == "0.3333"
     finally:
         overview.close()
 

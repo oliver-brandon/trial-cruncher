@@ -109,8 +109,8 @@ def _write_table(sheet: Worksheet, table: pd.DataFrame, overflow: list[tuple] | 
                     cell.number_format = "0"
                 elif isinstance(value, float):
                     cell.number_format = (
-                        '0.00"%"'
-                        if table.columns[column - 1].endswith("percent_correct")
+                        "0.0000"
+                        if table.columns[column - 1].endswith("proportion_correct")
                         else "0.###############"
                     )
     sheet.freeze_panes = "C2" if sheet.title in ("Quality", "Provenance") else "A2"
@@ -186,7 +186,7 @@ def build_workbook(
         "Quality": quality_table,
     }
     manifest["format"] = "xlsx"
-    manifest["workbook_schema_version"] = "2"
+    manifest["workbook_schema_version"] = "3"
     manifest["workbook"] = "results.xlsx"
     manifest["sheets"] = [*tables, "Provenance"]
     manifest["tables"] = {
@@ -200,7 +200,7 @@ def build_workbook(
         "decimals": "exact text, including raw acquisition values",
         "large_integers": "more than 15 digits stored as exact text",
         "floats": "native Excel numbers; Excel numeric precision applies; raw JSON retained",
-        "percent_correct": "0 to 100 numeric value, not a fraction",
+        "proportion_correct": "0 to 1 numeric proportion; no percent formatting",
         "missing_json": "null",
         "decimals_json": "strings",
         "array_indices_json": "object keys as strings",

@@ -55,6 +55,7 @@ class Project:
     sources: tuple[ProjectSource, ...]
     extensions: tuple[str, ...]
     recursive: bool
+    configuration_updated: bool = False
 
 
 @dataclass(frozen=True)
@@ -101,7 +102,14 @@ def _parse(payload: bytes, project_path: Path) -> Project:
     )
     if obj["format"] != PROJECT_FORMAT or obj["schema_version"] != PROJECT_VERSION:
         raise ValueError("Unsupported project format or version.")
-    if obj["analysis_configuration"] != analysis_configuration():
+    current_configuration = analysis_configuration()
+    percentage_configuration = {
+        **current_configuration,
+        "session_definition_version": "2",
+        "phase_definition_version": "1",
+    }
+    configuration_updated = obj["analysis_configuration"] == percentage_configuration
+    if obj["analysis_configuration"] != current_configuration and not configuration_updated:
         raise ValueError(
             "Project analysis configuration is incompatible with this version. "
             "No settings were applied; use a compatible application "
@@ -145,7 +153,7 @@ def _parse(payload: bytes, project_path: Path) -> Project:
         if digest is not None and (not isinstance(digest, str) or not _HASH.fullmatch(digest)):
             raise ValueError("Source SHA-256 must be 64 lowercase hex digits or null.")
         sources.append(ProjectSource(path, phase, digest))
-    return Project(tuple(sources), extensions, discovery["recursive"])
+    return Project(tuple(sources), extensions, discovery["recursive"], configuration_updated)
 
 
 def load_project(path: Path) -> ProjectResult:

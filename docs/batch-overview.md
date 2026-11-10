@@ -30,7 +30,7 @@ and still reports the full batch size.
 ## Sorting and filtering
 
 Click a column heading to sort; click again to reverse direction. Duration, metric
-values, and warning counts sort numerically. Percentage display rounds to two decimal
+values, and warning counts sort numerically. Proportion display rounds to four decimal
 places, but sorting uses the full calculated value. Unavailable, withheld, and
 unimported values sort after known values in either direction; genuine zero remains
 a numeric value. Equal sort values use source path as a deterministic tie-breaker.
@@ -63,7 +63,7 @@ These controls affect this window only; no persistent filter configuration is sa
 | Available | All six metrics available and no session warnings; numeric zero remains zero |
 | Warnings | All six metrics available, with retained session warnings; for example missing duration or unavailable saved-count cross-checks |
 | Withheld | The approved strict rule blocks metrics because of C-index gaps, invalid choices, values after a terminator, or saved-count mismatch; metric cells say **Withheld** |
-| Unavailable metrics | At least one metric is unavailable without a structural/count-conflict withholding condition; for example missing C, or an empty eligible sequence with undefined percent correct |
+| Unavailable metrics | At least one metric is unavailable without a structural/count-conflict withholding condition; for example missing C, or an empty eligible sequence with undefined proportion correct |
 | Failed | Import did not produce a supported session; metrics say **Unavailable**, and the error remains visible in review and tooltips |
 | Not imported | File has not been read; metric/duration/warning-count cells say **Not imported** |
 | Pending | File awaits completion in the active import; previous results have been cleared and metric cells say **Pending** |
@@ -71,7 +71,7 @@ These controls affect this window only; no persistent filter configuration is sa
 
 Withholding takes priority over warning status. Unavailable metrics also take priority
 over warning status, but all warnings remain visible in tooltips and detailed review.
-An empty eligible C has five real zero counts and an **Unavailable** percentage; it
+An empty eligible C has five real zero counts and an **Unavailable** proportion; it
 must not look like six missing measurements. Missing C has unavailable values for all
 six metrics. The detailed Session metrics tab retains the versioned metric status and
 specific reasons; the overview's **Withheld** label is a presentation of the existing
@@ -85,7 +85,7 @@ stated beside the filters and in button tooltips. Import re-reads all listed fil
 including hidden rows. CSV and Excel exports include every successful imported session, with
 failed and unimported paths recorded in the manifest. The CSV schema, row order,
 missing-value rules, and overwrite protection remain unchanged; displayed **Withheld**
-values are still missing numeric values plus attached reasons in CSV schema 2.
+values are still missing numeric values plus attached reasons in CSV schema 4.
 See [CSV export](csv-export.md) and [Excel export](excel-export.md).
 
 Sorting, filtering, and detailed review remain available during background work.
@@ -99,14 +99,14 @@ behavior.
 
 Synthetic tests cover quality states, missing versus withheld versus zero, literal
 search, combined program/status filters, numeric sorting in both directions with
-missing values last, full-precision percentage ordering, duplicate filenames,
+missing values last, full-precision proportion ordering, duplicate filenames,
 click-through to the correct source, clearing hidden/stale review, live filtering and
 cancellation, malformed re-reads, and full-batch import/export under an active filter.
 The existing offscreen GUI and core suites continue to run. These are software/UI
 checks, not scientific validation or native-dialog verification on every OS.
 
 On October 27, 2026, an offscreen GUI check of the four supplied local recordings
-verified all four overview rows and 24 metric cells, percentage sorting, source-path
+verified all four overview rows and 24 metric cells, proportion sorting, source-path
 selection, and click-through source review. Filtering to one visible row still
 exported all four sessions, including original source text in CSV metadata. Input
 hashes and modification times remained unchanged. The overview was visually inspected;

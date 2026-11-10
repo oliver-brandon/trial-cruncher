@@ -37,6 +37,45 @@ def add_import(app, window, paths):
     wait(app, lambda: window._import_worker is None)
 
 
+def test_percentage_project_load_notifies_and_reimports_as_proportions(
+    app, phase_input, tmp_path, monkeypatch
+):
+    from trial_cruncher.projects import save_project
+
+    p = phase_input((1, 7))
+    target = tmp_path / "old.tcproj.json"
+    save_project(target, [p], {p: "Reversal"}, {}, extensions=[".txt"], recursive=False)
+    data = json.loads(target.read_text())
+    data["analysis_configuration"]["session_definition_version"] = "2"
+    data["analysis_configuration"]["phase_definition_version"] = "1"
+    target.write_text(json.dumps(data))
+    before = target.read_bytes()
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *args, **kwargs: (str(target), ""))
+    window = MainWindow()
+    try:
+        window.open_project_button.click()
+        wait(app, lambda: window._project_worker is None)
+        assert "proportions" in window.statusBar().currentMessage()
+        assert window._project_dirty and target.read_bytes() == before
+        assert not window.import_results and not window.export_button.isEnabled()
+        window.import_button.click()
+        wait(app, lambda: window._import_worker is None)
+        window.overview.select_path(p)
+        assert window.review.metric_table.item(5, 1).text() == "0.5000"
+        assert window.review.phase_table.item(0, 1).text() == "0.5000"
+        assert window.review.metric_table.item(5, 0).text() == "Proportion correct"
+        assert window.review.phase_table.item(0, 0).text() == "Proportion correct"
+        window.save_project_button.click()
+        wait(app, lambda: window._project_worker is None)
+        assert not window._project_dirty
+        assert (
+            json.loads(target.read_text())["analysis_configuration"]["session_definition_version"]
+            == "3"
+        )
+    finally:
+        window.close()
+
+
 def test_save_load_restores_phases_settings_and_changed_missing_paths(
     app, phase_input, tmp_path, monkeypatch
 ):

@@ -14,7 +14,7 @@ errors retain imported results for retry. Cancelling the folder picker writes no
 ## Sheets and versions
 
 - **Sessions:** one row per successful session, with the same columns and values as
-  CSV schema 3: identifiers, duration, six PRL metrics, versions, checks, warnings,
+  CSV schema 4: identifiers, duration, six PRL metrics, versions, checks, warnings,
   metric statuses/reasons, diagnostics, and original source metadata/text.
 - **Choices:** all normalized choice records in source/index order, including invalid
   decoded choices. Source array index, line, exact raw value, time in seconds,
@@ -33,8 +33,8 @@ errors retain imported results for retry. Cancelling the folder picker writes no
   that exceeds the workbook's per-cell storage budget. It uses the columns `kind`,
   `sheet`, `cell`, `part`, `parts`, and `text`.
 
-The workbook layout is version **2** (`workbook_schema_version`), and the shared
-session/choice/phase table schema is version **3** (`schema_version`). `manifest.json` records runtime
+The workbook layout is version **3** (`workbook_schema_version`), and the shared
+session/choice/phase table schema is version **4** (`schema_version`). `manifest.json` records runtime
 versions, metric definitions/policy, UTC export time, input outcomes, table columns
 and row counts, ordering, and Excel serialization rules. The same manifest is embedded
 in Provenance so the workbook can be interpreted independently of the companion file.
@@ -51,10 +51,10 @@ are explicitly stored as literal text. Leading zeroes and Decimal trailing zeroe
 are preserved. Strings beginning with `=`, `+`, `-`, or `@`, and strings such as
 `#N/A`, remain text; the exporter creates no formulas or external links.
 Integers longer than 15 digits are stored as exact text. Other counts, normalized
-times, and calculated percentages are numeric. Excel's numeric precision applies to
+times, and calculated proportions are numeric. Excel's numeric precision applies to
 floating-point cells; original acquisition values and metric JSON remain available.
-Percent correct retains its **0–100** value and displays a literal percent suffix,
-not Excel's fraction-based percentage format. Formatting does not change the value.
+Proportion correct uses a **0–1** numeric value and four-decimal display format,
+with no percentage formatting or percent suffix. Formatting does not change the value.
 
 To prevent silent truncation, text is split at 30,000 UTF-16 code units or 250 line
 feeds per chunk. A long cell displays `[Full text: Provenance rows N-M]`. Filter
@@ -118,16 +118,21 @@ Those slots remain in full raw session metadata (including Provenance chunks whe
 needed) and carry explicit excluded indices/counts. Choices contains recorded events
 only; metric diagnostics distinguish raw entries and unused slots. The manifest
 records the storage policy. The initial unused-slot change retained workbook layout 1/table schema 2;
-phase metrics now extend them to workbook layout 2/table schema 3. See [unused-slot interpretation](prl-unused-slots.md).
+phase metrics first extended them to workbook layout 2/table schema 3.
+The current proportion scale uses workbook layout 3/table schema 4. See [unused-slot interpretation](prl-unused-slots.md).
 
 Phase assignments are saved for the next import, never inferred. Re-import to apply
 assignment edits; export uses the phase in the reviewed snapshot. Phase probabilities
-and adjusted regressive errors remain 0–1 values; percent correct remains 0–100.
+and adjusted regressive errors remain 0–1 values; proportion correct is also 0–1.
 Blank values, zero numerators/denominators, and undefined flags preserve distinct
 meaning. Source strings and custom phase labels are literal text. Choices gains
 phase, error-classification, and criterion-completed annotations; see
-[CSV schema 3](csv-export.md) and [phase definitions](medpc-behavioral-metrics-spec.md).
+[CSV schema 4](csv-export.md) and [phase definitions](medpc-behavioral-metrics-spec.md).
 
 Saved projects restore file/phase setup and compatible analysis configuration. They
 require a new import before export and retain reference hashes for detecting changed
 sources. See [projects and source verification](projects.md).
+
+Workbook layout 3 uses table schema 4 and the explicit proportion-correct IDs.
+Session definition version 3 and phase definition version 2 identify the changed
+scale. See [accuracy scale migration](proportion-correct.md).

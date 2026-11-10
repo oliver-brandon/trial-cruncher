@@ -19,7 +19,7 @@ def test_partial_duration_uses_recorded_denominator_and_exports_snapshot(
     write_export, tmp_path, duration, export_format, program
 ):
     path = write_export(program=program)
-    # Keep the stored target-based fraction distinct from the observed percentage.
+    # Keep the stored target-based fraction distinct from the observed proportion.
     text = path.read_text().replace("S: 10.00", f"S: {duration}").replace("  5: 0.50", "  5: 0.07")
     path.write_text(text)
     before = path.read_bytes(), path.stat().st_mtime_ns
@@ -28,7 +28,7 @@ def test_partial_duration_uses_recorded_denominator_and_exports_snapshot(
     assert result.session.duration_s == float(duration)
     assert result.session.metadata["raw_medpc"]["scalars"]["M"] == 60
     assert all(result.session.metadata["summary_checks"].values())
-    assert tuple(metric.value for metric in result.summary.metrics) == (4, 2, 2, 2, 2, 50)
+    assert tuple(metric.value for metric in result.summary.metrics) == (4, 2, 2, 2, 2, 0.5)
     assert not result.session.warnings
     destination = export_import_results({path: result}, [path], tmp_path, export_format)
     if export_format == "xlsx":
@@ -42,7 +42,7 @@ def test_partial_duration_uses_recorded_denominator_and_exports_snapshot(
             (row,) = csv.DictReader(stream)
         with (destination / "choices.csv").open(newline="") as stream:
             assert len(list(csv.DictReader(stream))) == 4
-    assert float(row["prl.percent_correct"]) == 50
+    assert float(row["prl.proportion_correct"]) == 0.5
     assert float(row["duration_s"]) == float(duration)
     raw = json.loads(row["metadata_json"])["raw_medpc"]
     assert row["program"] == raw["headers"]["MSN"] == program
@@ -88,7 +88,7 @@ def test_corroborated_zero_tail_preserves_raw_and_exports_exclusions(
     }
     assert all(result.session.metadata["summary_checks"].values())
     assert [metric.name for metric in result.summary.metrics] == list(METRIC_LABELS)
-    assert tuple(m.value for m in result.summary.metrics) == (4, 2, 2, 2, 2, 50)
+    assert tuple(m.value for m in result.summary.metrics) == (4, 2, 2, 2, 2, 0.5)
     assert not result.session.warnings
     destination = export_import_results({path: result}, [path], tmp_path, export_format)
     if export_format == "csv":
@@ -109,7 +109,8 @@ def test_corroborated_zero_tail_preserves_raw_and_exports_exclusions(
     assert "C[4]" in raw["line_numbers"] and "C[5]" in raw["line_numbers"]
     assert metadata["choice_storage"]["unused_slot_indices"] == [4, 5]
     assert json.loads(row["metric_diagnostics_json"])["unused_slot_count"] == 2
-    assert row["normalizer_version"] == row["metric_definition_version"] == "2"
+    assert row["normalizer_version"] == "2"
+    assert row["metric_definition_version"] == "3"
     assert (
         json.loads((destination / "manifest.json").read_text())["configuration"][
             "choice_storage_policy"

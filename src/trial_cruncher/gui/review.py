@@ -83,7 +83,7 @@ class ReviewPanel(QWidget):
         metric_layout = QVBoxLayout(self.metric_page)
         self.metric_note = QLabel(
             f"Recorded-choice summaries · definition {DEFINITION_VERSION} · strict withholding.\n"
-            "Percent correct uses recorded choices, not the saved A[5] fraction."
+            "Proportion correct uses recorded choices, not the saved A[5] fraction."
         )
         self.metric_note.setWordWrap(True)
         metric_layout.addWidget(self.metric_note)
@@ -166,8 +166,8 @@ class ReviewPanel(QWidget):
         self.metric_table.setRowCount(len(summary.metrics))
         for row, metric in enumerate(summary.metrics):
             value = display(metric.value)
-            if metric.value is not None and metric.unit == "%":
-                value = f"{metric.value:.2f}"
+            if metric.value is not None and metric.unit == "proportion":
+                value = f"{metric.value:.4f}"
             fields = (
                 METRIC_LABELS[metric.name],
                 value,
@@ -217,7 +217,11 @@ class ReviewPanel(QWidget):
             )
             value = display(metric.value)
             if isinstance(metric.value, float):
-                value = f"{metric.value:.4g}"
+                value = (
+                    f"{metric.value:.4f}"
+                    if metric.name.endswith("proportion_correct")
+                    else f"{metric.value:.4g}"
+                )
             fields = (
                 PHASE_LABELS[metric.name],
                 value,

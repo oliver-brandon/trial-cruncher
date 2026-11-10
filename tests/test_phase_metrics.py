@@ -18,7 +18,7 @@ def test_reference_example(phase_input):
     result = import_medpc_file(phase_input(), "Reversal 2")
     phase = result.phase_summary
     assert [m.name for m in phase.metrics] == list(METRIC_LABELS)
-    assert [m.value for m in phase.metrics] == pytest.approx([50, 3, 2, 2 / 3, 1 / 4, 0, 0, 2 / 3])
+    assert [m.value for m in phase.metrics] == pytest.approx([0.5, 3, 2, 2 / 3, 1 / 4, 0, 0, 2 / 3])
     assert [(p.numerator, p.denominator) for p in phase.strategies] == [
         (1, 4),
         (0, 1),
@@ -54,8 +54,8 @@ def test_reference_example(phase_input):
     "codes,expected,k,post",
     [
         ((7,), [0, 1, 0, None, None, None, None, None], None, 0),
-        ((1, 1, 1), [100, 0, 0, None, 1, None, None, None], 3, 0),
-        ((1, 1, 1, 7, 7, 1, 1, 1), [75, 0, 2, 0.4, 0.8, None, None, 0.5], 3, 5),
+        ((1, 1, 1), [1, 0, 0, None, 1, None, None, None], 3, 0),
+        ((1, 1, 1, 7, 7, 1, 1, 1), [0.75, 0, 2, 0.4, 0.8, None, None, 0.5], 3, 5),
         ((), [None] * 8, None, None),
     ],
 )
@@ -87,7 +87,7 @@ def test_independent_exhaustive_small_sequences(phase_input):
                 errors = [i for i, c in enumerate(cls, 1) if c == "I"]
                 pre = sum(i < k for i in errors) if k else len(errors)
                 post = len(errors) - pre
-                assert [m.value for m in phase.metrics[:3]] == [100 * cls.count("C") / n, pre, post]
+                assert [m.value for m in phase.metrics[:3]] == [cls.count("C") / n, pre, post]
                 assert phase.metrics[3].value == (post / (n - k) if k and k < n else None)
             for conditioning, evidence in zip((1, 6, 2, 7), phase.strategies, strict=True):
                 pairs = [
@@ -199,8 +199,8 @@ def test_phase_exports_literal_labels_evidence_and_versions(phase_input, tmp_pat
     assert int(row["omission_count"]) == 0
     assert row["omission_count_basis"] == "owner-confirmed no-omission protocol"
     manifest = json.loads((out / "manifest.json").read_text())
-    assert manifest["schema_version"] == "3"
-    assert manifest["configuration"]["phase_definition_version"] == "1"
+    assert manifest["schema_version"] == "4"
+    assert manifest["configuration"]["phase_definition_version"] == "2"
     assert manifest["configuration"]["phase_configurations"][0]["configuration"] == asdict(
         result.phase_summary.config
     )

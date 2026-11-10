@@ -1,7 +1,7 @@
 # Behavioral metric conventions
 
 Six owner-approved PRL session-summary metrics are implemented: recorded choices,
-correct/incorrect choices, rewarded/unrewarded choices, and percent correct. Their
+correct/incorrect choices, rewarded/unrewarded choices, and proportion correct. Their
 versioned formulas, strict withholding rules, and hand-calculated acceptance cases
 are specified in [PRL session-summary metrics](prl-session-metrics.md). The GUI
 calculates them during import; session CSV exports retain values and diagnostics.
@@ -9,7 +9,7 @@ calculates them during import; session CSV exports retain values and diagnostics
 The [PRL normalizer](medpc.md) extracts task duration and choice outcomes and checks
 their counts against saved summaries. Calculated metrics remain separate from these
 source observations. Stored `A[5]` retains its `A[0] / Y` meaning and is not the new
-percent-correct metric. Head entries are not recorded, so head-entry and latency
+proportion-correct metric. Head entries are not recorded, so head-entry and latency
 calculations remain unavailable. Owner approval and software tests do not establish
 general scientific validity. Five supported timeout recordings now pass local
 consistency checks. `PRL_OPTO` uses the owner-confirmed shared interpretation;
@@ -18,7 +18,7 @@ confirmed manual-stop zero tails are excluded as unused storage under
 [partial-session validation](partial-session-validation.md).
 
 Eight additional phase metrics are implemented under `prl-medpc-phase-behavior`
-version 1: phase percent correct, perseverative/regressive errors, adjusted regressive
+version 2: phase proportion correct, perseverative/regressive errors, adjusted regressive
 error proportion, and four correct/incorrect-conditioned win-stay/lose-shift
 probabilities. Their [implementation specification](medpc-behavioral-metrics-spec.md)
 records the owner-confirmed fixed-contingency/no-omission profile, manual phase

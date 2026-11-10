@@ -633,10 +633,13 @@ class MainWindow(QMainWindow):
             self._source_hashes = {s.path: s.sha256 for s in project.sources}
             self._project_path, self._project_sha256 = result.path, result.file_sha256
             self._apply_source_checks(result.checks)
-            self._project_dirty = False
+            self._project_dirty = project.configuration_updated
             self._update_project_label()
             self.statusBar().showMessage(
-                "Project loaded; import required before export."
+                "Project accuracy updated to proportions; re-import required. "
+                "Save to update the project."
+                if project.configuration_updated
+                else "Project loaded; import required before export."
                 if mode == "load"
                 else "Project saved. Changed sources still require re-import."
             )

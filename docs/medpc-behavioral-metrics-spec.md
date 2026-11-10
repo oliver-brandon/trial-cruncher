@@ -1,8 +1,8 @@
 # Med-PC PRL behavioral metrics — implementation specification
 
 Status: **Owner-confirmed rules; implemented.**
-Specification revision: 2 · November 10, 2026.
-Definition set: `prl-medpc-phase-behavior`, definition version 1.
+Specification revision: 3 · November 10, 2026.
+Definition set: `prl-medpc-phase-behavior`, definition version 2.
 
 This milestone supports the confirmed PRL_BO, PRL_OPTO, and PRL_OPTO_CORSTIM
 interpretations. On November 10, 2026 the owner confirmed one fixed contingency per
@@ -20,7 +20,11 @@ records a separate MAT-based experiment; its TTL fields, reward matching, sessio
 selection, sample sizes, and verification claims are not Med-PC defaults or evidence
 that these new calculations have been validated in Trial Cruncher.
 
-This milestone covers phase percent correct; perseverative and regressive error
+The owner requested accuracy on a 0–1 proportion scale on November 10, 2026. This
+supersedes the supplied reference's percentage reporting without changing the
+denominator or eligibility. See [scale migration](proportion-correct.md).
+
+This milestone covers phase proportion correct; perseverative and regressive error
 counts; adjusted regressive-error proportion; and correct/incorrect-conditioned
 win-stay and lose-shift probabilities. It includes criterion and denominator evidence,
 GUI review, and CSV/Excel export. Results describe observed choices, not reconstructed
@@ -32,9 +36,9 @@ aggregation, statistical tests, cross-session learning criteria, and intrasessio
 reversal processing. Do not calculate a fallback rate from `S`, header elapsed time,
 saved `A[3]`, or last C time plus five seconds. `S` remains recorded task duration.
 
-Existing session summaries remain `prl-session-summary` version 2 with
+Existing session summaries remain `prl-session-summary` version 3 with
 `strict-withholding-v2`. Phase results are separate and never silently replace
-`prl.percent_correct` or reinterpret saved `A[5]`.
+`prl.proportion_correct` or reinterpret saved `A[5]`.
 
 ## Confirmed phase and omission rules
 
@@ -117,7 +121,7 @@ Output unit of analysis: animal × source session × confirmed contingency phase
 For an eligible phase with N recorded choices, let `c[t]` and `r[t]` be its boolean
 correctness and reward flags. Positions t are **one-based choice ordinals**, not
 invented trial numbers. Raw C indices remain separately available and zero-based.
-All metric identifiers below belong to definition version 1 of the new set.
+All metric identifiers below belong to definition version 2 of the new set.
 
 Let K be the first ordinal completing three consecutive correct choices in that
 phase. Each incorrect choice resets the current streak to zero; a correct choice
@@ -126,7 +130,7 @@ Reward does not affect this criterion. Omissions do not occur in the confirmed p
 
 | Stable identifier | Formula / rule | Unit |
 |---|---|---|
-| `prl.phase.percent_correct` | `100 * sum(c[t]) / N` for N > 0 | %, 0–100 |
+| `prl.phase.proportion_correct` | `sum(c[t]) / N` for N > 0 | proportion, 0–1 |
 | `prl.phase.perseverative_errors` | Count incorrect choices at t < K; if no K, all incorrect choices | count |
 | `prl.phase.regressive_errors` | Count incorrect choices at t > K; zero if no K in a nonempty eligible phase | count |
 | `prl.phase.adjusted_regressive_error_proportion` | Regressive errors / number of choices after K | proportion, 0–1 |
@@ -200,7 +204,7 @@ missing, never "correct" or "no error". Excluded storage remains fully preserved
 raw metadata. No input mutation, overwrite, formula interpretation, long-text loss,
 or export filtering is allowed. Both export formats use the same reviewed snapshot.
 
-Export table/bundle schema is version 3; Excel workbook layout is version 2, adding
+Export table/bundle schema is version 4; Excel workbook layout is version 3, adding
 Phase metrics and phase/error annotations on Choices. Do not stamp new manifest
 definitions onto old computed results. Definition IDs and any
 configuration affecting semantics must be recorded so results can be reproduced.
@@ -224,7 +228,7 @@ P1/P2/O1 are confirmed and there are no omissions or integrity failures.
 | 9 | C | 1 | Correct |
 | 10 | I | 0 | Regressive; no next choice |
 
-Expected: N=10; correct=5; accuracy=50%; perseverative=3; regressive=2;
+Expected: N=10; correct=5; accuracy=0.5; perseverative=3; regressive=2;
 postcriterion=3; adjusted=2/3. Win-stay correct=1/4, win-stay incorrect=0/1,
 lose-shift correct=0/1, lose-shift incorrect=2/3. The four denominators sum to 9.
 
@@ -232,9 +236,9 @@ Additional hand-checked cases (C/I strings describe choices, not raw C-array tok
 
 | Case | Expected |
 |---|---|
-| One incorrect choice | N=1, accuracy=0%, perseverative=1, regressive=0, criterion false, postcriterion=0, adjusted unavailable; all four strategy denominators zero |
+| One incorrect choice | N=1, accuracy=0, perseverative=1, regressive=0, criterion false, postcriterion=0, adjusted unavailable; all four strategy denominators zero |
 | `CCC`, all rewarded | K=3, both errors zero, postcriterion=0, adjusted unavailable; win-stay correct=2/2, other strategy denominators zero |
-| `CCCIICCC` | K=3 remains fixed; perseverative=0, regressive=2, postcriterion=5, adjusted=2/5, accuracy=75% |
+| `CCCIICCC` | K=3 remains fixed; perseverative=0, regressive=2, postcriterion=5, adjusted=2/5, accuracy=0.75 |
 | Eligible empty C or recognized all-unused storage | N=0, behavioral metrics unavailable, no fabricated criterion success or error-free performance |
 | Any invalid choice, index gap, or saved-count conflict | All new behavioral metrics withheld; do not join the surrounding valid choices |
 | Intact sequence but unknown phase | New phase metrics unavailable; current session summaries retain their independent availability |

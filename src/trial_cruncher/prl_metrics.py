@@ -1,4 +1,4 @@
-"""Approved PRL session-summary definitions, version 2; corroborated unused slots."""
+"""Approved PRL session-summary definitions, version 3; corroborated unused slots."""
 
 from collections import Counter
 from collections.abc import Mapping
@@ -9,7 +9,7 @@ from trial_cruncher.models import MetricResult, Session
 from trial_cruncher.prl import NORMALIZER_VERSION, SUPPORTED_PROGRAMS, choice_storage_info
 
 DEFINITION_SET = "prl-session-summary"
-DEFINITION_VERSION = "2"
+DEFINITION_VERSION = "3"
 ELIGIBILITY_POLICY = "strict-withholding-v2"
 METRIC_LABELS = {
     "prl.choice_count": "Recorded choices",
@@ -17,7 +17,7 @@ METRIC_LABELS = {
     "prl.incorrect_choice_count": "Incorrect choices",
     "prl.rewarded_choice_count": "Rewarded choices",
     "prl.unrewarded_choice_count": "Unrewarded choices",
-    "prl.percent_correct": "Correct choices (%)",
+    "prl.proportion_correct": "Proportion correct",
 }
 _TERMINATOR = Decimal("-987.987")
 _OUTCOMES = {1: (True, True), 2: (True, False), 6: (False, True), 7: (False, False)}
@@ -141,28 +141,28 @@ def calculate_prl_summary(session: Session) -> PRLSessionSummary:
 
     total = sum(counts.values())
     correct = counts[1] + counts[2]
-    # One final division; no rounding or percentage derived from the saved A[5].
+    # One final division; no rounding or accuracy derived from the saved A[5].
     values = (
         total,
         correct,
         counts[6] + counts[7],
         counts[1] + counts[6],
         counts[2] + counts[7],
-        100 * correct / total if total else None,
+        correct / total if total else None,
     )
     metrics = []
     for name, value in zip(METRIC_LABELS, values, strict=True):
         metric_reasons = tuple(reasons)
         if reasons:
             value = None
-        elif name == "prl.percent_correct" and total == 0:
-            metric_reasons = ("Percent correct has no denominator: zero recorded choices.",)
+        elif name == "prl.proportion_correct" and total == 0:
+            metric_reasons = ("Proportion correct has no denominator: zero recorded choices.",)
         metrics.append(
             MetricResult(
                 name,
                 DEFINITION_VERSION,
                 value,
-                "%" if name == "prl.percent_correct" else "count",
+                "proportion" if name == "prl.proportion_correct" else "count",
                 warnings=session.warnings,
                 reasons=metric_reasons,
             )

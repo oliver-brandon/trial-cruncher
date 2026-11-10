@@ -62,8 +62,8 @@ correct, incorrect, rewarded, unrewarded.
 
 | C | A | B | Expected |
 |---|---|---|---|
-| `[0.01, 1.22, 2.36, 4.57, 0, 0]` | `[2, 2, 4]` | `[1, 1, 1, 1]` | Exclude indices 4,5; counts `(4,2,2,2,2)` and 50%; retain all six raw entries |
-| `[0.06, 1.27, 0]` | `[0, 2, 2]` | `[0, 0, 1, 1]` | Exclude index 2; counts `(2,0,2,1,1)` and genuine 0% |
+| `[0.01, 1.22, 2.36, 4.57, 0, 0]` | `[2, 2, 4]` | `[1, 1, 1, 1]` | Exclude indices 4,5; counts `(4,2,2,2,2)` and proportion correct 0.5; retain all six raw entries |
+| `[0.06, 1.27, 0]` | `[0, 2, 2]` | `[0, 0, 1, 1]` | Exclude index 2; counts `(2,0,2,1,1)` and genuine proportion correct 0 |
 | `[0, 0]` | `[0, 0, 0]` | `[0, 0, 0, 0]` | Exclude both slots; five zero counts, percentage unavailable |
 | `[0.01, 0, 2.36, 0]` | `[1, 2, 3]` | `[1, 0, 1, 1]` | No exclusion; invalid prefix, all metrics withheld |
 | `[0.01, 0, 2.36]` | `[1, 0, 1]` | `[1, 0, 0, 0]` | No exclusion; nonzero value after proposed boundary, all metrics withheld |
@@ -71,3 +71,7 @@ correct, incorrect, rewarded, unrewarded.
 | `[0.01, -987.987, 0]` | `[1, 0, 1]` | `[1, 0, 0, 0]` | No exclusion; post-terminator data still withholds metrics |
 
 Changing these recognition conditions or exclusions requires a new versioned rule.
+
+The slot interpretation remains version 2. Current session metric definition 3
+and phase definition 2 report accuracy as a 0–1 proportion, superseding percentage
+reporting without changing storage exclusions. See [proportion correct](proportion-correct.md).

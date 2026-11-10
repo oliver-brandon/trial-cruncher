@@ -65,15 +65,15 @@ def test_export_round_trip_provenance_missing_and_raw_fields(write_export, tmp_p
         METRIC_LABELS
     )
     assert manifest["configuration"]["metric_eligibility_policy"] == "strict-withholding-v2"
-    assert manifest["schema_version"] == row["schema_version"] == "3"
-    assert row["metric_definition_version"] == "2"
+    assert manifest["schema_version"] == row["schema_version"] == "4"
+    assert row["metric_definition_version"] == "3"
     assert row["metric_policy"] == "strict-withholding-v2"
     assert all(row[name] == "" for name in METRIC_LABELS)
     exported_metrics = json.loads(row["metric_results_json"])
     assert len(exported_metrics) == 6
     for metric in exported_metrics:
         assert metric["value"] is None and metric["status"] == "unavailable"
-        assert metric["definition_version"] == "2"
+        assert metric["definition_version"] == "3"
         assert "invalid choice" in metric["reasons"][0]
         assert metric["warnings"] == list(session.warnings)
     diagnostics = json.loads(row["metric_diagnostics_json"])
@@ -285,7 +285,7 @@ def test_export_requires_reimport_after_source_changes(write_export, tmp_path, e
     "choices,counts,outcomes,expected",
     [
         ("0.06 1.27", "0 2 2", "0 0 1 1", ["2", "0", "2", "1", "1", "0.0"]),
-        ("0.01 1.26 2.37", "1 2 3", "1 0 1 1", ["3", "1", "2", "2", "1", str(100 / 3)]),
+        ("0.01 1.26 2.37", "1 2 3", "1 0 1 1", ["3", "1", "2", "2", "1", str(1 / 3)]),
         (None, "0 0 0", "0 0 0 0", ["0", "0", "0", "0", "0", ""]),
     ],
 )

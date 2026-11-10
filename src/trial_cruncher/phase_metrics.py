@@ -9,11 +9,11 @@ from trial_cruncher.models import MetricResult, Session
 from trial_cruncher.prl_metrics import calculate_prl_summary
 
 DEFINITION_SET = "prl-medpc-phase-behavior"
-DEFINITION_VERSION = "1"
+DEFINITION_VERSION = "2"
 PROTOCOL_PROFILE = "fixed-contingency-no-omissions-v1"
 POLICY = "strict-withholding-v2"
 METRIC_LABELS = {
-    "prl.phase.percent_correct": "Correct choices (%)",
+    "prl.phase.proportion_correct": "Proportion correct",
     "prl.phase.perseverative_errors": "Perseverative errors",
     "prl.phase.regressive_errors": "Regressive errors",
     "prl.phase.adjusted_regressive_error_proportion": "Adjusted regressive-error proportion",
@@ -110,7 +110,7 @@ def calculate_phase_metrics(session: Session, phase: str | None = None) -> Phase
     if config.phase is None:
         reasons.append("Assign a phase and re-import to calculate phase metrics.")
         codes.append("phase_unassigned")
-    # Counts are unavailable for damaged or missing C. Undefined empty percentages
+    # Counts are unavailable for damaged or missing C. Undefined empty accuracy values
     # alone do not imply corrupt source data.
     if base.metrics[0].value is None:
         reasons.extend(base.metrics[0].reasons)
@@ -155,7 +155,7 @@ def calculate_phase_metrics(session: Session, phase: str | None = None) -> Phase
         )
         if n:
             values[:4] = [
-                100 * n_correct / n,
+                n_correct / n,
                 perseverative,
                 regressive,
                 regressive / post_count if post_count else None,
@@ -182,7 +182,7 @@ def calculate_phase_metrics(session: Session, phase: str | None = None) -> Phase
             name,
             DEFINITION_VERSION,
             value,
-            "%"
+            "proportion"
             if i == 0
             else "count"
             if i in (1, 2)

@@ -123,7 +123,7 @@ scope and serialization rules. Per-session metadata retains reader/normalizer ve
 raw acquisition fields, and time units/origin. Schema 2 adds the six calculated
 session columns and their status/reasons/diagnostics; the manifest records metric
 definition IDs/versions and the strict withholding policy. Excel workbook layout
-version 2 uses schema 3 tables, including Phase metrics, Quality, and
+version 3 uses schema 4 tables, including Phase metrics, Quality, and
 Provenance sheets. Phase configurations and definitions are recorded independently
 of the existing session definitions. `excel.py` stores literal text, chunks long metadata, checks
 worksheet/XML limits, and exclusively creates `results.xlsx`; the shared export
@@ -164,3 +164,9 @@ project operations. Exporters check source hashes before writing and before the 
 manifest; stale export failures clean up partial bundles and signal affected paths
 for GUI invalidation. Verification is point-in-time, not a filesystem watcher.
 See [project contract](projects.md).
+
+Accuracy now uses explicit proportion-correct metric IDs (0–1): session definition
+3 and phase definition 2. Projects recognize only the exact preceding accuracy-scale
+configuration as a supported upgrade, flag it visibly, and require re-import and an
+explicit save to persist it. Other mismatches still fail closed. See
+[scale migration](proportion-correct.md).

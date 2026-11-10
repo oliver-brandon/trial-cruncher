@@ -1,4 +1,4 @@
-# Session, choice, and phase CSV export (schema 3)
+# Session, choice, and phase CSV export (schema 4)
 
 ## GUI workflow
 
@@ -54,16 +54,16 @@ Additional `sessions.csv` columns:
 | `summary_checks_json` | Saved-count comparisons: true, false, or null (unavailable) |
 | `metadata_json` | Complete session metadata, including raw Med-PC headers, scalars, arrays, source text, line numbers, warnings, and versions |
 | `prl.choice_count`, `prl.correct_choice_count`, `prl.incorrect_choice_count` | Calculated recorded/correct/incorrect choice counts |
-| `prl.rewarded_choice_count`, `prl.unrewarded_choice_count`, `prl.percent_correct` | Calculated outcome counts and percent correct using recorded choices |
-| `metric_definition_set`, `metric_definition_version`, `metric_policy` | `prl-session-summary`, `2`, and `strict-withholding-v2` |
+| `prl.rewarded_choice_count`, `prl.unrewarded_choice_count`, `prl.proportion_correct` | Calculated outcome counts and proportion correct using recorded choices |
+| `metric_definition_set`, `metric_definition_version`, `metric_policy` | `prl-session-summary`, `3`, and `strict-withholding-v2` |
 | `metric_results_json` | All six results: stable name, definition version, numeric value or null, unit, availability status, reasons, and warnings |
 | `metric_diagnostics_json` | C presence, terminator observation, observed/decoded/invalid record counts, post-terminator entries, index gaps, and saved-count checks |
 
 The six calculated columns follow [the approved definitions](prl-session-metrics.md).
 Strict withholding leaves all six blank for incomplete/invalid C or a saved-count
 mismatch; raw choices and diagnostic counts are retained. Explicit empty eligible C
-has five zero counts and a blank percentage, while missing C gives six blank values.
-Availability reasons stay in `metric_results_json`. GUI percentage rounding does not
+has five zero counts and a blank proportion, while missing C gives six blank values.
+Availability reasons stay in `metric_results_json`. GUI proportion rounding does not
 affect CSV precision. Saved `A[5]` remains raw and separate.
 
 Additional `choices.csv` columns:
@@ -107,7 +107,7 @@ counts and columns, input statuses/errors/hashes/warnings, scope/order/filtering
 rules, and serialization conventions. Reader/normalizer versions and acquisition
 configuration are retained per session. The manifest lists all six metric IDs, units,
 definition version, definition set, strict eligibility policy, and the recorded-choice
-percentage denominator. There are no user-configurable policy overrides. Schema 2
+proportion denominator. There are no user-configurable policy overrides. Schema 2
 extends schema 1 with the calculated session columns and metric metadata; choice
 columns are unchanged apart from their bundle schema-version value.
 
@@ -155,7 +155,7 @@ reports raw entries and unused slots separately from choice counts. The manifest
 records `choice_storage_policy=validated-zero-tail-v1`. These storage additions were introduced with schema 2; schema 3 retains them
 and adds the phase table and choice annotations described below.
 
-## Phase results in schema 3
+## Phase results (introduced in schema 3)
 
 Use **Assign phases…** before importing. Assignments are per source path and may use
 custom labels. An empty label is not inferred from filenames: all eight phase
@@ -184,11 +184,16 @@ Original C indices and raw observations are unchanged.
 The manifest adds the phase definition set/version, metric IDs, strict policy, and
 per-source configuration snapshots/hashes. Technical source identity is the existing
 pair `(source_file, source_sha256)`; biological IDs are never invented. The new
-phase set is version 1; session summaries remain definition version 2. Export rejects
+phase set is version 2; session summaries use definition version 3. Export rejects
 missing or stale phase results/configuration/provenance before creating files.
 
-Probability/adjusted proportion scales are 0–1; phase accuracy is 0–100 percent.
+Probability/adjusted proportion scales are 0–1; phase accuracy is also a 0–1 proportion.
 Known zero denominators retain zero and an undefined flag, while withheld denominators
 stay blank with a missing flag. Neither becomes a fabricated zero probability.
 No trials-per-minute value or MAT duration fallback is produced. See the
 [phase specification](medpc-behavioral-metrics-spec.md) for formulas and examples.
+
+Schema 4 replaces percentage columns with `prl.proportion_correct` and
+`prl.phase.proportion_correct`, with unit `proportion` and range 0–1. Old percentage
+exports retain their original scale and filenames; they are never rewritten. See
+[accuracy scale migration](proportion-correct.md).

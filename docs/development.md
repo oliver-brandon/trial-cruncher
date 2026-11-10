@@ -146,3 +146,8 @@ copies to test a changed and a missing input; confirm stale metrics clear and ex
 requires re-import. Save before re-import and verify the old reference hash remains.
 Re-import and save again to update it. Check project Save As, picker cancellation,
 and externally edited project rejection. Never alter research originals for tests.
+
+`tests/test_proportion_correct.py` verifies 0, fractional, and 1 accuracy values,
+plain numeric Excel formatting, renamed schema-4 columns and units, rejection of
+old calculated snapshots, and safe percentage-project configuration upgrades. GUI
+checks verify proportion labels/values and the explicit re-import/save migration flow.

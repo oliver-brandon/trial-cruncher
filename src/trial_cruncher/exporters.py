@@ -102,6 +102,7 @@ def export_import_results(
                 or result.summary.definition_set != DEFINITION_SET
                 or result.summary.definition_version != DEFINITION_VERSION
                 or result.summary.eligibility_policy != ELIGIBILITY_POLICY
+                or tuple(m.name for m in result.summary.metrics) != tuple(METRIC_LABELS)
                 or any(m.definition_version != DEFINITION_VERSION for m in result.summary.metrics)
             ):
                 raise ValueError(
@@ -172,7 +173,7 @@ def export_import_results(
                 {
                     "name": name,
                     "definition_version": DEFINITION_VERSION,
-                    "unit": "%" if name == "prl.percent_correct" else "count",
+                    "unit": "proportion" if name == "prl.proportion_correct" else "count",
                 }
                 for name in METRIC_LABELS
             ],
@@ -180,7 +181,7 @@ def export_import_results(
             "metric_definition_version": DEFINITION_VERSION,
             "metric_eligibility_policy": ELIGIBILITY_POLICY,
             "choice_storage_policy": CHOICE_STORAGE_POLICY,
-            "percent_correct_denominator": "Recorded choices; no configured target substitution",
+            "proportion_correct_denominator": "Recorded choices; no configured target substitution",
             "task_configuration": (
                 "User-assigned phase per source; raw acquisition fields in metadata_json"
             ),

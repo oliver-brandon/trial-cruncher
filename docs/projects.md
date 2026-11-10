@@ -53,7 +53,8 @@ date, fixed-contingency/no-omission interpretation, and evidence text. These ana
 policies are fixed in the current application, not freely editable parameters.
 Loading validates compatibility with the installed interpretation. An unknown project
 version or different analysis configuration is rejected without applying settings;
-it is never silently migrated to different scientific rules.
+it is never silently migrated to different scientific rules. The one explicit
+exception is the known percentage-to-proportion configuration update described below.
 
 All JSON fields and types are validated. Duplicate object keys, duplicate source paths,
 relative/parent-traversal paths, invalid hashes, malformed phase labels, unknown fields,
@@ -142,3 +143,14 @@ and provenance verification, not new scientific validation of behavioral metrics
 
 Final checks on November 10, 2026: **282 tests passed**, along with Ruff lint/format,
 dependency consistency, Markdown link, and diff whitespace checks.
+
+## Known accuracy-scale update
+
+Project format 1 remains supported. A project whose analysis configuration exactly
+matches the previous session definition 2 / phase definition 1 setup can be opened
+under session definition 3 / phase definition 2. Paths, phases, and reference hashes
+are retained; the window visibly reports the proportion-scale update and marks the
+configuration unsaved. Import is still required before export. Loading leaves the
+original project file untouched; Save explicitly writes the updated configuration.
+Any additional policy/profile/version mismatch still fails compatibility checks.
+See [proportion correct](proportion-correct.md).

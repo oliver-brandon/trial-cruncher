@@ -574,7 +574,14 @@ def test_session_metrics_display_withholding_zero_and_clear(app, write_export, m
         window.review.tabs.setCurrentWidget(window.review.metric_page)
         table = window.review.metric_table
         assert table.rowCount() == 6
-        assert [table.item(row, 1).text() for row in range(6)] == ["4", "2", "2", "2", "2", "50.00"]
+        assert [table.item(row, 1).text() for row in range(6)] == [
+            "4",
+            "2",
+            "2",
+            "2",
+            "2",
+            "0.5000",
+        ]
         assert table.item(0, 3).text() == "Available"
         assert "Valid decoded records: 4" in window.review.metric_diagnostics.toPlainText()
         choose_path(window, mismatch)
@@ -594,9 +601,9 @@ def test_session_metrics_display_withholding_zero_and_clear(app, write_export, m
         with (destination / "sessions.csv").open(newline="") as stream:
             exported = {row["source_file"]: row for row in csv.DictReader(stream)}
         assert len(exported) == 3
-        assert exported[str(path)]["prl.percent_correct"] == "50.0"
+        assert exported[str(path)]["prl.proportion_correct"] == "0.5"
         assert exported[str(empty)]["prl.choice_count"] == "0"
-        assert exported[str(empty)]["prl.percent_correct"] == ""
+        assert exported[str(empty)]["prl.proportion_correct"] == ""
         assert exported[str(mismatch)]["prl.choice_count"] == ""
         assert (
             json.loads(exported[str(mismatch)]["metric_results_json"])[0]["status"] == "unavailable"
@@ -642,7 +649,7 @@ def test_metric_calculation_is_in_worker_and_failure_isolated(app, write_export,
         assert window.import_results[failed].summary is None
         choose_path(window, path)
         assert window.review.metric_table.rowCount() == 6
-        assert window.import_results[path].summary.metrics[-1].value == 50
+        assert window.import_results[path].summary.metrics[-1].value == 0.5
         assert window.export_button.isEnabled()
     finally:
         window.close()
