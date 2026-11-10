@@ -15,7 +15,7 @@ from trial_cruncher.phase_metrics import METRIC_LABELS as PHASE_METRIC_LABELS
 from trial_cruncher.phase_metrics import STRATEGIES, PhaseSummary
 from trial_cruncher.prl_metrics import METRIC_LABELS, PRLSessionSummary
 
-SCHEMA_VERSION = "4"
+SCHEMA_VERSION = "5"
 PROVENANCE_COLUMNS = (
     "schema_version",
     "application_version",

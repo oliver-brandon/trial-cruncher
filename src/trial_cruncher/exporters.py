@@ -21,6 +21,7 @@ from trial_cruncher.prl_metrics import (
     DEFINITION_VERSION,
     ELIGIBILITY_POLICY,
     METRIC_LABELS,
+    METRIC_UNITS,
 )
 from trial_cruncher.processing import ImportResult
 from trial_cruncher.source_tracking import require_current_sources
@@ -173,7 +174,7 @@ def export_import_results(
                 {
                     "name": name,
                     "definition_version": DEFINITION_VERSION,
-                    "unit": "proportion" if name == "prl.proportion_correct" else "count",
+                    "unit": METRIC_UNITS[name],
                 }
                 for name in METRIC_LABELS
             ],
@@ -181,6 +182,13 @@ def export_import_results(
             "metric_definition_version": DEFINITION_VERSION,
             "metric_eligibility_policy": ELIGIBILITY_POLICY,
             "choice_storage_policy": CHOICE_STORAGE_POLICY,
+            "medpc_trials_per_minute": {
+                "formula": "60 * validated recorded choices / S",
+                "scope": "whole session",
+                "duration_source": "S (task-relative seconds)",
+                "unit": "choices/min",
+                "saved_A3": "raw only; not substituted",
+            },
             "proportion_correct_denominator": "Recorded choices; no configured target substitution",
             "task_configuration": (
                 "User-assigned phase per source; raw acquisition fields in metadata_json"

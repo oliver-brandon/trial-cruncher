@@ -65,15 +65,15 @@ def test_export_round_trip_provenance_missing_and_raw_fields(write_export, tmp_p
         METRIC_LABELS
     )
     assert manifest["configuration"]["metric_eligibility_policy"] == "strict-withholding-v2"
-    assert manifest["schema_version"] == row["schema_version"] == "4"
-    assert row["metric_definition_version"] == "3"
+    assert manifest["schema_version"] == row["schema_version"] == "5"
+    assert row["metric_definition_version"] == "4"
     assert row["metric_policy"] == "strict-withholding-v2"
     assert all(row[name] == "" for name in METRIC_LABELS)
     exported_metrics = json.loads(row["metric_results_json"])
-    assert len(exported_metrics) == 6
+    assert len(exported_metrics) == 7
     for metric in exported_metrics:
         assert metric["value"] is None and metric["status"] == "unavailable"
-        assert metric["definition_version"] == "3"
+        assert metric["definition_version"] == "4"
         assert "invalid choice" in metric["reasons"][0]
         assert metric["warnings"] == list(session.warnings)
     diagnostics = json.loads(row["metric_diagnostics_json"])
@@ -300,7 +300,7 @@ def test_metric_csv_zero_missing_and_precision(
     result = import_medpc_file(path)
     destination = export_import_results({path: result}, [path], tmp_path)
     (row,) = read_csv(destination / "sessions.csv")
-    assert [row[name] for name in METRIC_LABELS] == expected
+    assert [row[name] for name in METRIC_LABELS] == [*expected, str(60 * int(expected[0]) / 10)]
     serialized = json.loads(row["metric_results_json"])
     for metric, original in zip(serialized, result.summary.metrics, strict=True):
         assert metric["value"] == original.value

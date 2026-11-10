@@ -34,10 +34,11 @@ not need to have trials.
 
 **Med-PC import review is available in the GUI, CLI, and Python API.**
 GUI CSV and Excel export of sessions and choices is available with provenance and an export
-manifest. Six PRL session-summary metrics are implemented with the approved strict
+manifest. Seven PRL session-summary metrics are implemented with the approved strict
 withholding policy. Eight phase-level accuracy, error, and strategy metrics are also
 implemented with user-assigned phases and explicit criterion/denominator evidence.
-Trials per minute and other metric families remain future work.
+Med-PC trials per minute uses validated recorded choices and S. The separately
+defined MAT-derived rate and other metric families remain future work.
 Extensions identify candidates only. Other formats/programs require representative
 example files and documented schemas. Synthetic tests verify software behavior, not
 scientific validity. See [Med-PC support and confirmed rules](docs/medpc.md).
@@ -53,7 +54,7 @@ to three confirmed PRL program names; it does not impose their conventions on ot
 
 The eventual workflow is **Import Files → Select Paradigm → Configure Metrics →
 Process Batch → Review Results → Export Tables**. The desktop currently supports file
-selection, Med-PC import review, six PRL session summaries, eight phase metrics,
+selection, Med-PC import review, seven PRL session summaries, eight phase metrics,
 manual phase assignment, and CSV/Excel export. Additional task configuration and
 metric families remain future work.
 
@@ -92,12 +93,13 @@ to all files** supports bulk assignment. Save, then click **Import Med-PC** to r
 the full batch with those assignments. Blank phases leave phase metrics unavailable.
 Each file has one fixed contingency under the confirmed no-omission protocol.
 Pending phase edits apply only on re-import; exports use the reviewed snapshot. The overview shows one row per file
-with subject, program, recorded date, duration, six metrics, and quality status. Sort
+with subject, program, recorded date, duration, seven metrics, and quality status. Sort
 by clicking column headings; combine search, program, and quality filters to find
 sessions needing attention. Click a row to review it below:
 
 - **Session details:** identifiers, task duration from `S`, original headers, and provenance.
-- **Session metrics:** five choice/outcome counts and proportion correct, with status,
+- **Session metrics:** five choice/outcome counts, proportion correct, and Med-PC trials
+  per minute, with status,
   withholding reasons, and separate recorded-data diagnostics.
 - **Phase metrics:** phase accuracy, perseverative/regressive errors, adjusted error
   proportion, and four win-stay/lose-shift probabilities, with criterion and
@@ -122,7 +124,7 @@ The visible/total count makes hidden rows explicit. Dates retain the source head
 text and sort as text; no calendar format is inferred.
 
 Choose **Phase results** in the upper batch area to compare behavioral metrics across
-sessions. Select **Errors and criterion**, **Win-stay**, **Lose-shift**, or **All metrics**
+sessions. Select **Errors and criterion**, **Win-stay**, **Lose-shift**, **Session rate**, or **All metrics**
 to see the relevant values and denominators together. Search or filter by imported
 phase/status; click a row for details. Zero denominators remain zero while undefined
 ratios say **Unavailable**. See [batch phase results](docs/batch-phase-results.md).
@@ -132,7 +134,7 @@ warnings, then choose a parent folder. A new uniquely named folder holds `sessio
 `choices.csv`, `phase_metrics.csv`, and `manifest.json`; the saved location appears above the overview.
 Existing files are never overwritten. Failed/unimported files are recorded in the
 manifest. Blank fields mean missing observations, while zero and false stay explicit.
-Session CSV includes the six calculated metrics and their versioned status/reasons;
+Session CSV includes the seven calculated metrics and their versioned status/reasons;
 withheld values stay blank. Exports verify the reviewed snapshot against current source
 hashes; changed or unavailable sources require re-import. See
 [CSV schemas, provenance, and limitations](docs/csv-export.md).
@@ -209,7 +211,7 @@ not empty executable stages. See [architecture](docs/architecture.md) and
    timeouts and two manual stops now pass local consistency checks, with unused
    trailing slots preserved raw under a versioned exclusion rule. See
    [partial-session validation](docs/partial-session-validation.md).
-2. Review the six implemented PRL summaries against additional independent examples.
+2. Review the seven implemented PRL summaries against additional independent examples.
 3. Define further metrics and subject/group aggregation before implementing them.
 4. Add broader task configuration and, separately, MAT-derived trials per minute.
 

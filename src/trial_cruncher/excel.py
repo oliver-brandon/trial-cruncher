@@ -186,7 +186,7 @@ def build_workbook(
         "Quality": quality_table,
     }
     manifest["format"] = "xlsx"
-    manifest["workbook_schema_version"] = "3"
+    manifest["workbook_schema_version"] = "4"
     manifest["workbook"] = "results.xlsx"
     manifest["sheets"] = [*tables, "Provenance"]
     manifest["tables"] = {

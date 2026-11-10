@@ -35,6 +35,7 @@ HEADERS = (
     "Unrewarded",
     "Proportion correct",
     "Warnings",
+    "Trials/min\n(Med-PC)",
 )
 METRIC_NAMES = tuple(METRIC_LABELS)
 ATTENTION_STATES = frozenset(
@@ -84,7 +85,7 @@ class OverviewRow:
 
     def metric(self, column: int) -> MetricResult | None:
         if self.result and self.result.summary:
-            name = METRIC_NAMES[column - 6]
+            name = METRIC_NAMES[6 if column == 13 else column - 6]
             return next((m for m in self.result.summary.metrics if m.name == name), None)
         return None
 
@@ -104,7 +105,7 @@ class OverviewRow:
             return headers.get("Start Date") or None
         if column == 5:
             return session.duration_s if session else None
-        if 6 <= column <= 11:
+        if 6 <= column <= 11 or column == 13:
             metric = self.metric(column)
             return metric.value if metric else None
         if column == 12:
@@ -114,10 +115,10 @@ class OverviewRow:
     def text(self, column: int) -> str:
         value = self.value(column)
         if value is not None:
-            if column == 11:
+            if column in (11, 13):
                 return f"{value:.4f}"
             return str(value)
-        if 6 <= column <= 11 and self.withheld:
+        if (6 <= column <= 11 or column == 13) and self.withheld:
             return "Withheld"
         if column >= 5 and self.result is None:
             return "Pending" if self.state == "Pending" else "Not imported"
@@ -129,7 +130,7 @@ class OverviewRow:
             lines.append(self.source_issue)
         if self.result and self.result.error:
             lines.append(self.result.error)
-        if 6 <= column <= 11:
+        if 6 <= column <= 11 or column == 13:
             metric = self.metric(column)
             if metric:
                 lines += [METRIC_LABELS[metric.name], f"Status: {metric.status}", *metric.reasons]
@@ -231,9 +232,9 @@ class OverviewModel(QAbstractTableModel):
             if role == Qt.ItemDataRole.DisplayRole:
                 return HEADERS[section]
             if role == Qt.ItemDataRole.ToolTipRole:
-                if 6 <= section <= 11:
+                if 6 <= section <= 11 or section == 13:
                     return (
-                        METRIC_LABELS[METRIC_NAMES[section - 6]]
+                        METRIC_LABELS[METRIC_NAMES[6 if section == 13 else section - 6]]
                         + "; unavailable/withheld values sort last."
                     )
                 if section == 4:
@@ -331,7 +332,7 @@ class BatchOverview(QWidget):
         # Keep the percentage visible before the five count columns on narrow windows.
         self.table.horizontalHeader().moveSection(11, 6)
         for column, width in enumerate(
-            (220, 150, 80, 160, 130, 105, 95, 95, 95, 100, 110, 145, 90)
+            (220, 150, 80, 160, 130, 105, 95, 95, 95, 100, 110, 145, 90, 130)
         ):
             self.table.setColumnWidth(column, width)
         layout.addWidget(self.table)

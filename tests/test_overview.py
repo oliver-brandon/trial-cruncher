@@ -101,7 +101,7 @@ def test_quality_missing_withheld_zero_and_raw_metadata(app, make_input):
         overview.set_files(paths, results)
         expected = [
             "Available",
-            "Warnings",
+            "Unavailable metrics",
             "Withheld",
             "Unavailable metrics",
             "Unavailable metrics",
@@ -148,8 +148,9 @@ def test_numeric_sort_both_directions_keeps_unavailable_last(app, make_input, co
         for path, value in ((small, 0.33331), (large, 0.33334)):
             original = results[path]
             metrics = (
-                *original.summary.metrics[:-1],
-                replace(original.summary.metrics[-1], value=value),
+                *original.summary.metrics[:5],
+                replace(original.summary.metrics[5], value=value),
+                *original.summary.metrics[6:],
             )
             results[path] = replace(original, summary=replace(original.summary, metrics=metrics))
     overview = BatchOverview()
@@ -207,12 +208,14 @@ def test_filter_combinations_literal_search_and_date_text_sort(app, make_input):
 def test_status_filters_and_attention_include_failures_and_unimported(app, make_input, quality):
     paths = {
         "Available": make_input("available.txt"),
-        "Warnings": make_input("warning.txt", duration=None),
+        "Warnings": make_input("warning.txt"),
         "Withheld": make_input("withheld.txt", saved=3),
         "Unavailable metrics": make_input("missing.txt", c=""),
         "Failed": make_input("failed.txt", program="OTHER"),
         "Not imported": make_input("pending.txt"),
     }
+    warning_path = paths["Warnings"]
+    warning_path.write_text(warning_path.read_text() + "F:\n  2: 0\n")
     results = {
         path: import_medpc_file(path) for state, path in paths.items() if state != "Not imported"
     }

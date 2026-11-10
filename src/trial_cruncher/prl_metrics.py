@@ -1,5 +1,6 @@
-"""Approved PRL session-summary definitions, version 3; corroborated unused slots."""
+"""Approved PRL session-summary definitions, version 4; whole-session Med-PC rate."""
 
+import math
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -9,8 +10,9 @@ from trial_cruncher.models import MetricResult, Session
 from trial_cruncher.prl import NORMALIZER_VERSION, SUPPORTED_PROGRAMS, choice_storage_info
 
 DEFINITION_SET = "prl-session-summary"
-DEFINITION_VERSION = "3"
+DEFINITION_VERSION = "4"
 ELIGIBILITY_POLICY = "strict-withholding-v2"
+MEDPC_RATE = "prl.medpc_trials_per_minute"
 METRIC_LABELS = {
     "prl.choice_count": "Recorded choices",
     "prl.correct_choice_count": "Correct choices",
@@ -18,6 +20,15 @@ METRIC_LABELS = {
     "prl.rewarded_choice_count": "Rewarded choices",
     "prl.unrewarded_choice_count": "Unrewarded choices",
     "prl.proportion_correct": "Proportion correct",
+    MEDPC_RATE: "Trials/min (Med-PC)",
+}
+METRIC_UNITS = {
+    name: "proportion"
+    if name == "prl.proportion_correct"
+    else "choices/min"
+    if name == MEDPC_RATE
+    else "count"
+    for name in METRIC_LABELS
 }
 _TERMINATOR = Decimal("-987.987")
 _OUTCOMES = {1: (True, True), 2: (True, False), 6: (False, True), 7: (False, False)}
@@ -141,6 +152,20 @@ def calculate_prl_summary(session: Session) -> PRLSessionSummary:
 
     total = sum(counts.values())
     correct = counts[1] + counts[2]
+    rate_reasons = list(reasons)
+    duration = session.duration_s
+    rate = None
+    if duration is None or not math.isfinite(duration) or duration <= 0:
+        rate_reasons.append("Med-PC rate requires a finite, positive task duration S.")
+    elif any(
+        event.timestamp_s is not None and event.timestamp_s > duration for event in session.events
+    ):
+        rate_reasons.append("Med-PC rate is unavailable because a choice timestamp exceeds S.")
+    elif not rate_reasons:
+        rate = 60 * total / duration
+        if not math.isfinite(rate):
+            rate = None
+            rate_reasons.append("Med-PC rate cannot be represented as a finite number.")
     # One final division; no rounding or accuracy derived from the saved A[5].
     values = (
         total,
@@ -149,11 +174,12 @@ def calculate_prl_summary(session: Session) -> PRLSessionSummary:
         counts[1] + counts[6],
         counts[2] + counts[7],
         correct / total if total else None,
+        rate,
     )
     metrics = []
     for name, value in zip(METRIC_LABELS, values, strict=True):
-        metric_reasons = tuple(reasons)
-        if reasons:
+        metric_reasons = tuple(rate_reasons if name == MEDPC_RATE else reasons)
+        if metric_reasons:
             value = None
         elif name == "prl.proportion_correct" and total == 0:
             metric_reasons = ("Proportion correct has no denominator: zero recorded choices.",)
@@ -162,7 +188,7 @@ def calculate_prl_summary(session: Session) -> PRLSessionSummary:
                 name,
                 DEFINITION_VERSION,
                 value,
-                "proportion" if name == "prl.proportion_correct" else "count",
+                METRIC_UNITS[name],
                 warnings=session.warnings,
                 reasons=metric_reasons,
             )

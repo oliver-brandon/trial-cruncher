@@ -12,6 +12,7 @@ aggregation, phase assignment, or export schema.
 | Errors and criterion | File, subject, imported phase/status, choices, proportion correct, perseverative/regressive errors, adjusted regressive proportion, its postcriterion denominator, and criterion reached |
 | Win-stay | File, subject, phase/status, eligible pair count, and correct/incorrect-conditioned probabilities with separate numerators and denominators |
 | Lose-shift | File, subject, phase/status, eligible pair count, and correct/incorrect-conditioned probabilities with separate numerators and denominators |
+| Session rate | Whole-session choices, duration S, Med-PC trials/min, and rate status; independent of phase assignment |
 | All metrics | Every metric and ratio count, plus one-based criterion choice ordinal, program, and original date text |
 
 Ratios use 0–1 and display four decimals; sorting uses full stored precision.
@@ -22,8 +23,8 @@ invented trial ID. Full paths distinguish duplicate filenames.
 
 Focused layouts keep source identity beside the relevant counts and values.
 **All metrics** may require horizontal scrolling. Resize columns or drag the divider
-between the batch area and detailed review to show more rows. Changing layouts keeps
-filters/selection. If it hides the sort column, sorting returns to File.
+between the batch area and detailed review to show more rows. Changing phase layouts keeps filters/selection. Switching into or out of Session rate
+resets the status filter because it changes from phase status to rate status. If it hides the sort column, sorting returns to File.
 
 ## Filters, sorting, and navigation
 
@@ -109,3 +110,16 @@ presentation/workflow verification, not new scientific validation or native-dial
 Final verification: **301 tests passed**, along with Ruff lint/format, Markdown link,
 and diff whitespace checks. Project loading also resets old cancellation states in
 the shared batch model, so the new setup starts explicitly unimported.
+
+## Whole-session rate comparison
+
+**Session rate** reads the separate `prl.medpc_trials_per_minute` session result,
+its validated choice count, and duration S. It uses its own rate status, so a missing
+phase label does not hide an available rate. Phase and search filters still apply;
+status filtering uses rate status only in this layout. Switching into/out of the
+layout resets the status filter. Click-through opens Session metrics for the rate;
+other layouts continue to open phase details. **All metrics** also includes the
+session rate/count/duration/status columns, while its status filter remains phase-based.
+The label includes Med-PC and the whole-session scope to avoid suggesting a new
+phase rate or the deferred MAT definition. Exported rate values are in Sessions;
+see [rate definition](medpc-trials-per-minute.md).

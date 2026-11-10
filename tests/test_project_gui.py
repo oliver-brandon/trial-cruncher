@@ -70,7 +70,7 @@ def test_percentage_project_load_notifies_and_reimports_as_proportions(
         assert not window._project_dirty
         assert (
             json.loads(target.read_text())["analysis_configuration"]["session_definition_version"]
-            == "3"
+            == "4"
         )
     finally:
         window.close()

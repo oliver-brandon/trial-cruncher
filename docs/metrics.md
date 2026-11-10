@@ -1,7 +1,7 @@
 # Behavioral metric conventions
 
-Six owner-approved PRL session-summary metrics are implemented: recorded choices,
-correct/incorrect choices, rewarded/unrewarded choices, and proportion correct. Their
+Seven owner-approved PRL session-summary metrics are implemented: recorded choices,
+correct/incorrect choices, rewarded/unrewarded choices, proportion correct, and whole-session Med-PC trials per minute. Their
 versioned formulas, strict withholding rules, and hand-calculated acceptance cases
 are specified in [PRL session-summary metrics](prl-session-metrics.md). The GUI
 calculates them during import; session CSV exports retain values and diagnostics.
@@ -24,8 +24,10 @@ probabilities. Their [implementation specification](medpc-behavioral-metrics-spe
 records the owner-confirmed fixed-contingency/no-omission profile, manual phase
 assignment, strict withholding, formulas, denominators, and acceptance evidence.
 Missing phase labels leave these results unavailable without suppressing the
-existing session summaries. Trials per minute remains deferred to its MAT-based
-source definition; no Med-PC duration fallback is implemented.
+existing session summaries. [Med-PC trials per minute](medpc-trials-per-minute.md)
+is now a separate, explicitly approved whole-session metric: 60 times validated
+recorded choices divided by S. The independently defined MAT rate remains deferred;
+the Med-PC rate is not a silent fallback for it.
 
 Other future metric families include response/retrieval latencies, trials to criterion,
 progressive-ratio breakpoint, and subject/group aggregation. Each needs its own

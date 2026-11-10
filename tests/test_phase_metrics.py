@@ -199,7 +199,7 @@ def test_phase_exports_literal_labels_evidence_and_versions(phase_input, tmp_pat
     assert int(row["omission_count"]) == 0
     assert row["omission_count_basis"] == "owner-confirmed no-omission protocol"
     manifest = json.loads((out / "manifest.json").read_text())
-    assert manifest["schema_version"] == "4"
+    assert manifest["schema_version"] == "5"
     assert manifest["configuration"]["phase_definition_version"] == "2"
     assert manifest["configuration"]["phase_configurations"][0]["configuration"] == asdict(
         result.phase_summary.config

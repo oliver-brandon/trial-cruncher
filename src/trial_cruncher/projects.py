@@ -56,6 +56,7 @@ class Project:
     extensions: tuple[str, ...]
     recursive: bool
     configuration_updated: bool = False
+    configuration_update_message: str | None = None
 
 
 @dataclass(frozen=True)
@@ -108,7 +109,15 @@ def _parse(payload: bytes, project_path: Path) -> Project:
         "session_definition_version": "2",
         "phase_definition_version": "1",
     }
-    configuration_updated = obj["analysis_configuration"] == percentage_configuration
+    proportion_configuration = {**current_configuration, "session_definition_version": "3"}
+    update_message = (
+        "Updated accuracy to proportions and added the Med-PC session rate."
+        if obj["analysis_configuration"] == percentage_configuration
+        else "Added the Med-PC session rate."
+        if obj["analysis_configuration"] == proportion_configuration
+        else None
+    )
+    configuration_updated = update_message is not None
     if obj["analysis_configuration"] != current_configuration and not configuration_updated:
         raise ValueError(
             "Project analysis configuration is incompatible with this version. "
@@ -153,7 +162,9 @@ def _parse(payload: bytes, project_path: Path) -> Project:
         if digest is not None and (not isinstance(digest, str) or not _HASH.fullmatch(digest)):
             raise ValueError("Source SHA-256 must be 64 lowercase hex digits or null.")
         sources.append(ProjectSource(path, phase, digest))
-    return Project(tuple(sources), extensions, discovery["recursive"], configuration_updated)
+    return Project(
+        tuple(sources), extensions, discovery["recursive"], configuration_updated, update_message
+    )
 
 
 def load_project(path: Path) -> ProjectResult:

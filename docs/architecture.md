@@ -9,7 +9,7 @@ Selected paths → discovery → format detection/readers → normalization
 
 Discovery, selection, Med-PC text extraction, and normalization of three confirmed PRL
 programs are implemented, along with session/choice table builders and CSV/Excel export.
-Six PRL session-summary calculations and eight phase behavioral metrics are
+Seven PRL session-summary calculations and eight phase behavioral metrics are
 implemented with strict withholding. User-assigned phases follow the confirmed
 fixed-contingency/no-omission profile. Further metric families remain future work. The Med-PC reader is exposed through Python, `--inspect-medpc`, and GUI
 import review with per-file results.
@@ -46,7 +46,7 @@ exclusions and reject stale storage metadata; see [unused slots](prl-unused-slot
 [the Med-PC specification](medpc.md) for supported encodings and missing-data policy.
 `paradigms.py` carries a named, versioned
 configuration without assuming automatic task identification. `metrics.py` defines
-the extensible metric contract. `prl_metrics.py` implements the six approved PRL
+the extensible metric contract. `prl_metrics.py` implements the seven approved PRL
 summaries under a fixed, versioned eligibility policy, without configurable overrides.
 It consumes canonical choices and structured source/normalizer facts, returning
 `MetricResult` values and separate diagnostics. Values never replace raw observations;
@@ -123,7 +123,7 @@ scope and serialization rules. Per-session metadata retains reader/normalizer ve
 raw acquisition fields, and time units/origin. Schema 2 adds the six calculated
 session columns and their status/reasons/diagnostics; the manifest records metric
 definition IDs/versions and the strict withholding policy. Excel workbook layout
-version 3 uses schema 4 tables, including Phase metrics, Quality, and
+version 4 uses schema 5 tables, including Phase metrics, Quality, and
 Provenance sheets. Phase configurations and definitions are recorded independently
 of the existing session definitions. `excel.py` stores literal text, chunks long metadata, checks
 worksheet/XML limits, and exclusively creates `results.xlsx`; the shared export
@@ -182,3 +182,9 @@ routes detail selection from the active upper tab, preserving full source-path i
 through sorting, filtering, and tab changes. Hidden selections clear review and
 inactive-tab events cannot switch the reviewed source. See
 [batch phase results](batch-phase-results.md).
+
+The session definition set is now version 4, adding `prl.medpc_trials_per_minute`
+from validated choice count and positive S. Rate-specific timing failures do not
+suppress existing count/phase calculations. The batch phase projection also exposes
+session-rate columns/layout without recomputing or treating them as phase metrics.
+The rate is exported in Sessions, with scope/formula provenance in the manifest.

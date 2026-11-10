@@ -47,18 +47,19 @@ def test_hand_calculated_examples(imported, program, choices, summaries, expecte
     result = imported(f"C:\n  0: {choices}\n", summaries, program=program)
     summary = result.summary
     assert [m.name for m in summary.metrics] == list(METRIC_LABELS)
-    assert tuple(m.value for m in summary.metrics) == expected
+    assert tuple(m.value for m in summary.metrics[:6]) == expected
+    assert summary.metrics[6].value == 60 * expected[0] / 10
     assert all(isinstance(m.value, int) for m in summary.metrics[:5])
     assert all(m.status == "available" and not m.reasons for m in summary.metrics)
-    assert all(m.definition_version == "3" for m in summary.metrics)
-    assert [m.unit for m in summary.metrics] == ["count"] * 5 + ["proportion"]
+    assert all(m.definition_version == "4" for m in summary.metrics)
+    assert [m.unit for m in summary.metrics] == ["count"] * 5 + ["proportion", "choices/min"]
     assert summary.eligibility_policy == "strict-withholding-v2"
 
 
 @pytest.mark.parametrize("c", ["C:\n", "C:\n  0: -987.987\n"])
 def test_explicit_empty_sequence_zero_counts_undefined_percentage(imported, c):
     result = imported(c, "A:\n  0: 0 0 0\nB:\n  0: 0 0 0 0\n")
-    counts, percent = result.summary.metrics[:5], result.summary.metrics[-1]
+    counts, percent = result.summary.metrics[:5], result.summary.metrics[5]
     assert all(m.value == 0 and m.status == "available" for m in counts)
     assert percent.value is None and percent.status == "unavailable"
     assert "zero recorded choices" in percent.reasons[0]
@@ -144,7 +145,7 @@ def test_all_independent_blocking_reasons_are_retained(imported):
 @pytest.mark.parametrize("summaries", ["", "A:\n  0: -1 2.5\nB:\n", "B:\n  1: 1\n"])
 def test_unavailable_saved_checks_warn_without_withholding(imported, summaries):
     result = imported(summaries=summaries)
-    assert tuple(m.value for m in result.summary.metrics) == (4, 2, 2, 2, 2, 0.5)
+    assert tuple(m.value for m in result.summary.metrics[:6]) == (4, 2, 2, 2, 2, 0.5)
     assert all(m.status == "available_with_warnings" for m in result.summary.metrics)
     assert all(
         m.warnings == result.session.warnings and not m.reasons for m in result.summary.metrics
@@ -155,8 +156,8 @@ def test_unavailable_saved_checks_warn_without_withholding(imported, summaries):
 def test_duration_does_not_control_choice_metrics(imported, duration):
     result = imported(duration=duration)
     assert result.session.duration_s == (0 if duration == "S: 0\n" else None)
-    assert tuple(m.value for m in result.summary.metrics) == (4, 2, 2, 2, 2, 0.5)
-    assert all(m.status == "available_with_warnings" for m in result.summary.metrics)
+    assert tuple(m.value for m in result.summary.metrics[:6]) == (4, 2, 2, 2, 2, 0.5)
+    assert all(m.status == "available_with_warnings" for m in result.summary.metrics[:6])
 
 
 @pytest.mark.parametrize(
@@ -165,13 +166,13 @@ def test_duration_does_not_control_choice_metrics(imported, duration):
 )
 def test_time_or_printed_row_order_warnings_do_not_withhold(imported, c):
     result = imported(c)
-    assert tuple(m.value for m in result.summary.metrics) == (4, 2, 2, 2, 2, 0.5)
-    assert all(m.status == "available_with_warnings" for m in result.summary.metrics)
+    assert tuple(m.value for m in result.summary.metrics[:6]) == (4, 2, 2, 2, 2, 0.5)
+    assert all(m.status == "available_with_warnings" for m in result.summary.metrics[:6])
 
 
 def test_identical_indexed_records_count_separately(imported):
     result = imported("C:\n  0: 0.01 0.01\n", "A:\n  0: 2 0 2\nB:\n  0: 2 0 0 0\n")
-    assert tuple(m.value for m in result.summary.metrics) == (2, 2, 0, 2, 0, 1)
+    assert tuple(m.value for m in result.summary.metrics[:6]) == (2, 2, 0, 2, 0, 1)
     assert not result.session.warnings
 
 

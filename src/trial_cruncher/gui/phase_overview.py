@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 from trial_cruncher.gui.overview import OverviewModel, OverviewRow
 from trial_cruncher.models import MetricResult
 from trial_cruncher.phase_metrics import METRIC_LABELS, PhaseSummary, RatioEvidence
+from trial_cruncher.prl_metrics import MEDPC_RATE
 
 HEADERS = (
     "File",
@@ -49,6 +50,10 @@ HEADERS = (
     "LS incorrect\ndenominator",
     "Program",
     "Date (source text)",
+    "Session\nchoices",
+    "Task duration\nS (seconds)",
+    "Trials/min\n(Med-PC)",
+    "Rate status",
 )
 METRIC_COLUMNS = {5: 0, 6: 1, 7: 2, 8: 3, 13: 4, 16: 5, 19: 6, 22: 7}
 RATIO_COLUMNS = {c: i for i, start in enumerate((13, 16, 19, 22)) for c in range(start, start + 3)}
@@ -56,6 +61,7 @@ VIEWS = {
     "Errors and criterion": tuple(range(11)),
     "Win-stay": (*range(4), 12, *range(13, 19)),
     "Lose-shift": (*range(4), 12, *range(19, 25)),
+    "Session rate": (0, 1, 2, 27, 28, 29, 30),
     "All metrics": tuple(range(len(HEADERS))),
 }
 PHASE_STATES = {
@@ -102,7 +108,25 @@ class PhaseRow:
         status = PHASE_STATES[self.phase.status]
         return "Warnings" if status == "Available" and self.source.warnings else status
 
+    @property
+    def rate(self) -> MetricResult | None:
+        result = self.source.result
+        if self.source.source_issue or not result or result.error or not result.summary:
+            return None
+        return next((m for m in result.summary.metrics if m.name == MEDPC_RATE), None)
+
+    @property
+    def rate_status(self) -> str:
+        metric = self.rate
+        if metric is None:
+            return self.status
+        if metric.value is None:
+            return "Withheld" if self.source.withheld else "Unavailable metrics"
+        return "Warnings" if metric.warnings else "Available"
+
     def metric(self, column: int) -> MetricResult | None:
+        if column == 29:
+            return self.rate
         phase = self.phase
         if phase is None:
             return None
@@ -126,10 +150,21 @@ class PhaseRow:
             return self.path.name
         if column == 3:
             return self.status
+        if column == 30:
+            return self.rate_status
         if self.source.source_issue:
             return None
         if column in (1, 25, 26):
             return self.source.value({1: 2, 25: 3, 26: 4}[column])
+        result = self.source.result
+        if column in (27, 28, 29):
+            if not result or result.error or not result.session:
+                return None
+            if column == 27:
+                return result.summary.metrics[0].value if result.summary else None
+            if column == 28:
+                return result.session.duration_s
+            return self.rate.value if self.rate else None
         phase = self.phase
         if phase is None:
             return None
@@ -159,12 +194,35 @@ class PhaseRow:
             return "Unassigned"
         if 4 <= column <= 24 and self.status == "Withheld":
             return "Withheld"
+        if column in (27, 29) and self.rate_status == "Withheld":
+            return "Withheld"
         if column not in (0, 1, 3, 25, 26) and self.source.result is None:
             return "Pending" if self.status == "Pending" else "Not imported"
         return "Unavailable"
 
     def tooltip(self, column: int) -> str:
         lines = [str(self.path), f"Phase status: {self.status}"]
+        if column >= 27:
+            lines = [
+                str(self.path),
+                f"Rate status: {self.rate_status}",
+                "Whole-session Med-PC rate = 60 × recorded choices / S.",
+                "Includes waiting/timeout time; independent of phase assignment.",
+                f"Recorded choices: {self.value(27)}",
+                f"Duration S (seconds): {self.value(28)}",
+            ]
+            if self.rate:
+                lines += [
+                    f"Session definition: {self.rate.definition_version}",
+                    f"Unit: {self.rate.unit}",
+                    f"Full value: {self.rate.value}",
+                    *self.rate.reasons,
+                ]
+            if self.source.source_issue:
+                lines.append(self.source.source_issue)
+            if self.source.result and self.source.result.error:
+                lines.append(self.source.result.error)
+            return "\n".join((*lines, *self.source.warnings))
         if self.source.source_issue:
             lines.append(self.source.source_issue)
         if self.source.result and self.source.result.error:
@@ -268,7 +326,9 @@ class PhaseModel(QAbstractTableModel):
             return "<qt>" + escape(row.tooltip(index.column())).replace("\n", "<br>") + "</qt>"
         if role == Qt.ItemDataRole.UserRole:
             return row.path
-        if role == Qt.ItemDataRole.TextAlignmentRole and 4 <= index.column() <= 24:
+        if role == Qt.ItemDataRole.TextAlignmentRole and (
+            4 <= index.column() <= 24 or 27 <= index.column() <= 29
+        ):
             return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         return None
 
@@ -293,11 +353,13 @@ class PhaseProxy(QSortFilterProxyModel):
         self.search = ""
         self.phase: str | None = None
         self.status = "All statuses"
+        self.rate_view = False
         self.setDynamicSortFilter(True)
 
     def filterAcceptsRow(self, index, parent) -> bool:
         row = self.sourceModel().row(index)
-        status = "Not imported" if row.status.startswith("Not imported") else row.status
+        status = row.rate_status if self.rate_view else row.status
+        status = "Not imported" if status.startswith("Not imported") else status
         if self.status == "Needs attention":
             if status in ("Available", "Pending"):
                 return False
@@ -412,6 +474,10 @@ class BatchPhaseOverview(QWidget):
             95,
             160,
             130,
+            100,
+            130,
+            130,
+            175,
         )
         for column, width in enumerate(widths):
             self.table.setColumnWidth(column, width)
@@ -486,6 +552,14 @@ class BatchPhaseOverview(QWidget):
 
     def _columns_changed(self, *args) -> None:
         columns = VIEWS[self.column_view.currentText()]
+        rate_view = self.column_view.currentText() == "Session rate"
+        if self.proxy.rate_view != rate_view:
+            self.proxy.rate_view = rate_view
+            self.status_filter.setCurrentIndex(0)
+            self.status_filter.setAccessibleName(
+                "Filter session rate status" if rate_view else "Filter phase result status"
+            )
+            self._filter_changed()
         for column in range(len(HEADERS)):
             self.table.setColumnHidden(column, column not in columns)
         if self.proxy.sortColumn() not in columns:
@@ -498,7 +572,12 @@ class BatchPhaseOverview(QWidget):
     def _view_changed(self, *args) -> None:
         visible, total = self.proxy.rowCount(), self.model.rowCount()
         prefix = "No files match the filters. " if total and not visible else ""
+        units = (
+            "Med-PC rate uses whole-session choices and S (seconds)."
+            if self.proxy.rate_view
+            else "Phase ratios use 0–1."
+        )
         self.count_label.setText(
             f"{prefix}Showing {visible} of {total} files. Import/export use the full batch. "
-            "Ratios use 0–1; unavailable is not zero. Phase labels are from the last import."
+            f"{units} Unavailable is not zero. Labels are from the last import."
         )

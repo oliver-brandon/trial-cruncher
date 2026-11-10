@@ -321,7 +321,9 @@ class MainWindow(QMainWindow):
             and result.session
             and path not in self._source_issues
         ):
-            self.review.tabs.setCurrentWidget(self.review.phase_page)
+            self.review.tabs.setCurrentWidget(
+                self.review.metric_page if view.proxy.rate_view else self.review.phase_page
+            )
 
     def _batch_tab_changed(self, *args) -> None:
         self._active_batch().select_path(self._reviewed_path)
@@ -678,8 +680,8 @@ class MainWindow(QMainWindow):
             self._project_dirty = project.configuration_updated
             self._update_project_label()
             self.statusBar().showMessage(
-                "Project accuracy updated to proportions; re-import required. "
-                "Save to update the project."
+                f"{project.configuration_update_message} "
+                "Re-import required; save to update the project."
                 if project.configuration_updated
                 else "Project loaded; import required before export."
                 if mode == "load"

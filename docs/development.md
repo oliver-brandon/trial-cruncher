@@ -160,3 +160,9 @@ For desktop review, select the upper **Phase results** tab, inspect each focused
 layout, sort a denominator in both directions, filter out the selected row, and
 switch upper tabs. The detailed review must never point to a hidden/different file.
 Use a disposable source copy when checking source-change invalidation.
+
+`tests/test_medpc_rate.py` covers recorded-S duration, manual-stop raw A[3] retention,
+zero versus unavailable rates, missing/nonpositive/unrepresentable durations,
+out-of-duration choices, strict count withholding, full export precision/provenance,
+project updates, and rate sorting/filtering without phase assignments. Use the
+**Session rate** batch layout and Session metrics tab for manual inspection.

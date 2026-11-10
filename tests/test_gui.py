@@ -573,7 +573,7 @@ def test_session_metrics_display_withholding_zero_and_clear(app, write_export, m
         choose_path(window, path)
         window.review.tabs.setCurrentWidget(window.review.metric_page)
         table = window.review.metric_table
-        assert table.rowCount() == 6
+        assert table.rowCount() == 7
         assert [table.item(row, 1).text() for row in range(6)] == [
             "4",
             "2",
@@ -609,7 +609,7 @@ def test_session_metrics_display_withholding_zero_and_clear(app, write_export, m
             json.loads(exported[str(mismatch)]["metric_results_json"])[0]["status"] == "unavailable"
         )
         choose_path(window, path)
-        assert table.rowCount() == 6
+        assert table.rowCount() == 7
         path.unlink()
         window.import_button.click()
         wait_until(app, lambda: window._import_worker is None)
@@ -648,8 +648,8 @@ def test_metric_calculation_is_in_worker_and_failure_isolated(app, write_export,
         assert window.import_results[failed].error
         assert window.import_results[failed].summary is None
         choose_path(window, path)
-        assert window.review.metric_table.rowCount() == 6
-        assert window.import_results[path].summary.metrics[-1].value == 0.5
+        assert window.review.metric_table.rowCount() == 7
+        assert window.import_results[path].summary.metrics[5].value == 0.5
         assert window.export_button.isEnabled()
     finally:
         window.close()

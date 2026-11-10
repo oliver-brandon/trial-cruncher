@@ -8,7 +8,7 @@ This milestone supports the confirmed PRL_BO, PRL_OPTO, and PRL_OPTO_CORSTIM
 interpretations. On November 10, 2026 the owner confirmed one fixed contingency per
 file, no omissions because levers stay extended until a choice, manual phase
 assignment during import, and authorization to implement. Strict withholding remains
-in force; trials per minute stays deferred.
+in force; the MAT-derived rate stays deferred; the separately approved Med-PC rate is available.
 
 ## Basis and scope
 
@@ -30,13 +30,15 @@ win-stay and lose-shift probabilities. It includes criterion and denominator evi
 GUI review, and CSV/Excel export. Results describe observed choices, not reconstructed
 trial opportunities, physical reward retrieval, or modeled behavior.
 
-**Deferred:** trials/choices per minute, MAT parsing or linkage, cue/lever TTL matching,
+**Deferred:** MAT-derived trials/choices per minute, MAT parsing or linkage, cue/lever TTL matching,
 latencies, inferred omissions, trials to criterion as a separate metric, subject/group
 aggregation, statistical tests, cross-session learning criteria, and intrasession
-reversal processing. Do not calculate a fallback rate from `S`, header elapsed time,
-saved `A[3]`, or last C time plus five seconds. `S` remains recorded task duration.
+reversal processing. The separate [Med-PC rate](medpc-trials-per-minute.md) now uses
+60 times validated choices divided by S. It is not a fallback for the MAT definition,
+and is not a new phase metric. Header elapsed time, saved A[3], and last C time plus
+five seconds are not substituted. S remains recorded task duration.
 
-Existing session summaries remain `prl-session-summary` version 3 with
+Existing session summaries remain `prl-session-summary` version 4 with
 `strict-withholding-v2`. Phase results are separate and never silently replace
 `prl.proportion_correct` or reinterpret saved `A[5]`.
 
@@ -204,7 +206,7 @@ missing, never "correct" or "no error". Excluded storage remains fully preserved
 raw metadata. No input mutation, overwrite, formula interpretation, long-text loss,
 or export filtering is allowed. Both export formats use the same reviewed snapshot.
 
-Export table/bundle schema is version 4; Excel workbook layout is version 3, adding
+Export table/bundle schema is version 5; Excel workbook layout is version 4, adding
 Phase metrics and phase/error annotations on Choices. Do not stamp new manifest
 definitions onto old computed results. Definition IDs and any
 configuration affecting semantics must be recorded so results can be reproduced.
@@ -334,7 +336,7 @@ still be entered by the user; this verification does not supply them.
 
 No real recordings were copied into committed fixtures. These comparisons establish
 local arithmetic/provenance consistency, not general scientific validation or a
-statistical analysis of treatment effects. Trials per minute remains deferred.
+statistical analysis of treatment effects. The MAT-derived rate remains deferred; the separate Med-PC session rate is implemented.
 
 Final verification on November 10, 2026: **247 tests passed**, including the
 341-sequence independent comparison inside the suite. Ruff lint and format checks,

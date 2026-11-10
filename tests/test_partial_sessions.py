@@ -28,7 +28,7 @@ def test_partial_duration_uses_recorded_denominator_and_exports_snapshot(
     assert result.session.duration_s == float(duration)
     assert result.session.metadata["raw_medpc"]["scalars"]["M"] == 60
     assert all(result.session.metadata["summary_checks"].values())
-    assert tuple(metric.value for metric in result.summary.metrics) == (4, 2, 2, 2, 2, 0.5)
+    assert tuple(metric.value for metric in result.summary.metrics[:6]) == (4, 2, 2, 2, 2, 0.5)
     assert not result.session.warnings
     destination = export_import_results({path: result}, [path], tmp_path, export_format)
     if export_format == "xlsx":
@@ -88,7 +88,7 @@ def test_corroborated_zero_tail_preserves_raw_and_exports_exclusions(
     }
     assert all(result.session.metadata["summary_checks"].values())
     assert [metric.name for metric in result.summary.metrics] == list(METRIC_LABELS)
-    assert tuple(m.value for m in result.summary.metrics) == (4, 2, 2, 2, 2, 0.5)
+    assert tuple(m.value for m in result.summary.metrics[:6]) == (4, 2, 2, 2, 2, 0.5)
     assert not result.session.warnings
     destination = export_import_results({path: result}, [path], tmp_path, export_format)
     if export_format == "csv":
@@ -110,7 +110,7 @@ def test_corroborated_zero_tail_preserves_raw_and_exports_exclusions(
     assert metadata["choice_storage"]["unused_slot_indices"] == [4, 5]
     assert json.loads(row["metric_diagnostics_json"])["unused_slot_count"] == 2
     assert row["normalizer_version"] == "2"
-    assert row["metric_definition_version"] == "3"
+    assert row["metric_definition_version"] == "4"
     assert (
         json.loads((destination / "manifest.json").read_text())["configuration"][
             "choice_storage_policy"
@@ -178,7 +178,7 @@ def test_all_zero_storage_with_zero_counters_is_empty_not_missing(write_export):
     result = import_medpc_file(path)
     assert result.error is None
     assert not result.session.events
-    assert [m.value for m in result.summary.metrics] == [0, 0, 0, 0, 0, None]
+    assert [m.value for m in result.summary.metrics] == [0, 0, 0, 0, 0, None, 0]
     assert result.summary.diagnostics.raw_c_entry_count == 3
     assert result.summary.diagnostics.unused_slot_count == 3
     assert result.summary.diagnostics.observed_record_count == 0

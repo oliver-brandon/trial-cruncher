@@ -14,7 +14,7 @@ errors retain imported results for retry. Cancelling the folder picker writes no
 ## Sheets and versions
 
 - **Sessions:** one row per successful session, with the same columns and values as
-  CSV schema 4: identifiers, duration, six PRL metrics, versions, checks, warnings,
+  CSV schema 5: identifiers, duration, seven PRL session metrics, versions, checks, warnings,
   metric statuses/reasons, diagnostics, and original source metadata/text.
 - **Choices:** all normalized choice records in source/index order, including invalid
   decoded choices. Source array index, line, exact raw value, time in seconds,
@@ -23,7 +23,7 @@ errors retain imported results for retry. Cancelling the folder picker writes no
   metrics, criterion evidence, ratio numerators/denominators, undefined flags,
   per-metric reasons, configuration hashes, and source/unused-slot diagnostics.
   Missing phase leaves new metrics unavailable while session summaries remain usable.
-- **Quality:** one `input` row for every selected path, plus six `metric` rows and eight
+- **Quality:** one `input` row for every selected path, plus seven `metric` rows and eight
   `phase_metric` rows for each successful session. Input rows report `exported`, `failed`, or `not_imported`,
   hash, error, and warnings. Metric rows add the existing value, unit, availability
   status, reasons, definition version, and eligibility policy. Withheld metrics retain
@@ -33,8 +33,8 @@ errors retain imported results for retry. Cancelling the folder picker writes no
   that exceeds the workbook's per-cell storage budget. It uses the columns `kind`,
   `sheet`, `cell`, `part`, `parts`, and `text`.
 
-The workbook layout is version **3** (`workbook_schema_version`), and the shared
-session/choice/phase table schema is version **4** (`schema_version`). `manifest.json` records runtime
+The workbook layout is version **4** (`workbook_schema_version`), and the shared
+session/choice/phase table schema is version **5** (`schema_version`). `manifest.json` records runtime
 versions, metric definitions/policy, UTC export time, input outcomes, table columns
 and row counts, ordering, and Excel serialization rules. The same manifest is embedded
 in Provenance so the workbook can be interpreted independently of the companion file.
@@ -119,7 +119,8 @@ needed) and carry explicit excluded indices/counts. Choices contains recorded ev
 only; metric diagnostics distinguish raw entries and unused slots. The manifest
 records the storage policy. The initial unused-slot change retained workbook layout 1/table schema 2;
 phase metrics first extended them to workbook layout 2/table schema 3.
-The current proportion scale uses workbook layout 3/table schema 4. See [unused-slot interpretation](prl-unused-slots.md).
+The proportion-scale change used workbook layout 3/table schema 4; current rates
+use workbook layout 4/table schema 5. See [unused-slot interpretation](prl-unused-slots.md).
 
 Phase assignments are saved for the next import, never inferred. Re-import to apply
 assignment edits; export uses the phase in the reviewed snapshot. Phase probabilities
@@ -127,12 +128,18 @@ and adjusted regressive errors remain 0–1 values; proportion correct is also 0
 Blank values, zero numerators/denominators, and undefined flags preserve distinct
 meaning. Source strings and custom phase labels are literal text. Choices gains
 phase, error-classification, and criterion-completed annotations; see
-[CSV schema 4](csv-export.md) and [phase definitions](medpc-behavioral-metrics-spec.md).
+[CSV schema 5](csv-export.md) and [phase definitions](medpc-behavioral-metrics-spec.md).
 
 Saved projects restore file/phase setup and compatible analysis configuration. They
 require a new import before export and retain reference hashes for detecting changed
 sources. See [projects and source verification](projects.md).
 
-Workbook layout 3 uses table schema 4 and the explicit proportion-correct IDs.
+Workbook layout 3 introduced schema 4 and explicit proportion-correct IDs.
 Session definition version 3 and phase definition version 2 identify the changed
 scale. See [accuracy scale migration](proportion-correct.md).
+
+Workbook layout 4 / table schema 5 adds whole-session Med-PC trials per minute to
+Sessions and its Quality metric rows. The value is a plain numeric choices/min
+rate (not a proportion); recorded choices and duration_s provide its inputs. Missing
+or invalid rate values stay blank with reasons. It is not duplicated as a phase rate.
+See [Med-PC trials per minute](medpc-trials-per-minute.md).

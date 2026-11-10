@@ -18,7 +18,7 @@ overview or review more space. Columns can be resized; scroll horizontally to se
 metrics and the warning count on smaller windows.
 
 Rows show filename, quality status, subject, program, recorded Start Date, duration
-from `S`, the six approved PRL metrics, and warning count. Hover over a filename to
+from `S`, the seven approved PRL metrics, and warning count. Hover over a filename to
 see its full source path. Hover over quality or metric cells for warnings,
 unavailability/withholding reasons, and import errors. Missing raw fields display
 **Unavailable**. Subject identifiers keep their original text, including leading zeroes.
@@ -64,8 +64,8 @@ These controls affect this window only; no persistent filter configuration is sa
 
 | Quality | Meaning and cell display |
 |---|---|
-| Available | All six metrics available and no session warnings; numeric zero remains zero |
-| Warnings | All six metrics available, with retained session warnings; for example missing duration or unavailable saved-count cross-checks |
+| Available | All seven metrics available and no session warnings; numeric zero remains zero |
+| Warnings | All seven metrics available, with retained session warnings; for example unavailable saved-count cross-checks |
 | Withheld | The approved strict rule blocks metrics because of C-index gaps, invalid choices, values after a terminator, or saved-count mismatch; metric cells say **Withheld** |
 | Unavailable metrics | At least one metric is unavailable without a structural/count-conflict withholding condition; for example missing C, or an empty eligible sequence with undefined proportion correct |
 | Failed | Import did not produce a supported session; metrics say **Unavailable**, and the error remains visible in review and tooltips |
@@ -75,9 +75,9 @@ These controls affect this window only; no persistent filter configuration is sa
 
 Withholding takes priority over warning status. Unavailable metrics also take priority
 over warning status, but all warnings remain visible in tooltips and detailed review.
-An empty eligible C has five real zero counts and an **Unavailable** proportion; it
-must not look like six missing measurements. Missing C has unavailable values for all
-six metrics. The detailed Session metrics tab retains the versioned metric status and
+An empty eligible C has five real zero counts and an **Unavailable** proportion.
+Its rate is zero only when S is positive; missing/zero S leaves the rate unavailable. Missing C has unavailable values for all
+seven metrics. The detailed Session metrics tab retains the versioned metric status and
 specific reasons; the overview's **Withheld** label is a presentation of the existing
 strict policy, not a different calculation or export value. See
 [PRL metric definitions](prl-session-metrics.md).
@@ -89,7 +89,7 @@ stated beside the filters and in button tooltips. Import re-reads all listed fil
 including hidden rows. CSV and Excel exports include every successful imported session, with
 failed and unimported paths recorded in the manifest. The CSV schema, row order,
 missing-value rules, and overwrite protection remain unchanged; displayed **Withheld**
-values are still missing numeric values plus attached reasons in CSV schema 4.
+values are still missing numeric values plus attached reasons in CSV schema 5.
 See [CSV export](csv-export.md) and [Excel export](excel-export.md).
 
 Sorting, filtering, and detailed review remain available during background work.
@@ -124,3 +124,9 @@ reasons in tooltips and cleared stale review/metric values. **Needs attention**
 includes them. A fresh import replaces this state with the actual import result.
 Source checks do not infer phase labels or silently remove selected paths; see
 [projects](projects.md).
+
+The Sessions overview now includes **Trials/min (Med-PC)**, a whole-session rate from
+validated choices and S. It sorts numerically and shows rate-specific unavailability
+reasons in tooltips. Missing/zero duration can make this rate unavailable while the
+choice counts and accuracy remain available. For a focused count/duration/rate
+comparison, choose **Session rate** in the upper Phase results tab.

@@ -1,4 +1,4 @@
-# Session, choice, and phase CSV export (schema 4)
+# Session, choice, and phase CSV export (schema 5)
 
 ## GUI workflow
 
@@ -56,13 +56,13 @@ Additional `sessions.csv` columns:
 | `prl.choice_count`, `prl.correct_choice_count`, `prl.incorrect_choice_count` | Calculated recorded/correct/incorrect choice counts |
 | `prl.rewarded_choice_count`, `prl.unrewarded_choice_count`, `prl.proportion_correct` | Calculated outcome counts and proportion correct using recorded choices |
 | `metric_definition_set`, `metric_definition_version`, `metric_policy` | `prl-session-summary`, `3`, and `strict-withholding-v2` |
-| `metric_results_json` | All six results: stable name, definition version, numeric value or null, unit, availability status, reasons, and warnings |
+| `metric_results_json` | All seven results: stable name, definition version, numeric value or null, unit, availability status, reasons, and warnings |
 | `metric_diagnostics_json` | C presence, terminator observation, observed/decoded/invalid record counts, post-terminator entries, index gaps, and saved-count checks |
 
-The six calculated columns follow [the approved definitions](prl-session-metrics.md).
-Strict withholding leaves all six blank for incomplete/invalid C or a saved-count
+The seven calculated columns follow [the approved definitions](prl-session-metrics.md).
+Strict withholding leaves all seven blank for incomplete/invalid C or a saved-count
 mismatch; raw choices and diagnostic counts are retained. Explicit empty eligible C
-has five zero counts and a blank proportion, while missing C gives six blank values.
+has five zero counts and a blank proportion, while missing C gives seven blank values.
 Availability reasons stay in `metric_results_json`. GUI proportion rounding does not
 affect CSV precision. Saved `A[5]` remains raw and separate.
 
@@ -105,7 +105,7 @@ The files contain original paths, identifiers, and source text: review before sh
 The manifest records UTC export time, application/Python/dependency versions, row
 counts and columns, input statuses/errors/hashes/warnings, scope/order/filtering
 rules, and serialization conventions. Reader/normalizer versions and acquisition
-configuration are retained per session. The manifest lists all six metric IDs, units,
+configuration are retained per session. The manifest lists all seven metric IDs, units,
 definition version, definition set, strict eligibility policy, and the recorded-choice
 proportion denominator. There are no user-configurable policy overrides. Schema 2
 extends schema 1 with the calculated session columns and metric metadata; choice
@@ -184,16 +184,27 @@ Original C indices and raw observations are unchanged.
 The manifest adds the phase definition set/version, metric IDs, strict policy, and
 per-source configuration snapshots/hashes. Technical source identity is the existing
 pair `(source_file, source_sha256)`; biological IDs are never invented. The new
-phase set is version 2; session summaries use definition version 3. Export rejects
+phase set is version 2; session summaries use definition version 4. Export rejects
 missing or stale phase results/configuration/provenance before creating files.
 
 Probability/adjusted proportion scales are 0–1; phase accuracy is also a 0–1 proportion.
 Known zero denominators retain zero and an undefined flag, while withheld denominators
 stay blank with a missing flag. Neither becomes a fabricated zero probability.
-No trials-per-minute value or MAT duration fallback is produced. See the
+The phase table does not invent a phase-specific rate. The whole-session Med-PC
+rate is in Sessions, and the separate MAT rate remains deferred. See the
 [phase specification](medpc-behavioral-metrics-spec.md) for formulas and examples.
 
 Schema 4 replaces percentage columns with `prl.proportion_correct` and
 `prl.phase.proportion_correct`, with unit `proportion` and range 0–1. Old percentage
 exports retain their original scale and filenames; they are never rewritten. See
 [accuracy scale migration](proportion-correct.md).
+
+## Med-PC session rate in schema 5
+
+Sessions gains `prl.medpc_trials_per_minute` (choices/min), with recorded choices
+in `prl.choice_count` and duration in `duration_s` from S. It is calculated as
+`60 * choices / S`, including waiting/timeouts. Source A[3] remains raw and may differ
+because it was rounded or not finalized. Definition set version 4 and the manifest
+record the formula, whole-session scope, source, unit, availability, and reasons.
+Invalid duration or a choice beyond S makes the rate blank without withholding
+otherwise eligible choice/phase metrics. See [rate definition](medpc-trials-per-minute.md).

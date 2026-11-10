@@ -19,8 +19,8 @@ from trial_cruncher.projects import analysis_configuration, load_project, save_p
 def test_accuracy_proportions_in_both_export_tables(phase_input, tmp_path, codes, expected, format):
     path = phase_input(codes)
     result = import_medpc_file(path, "Acquisition")
-    assert result.summary.metrics[-1].value == result.phase_summary.metrics[0].value == expected
-    assert result.summary.metrics[-1].unit == result.phase_summary.metrics[0].unit == "proportion"
+    assert result.summary.metrics[5].value == result.phase_summary.metrics[0].value == expected
+    assert result.summary.metrics[5].unit == result.phase_summary.metrics[0].unit == "proportion"
     out = export_import_results({path: result}, [path], tmp_path, format)
     if format == "xlsx":
         book = load_workbook(out / "results.xlsx")
@@ -45,12 +45,12 @@ def test_accuracy_proportions_in_both_export_tables(phase_input, tmp_path, codes
     if format == "xlsx":
         book.close()
     manifest = json.loads((out / "manifest.json").read_text())
-    assert manifest["schema_version"] == "4"
+    assert manifest["schema_version"] == "5"
     if format == "xlsx":
-        assert manifest["workbook_schema_version"] == "3"
-    assert manifest["configuration"]["metric_definition_version"] == "3"
+        assert manifest["workbook_schema_version"] == "4"
+    assert manifest["configuration"]["metric_definition_version"] == "4"
     assert manifest["configuration"]["phase_definition_version"] == "2"
-    assert manifest["configuration"]["metrics"][-1]["unit"] == "proportion"
+    assert manifest["configuration"]["metrics"][5]["unit"] == "proportion"
 
 
 def test_old_project_scale_upgrade_preserves_setup_until_explicit_save(phase_input, tmp_path):

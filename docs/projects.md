@@ -53,8 +53,8 @@ date, fixed-contingency/no-omission interpretation, and evidence text. These ana
 policies are fixed in the current application, not freely editable parameters.
 Loading validates compatibility with the installed interpretation. An unknown project
 version or different analysis configuration is rejected without applying settings;
-it is never silently migrated to different scientific rules. The one explicit
-exception is the known percentage-to-proportion configuration update described below.
+it is never silently migrated to different scientific rules. The explicit known updates are percentage-to-proportion and the additive
+Med-PC session-rate configuration updates described below.
 
 All JSON fields and types are validated. Duplicate object keys, duplicate source paths,
 relative/parent-traversal paths, invalid hashes, malformed phase labels, unknown fields,
@@ -154,3 +154,10 @@ configuration unsaved. Import is still required before export. Loading leaves th
 original project file untouched; Save explicitly writes the updated configuration.
 Any additional policy/profile/version mismatch still fails compatibility checks.
 See [proportion correct](proportion-correct.md).
+
+Projects with the exact previous session-definition-3 / phase-definition-2 settings
+now receive a Med-PC session-rate update notice under session definition 4. The
+older percentage configuration receives both notices. Both preserve source paths,
+phase labels, and reference hashes; import is required and Save explicitly records
+the current configuration. The phase definition remains 2. Unrecognized policy or
+profile changes are still rejected. See [Med-PC rate](medpc-trials-per-minute.md).

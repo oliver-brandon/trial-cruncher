@@ -1,13 +1,13 @@
-# PRL session-summary metrics — definition version 3
+# PRL session-summary metrics — definition version 4
 
 Status: **Approved by the project owner and implemented.**
-Definition set: `prl-session-summary`, version `3`.
+Definition set: `prl-session-summary`, version `4`.
 Eligibility policy: `strict-withholding-v2`.
 Approval: October 27, 2026, for the original formulas and strict withholding;
 November 4, 2026, for recognizing confirmed unused trailing slots while preserving raw data. This
 approval is not a claim of independent scientific validation.
 
-This definition set specifies six session-level metrics for the owner-confirmed
+This definition set specifies seven session-level metrics for the owner-confirmed
 `PRL_BO`, `PRL_OPTO`, and `PRL_OPTO_CORSTIM` interpretations documented in [medpc.md](medpc.md), using
 reader version `1` and normalizer version `2`. Program names alone do not establish compatibility
 with future acquisition-code revisions. The definitions below are specific to this project,
@@ -29,7 +29,7 @@ fixed trial target, reversal location, or schedule is assumed.
 Task duration remains the existing extracted `duration_s` from `S`, in seconds from
 task start. It is not a new calculation in this milestone. Header elapsed time is
 not substituted. Head entries, latencies, omissions, aborted-trial counts, choice
-rates, win-stay/lose-shift, reversal metrics, and subject/group aggregates are outside
+MAT-derived rates, win-stay/lose-shift, reversal metrics, and subject/group aggregates are outside
 this definition set.
 
 ## Metric definitions
@@ -39,8 +39,9 @@ choice events with outcome codes 1, 2, 6, and 7. These codes respectively mean
 correct/rewarded, correct/unrewarded, incorrect/rewarded, and incorrect/unrewarded.
 Let `N = n1 + n2 + n6 + n7`.
 
-All six definitions use the eligibility rules below and definition version
-`3`. Each output has row level **session**. Counts are nonnegative integers with unit
+All seven definitions use definition version `4`. The first six use the common
+choice-record eligibility below; the Med-PC rate additionally requires valid duration
+and time bounds, as specified in [Med-PC trials per minute](medpc-trials-per-minute.md). Each output has row level **session**. Counts are nonnegative integers with unit
 `count`; proportion has unit `proportion` and range 0–1 inclusive.
 
 | Stable identifier | Display name | Formula | Interpretation |
@@ -51,6 +52,7 @@ All six definitions use the eligibility rules below and definition version
 | `prl.rewarded_choice_count` | Rewarded choices | `n1 + n6` | Choices encoded with a reward outcome |
 | `prl.unrewarded_choice_count` | Unrewarded choices | `n2 + n7` | Choices encoded without a reward outcome |
 | `prl.proportion_correct` | Proportion correct | `(n1 + n2) / N`, for `N > 0` | Correct choices as a proportion of recorded choices |
+| `prl.medpc_trials_per_minute` | Trials/min (Med-PC) | `60 * N / S`, for finite positive S | Whole-session completed-choice rate, including waiting/timeouts; unit choices/min |
 
 The proportion-correct denominator is **recorded choices**, not the configured maximum
 `Y`, elapsed time, rewards, or a guessed number of trials. Saved `A[5]` remains a raw
@@ -76,14 +78,14 @@ not assert that an acquisition export captured all behavior.
 
 | Condition | Result |
 |---|---|
-| Valid nonempty `C`; available saved counts match | All six metrics available |
+| Valid nonempty `C`; available saved counts match | First six metrics available; rate additionally requires valid S and time bounds |
 | Valid prefix with fully corroborated unused zero tail | Exclude only confirmed storage slots, retain all raw values and exclusion metadata, calculate from the recorded prefix |
-| `C` absent | All six unavailable; absence is not an observed zero |
+| `C` absent | All seven unavailable; absence is not an observed zero |
 | Explicitly empty `C`, or only a terminator at index zero; no saved-count mismatch | Five counts are zero; proportion correct unavailable because `N = 0` |
-| Missing C indices, including a first index other than zero | All six unavailable; do not fill gaps or infer omitted choices |
-| Any invalid/unknown encoded choice before the terminator | All six unavailable; do not drop that record or shrink the proportion denominator |
-| Values after the terminator, including another terminator | All six unavailable; retain every raw value and warning |
-| Any valid saved `A[0]`, `A[1]`, `A[2]`, or `B[0:4]` comparison is false | All six unavailable pending review; neither source wins automatically |
+| Missing C indices, including a first index other than zero | All seven unavailable; do not fill gaps or infer omitted choices |
+| Any invalid/unknown encoded choice before the terminator | All seven unavailable; do not drop that record or shrink the proportion denominator |
+| Values after the terminator, including another terminator | All seven unavailable; retain every raw value and warning |
+| Any valid saved `A[0]`, `A[1]`, `A[2]`, or `B[0:4]` comparison is false | All seven unavailable pending review; neither source wins automatically |
 | Saved summary counts absent, negative, fractional, or otherwise not comparable, while `C` itself is eligible | Calculate from `C` with warnings; unavailable cross-checks alone do not invalidate the observed sequence |
 | Missing, invalid, or negative `S` | Duration unavailable; eligible choice counts and proportion remain available with warnings |
 | Decodable timestamps decrease or exceed valid `S` | Retain eligible counts/proportion with warnings: these metrics count encoded outcomes and do not use timing or reorder events |
@@ -123,7 +125,7 @@ eligibility override is implemented in version 2.
 
 ## Diagnostics and result reporting
 
-Keep quality diagnostics separate from the six behavioral summaries:
+Keep quality diagnostics separate from the behavioral summaries:
 
 - Whether `C` is present and whether a terminator was observed.
 - Raw C entry count and recognized unused slot count, separately.
@@ -189,7 +191,7 @@ validity of these metrics.
 
 ## Implementation and reproducibility
 
-`prl_metrics.calculate_prl_summary(session)` returns six `MetricResult` values and
+`prl_metrics.calculate_prl_summary(session)` returns seven `MetricResult` values and
 separate `PRLDiagnostics`. It uses the version 2 normalizer's decoded events, raw C
 structure, and structured saved-count checks; it does not parse warning messages or
 silently accept unsupported reader/normalizer versions. The approved fixed policy
@@ -219,6 +221,9 @@ six formulas unchanged. See [version 2 examples and guards](prl-unused-slots.md)
 Version 3 implements the owner-requested change from percentage to proportion
 correct on November 10, 2026, with a new metric ID and 0–1 scale. See
 [accuracy scale migration](proportion-correct.md). Counts and eligibility are unchanged.
+Version 4 adds whole-session Med-PC trials per minute from validated choices and S.
+The first six formulas and phase definitions are unchanged; invalid duration affects
+only the new rate. See [rate eligibility and examples](medpc-trials-per-minute.md).
 Future semantic changes require a new definition version.
 
 ## Local verification record

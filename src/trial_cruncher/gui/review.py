@@ -166,7 +166,7 @@ class ReviewPanel(QWidget):
         self.metric_table.setRowCount(len(summary.metrics))
         for row, metric in enumerate(summary.metrics):
             value = display(metric.value)
-            if metric.value is not None and metric.unit == "proportion":
+            if metric.value is not None and metric.unit in ("proportion", "choices/min"):
                 value = f"{metric.value:.4f}"
             fields = (
                 METRIC_LABELS[metric.name],

@@ -37,7 +37,7 @@ an inspection command, not a CSV/Excel export pipeline.
 
 For GUI review, launch `trial-cruncher --gui`, add files or a folder, and click
 **Import Med-PC**. Click a file to browse Session details, Decoded choices, Warnings
-and checks, and Source text. The Session metrics tab shows the six owner-approved
+and checks, and Source text. The Session metrics tab shows the seven owner-approved
 PRL summaries, with strict withholding and diagnostic counts; see
 [their definitions](prl-session-metrics.md). The same reader and normalizer drive both interfaces.
 The choice table displays unavailable fields explicitly and preserves source array
@@ -188,10 +188,10 @@ choices and 49 matching saved-count checks; 174 unused slots remain raw and are
 explicitly documented in exclusion metadata. See
 [partial-session validation](partial-session-validation.md) for evidence and limits.
 
-Six PRL session-summary metrics are implemented separately from extraction and
+Seven PRL session-summary metrics are implemented separately from extraction and
 normalization. Additional metric families, configurable batch analysis,
 general Med-PC dialect support, and a MATLAB reader remain future work.
-Session CSV schema 2 includes the six calculated values with versioned definitions,
+Session CSV schema 5 includes the seven calculated values with versioned definitions,
 strict withholding reasons, and diagnostics; raw observations remain unchanged.
 Excel export also supports the same reviewed tables; see [Excel export](excel-export.md).
 
@@ -199,4 +199,5 @@ Phase behavioral metrics are now available separately using an explicitly assign
 phase and the owner-confirmed fixed-contingency/no-omission profile. Use **Assign
 phases…** before import, or pass `phase="Reversal"` to `import_medpc_file()`. The
 reader/normalizer and existing session definitions are unchanged by this addition.
-See [phase metrics](medpc-behavioral-metrics-spec.md). Trials per minute remains deferred.
+See [phase metrics](medpc-behavioral-metrics-spec.md). Med-PC trials per minute is now implemented separately from the deferred MAT rate;
+see [Med-PC rate definition](medpc-trials-per-minute.md).
