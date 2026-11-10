@@ -19,8 +19,8 @@ not need to have trials.
   structured JSON logs on standard error when a console is available.
 - Canonical event/session/trial records and small reader, normalizer, metric, and
   exporter interfaces for future implementations.
-- A read-only Med-PC text reader and PRL normalizer for the confirmed `PRL_BO` and
-  `PRL_OPTO_CORSTIM` programs, with choice decoding, source provenance, and saved-count
+- A read-only Med-PC text reader and PRL normalizer for the confirmed `PRL_BO`,
+  `PRL_OPTO`, and `PRL_OPTO_CORSTIM` programs, with choice decoding, source provenance, and saved-count
   consistency checks. Use the GUI, `--inspect-medpc FILE`, or the Python API.
 - Background imports with progress, per-file failure isolation, and cancellation
   after the current file. Completed results remain available for review.
@@ -31,7 +31,9 @@ not need to have trials.
 **Med-PC import review is available in the GUI, CLI, and Python API.**
 GUI CSV and Excel export of sessions and choices is available with provenance and an export
 manifest. Six PRL session-summary metrics are implemented with the approved strict
-withholding policy. Additional behavioral metrics remain future work.
+withholding policy. Eight phase-level accuracy, error, and strategy metrics are also
+implemented with user-assigned phases and explicit criterion/denominator evidence.
+Trials per minute and other metric families remain future work.
 Extensions identify candidates only. Other formats/programs require representative
 example files and documented schemas. Synthetic tests verify software behavior, not
 scientific validity. See [Med-PC support and confirmed rules](docs/medpc.md).
@@ -43,12 +45,13 @@ and event identification; configurable and documented behavioral metrics; trial,
 session, subject, and group tables; and CSV/Excel export with reproducibility metadata.
 Planned analysis paradigms include operant conditioning, reinforcement learning,
 probabilistic reversal learning, and progressive ratio. The first normalizer is scoped
-to two confirmed PRL programs; it does not impose their conventions on other tasks.
+to three confirmed PRL program names; it does not impose their conventions on other tasks.
 
 The eventual workflow is **Import Files → Select Paradigm → Configure Metrics →
 Process Batch → Review Results → Export Tables**. The desktop currently supports file
-selection, Med-PC import review, six PRL summary metrics, and session/choice CSV/Excel
-export; task configuration and additional metrics are future work.
+selection, Med-PC import review, six PRL session summaries, eight phase metrics,
+manual phase assignment, and CSV/Excel export. Additional task configuration and
+metric families remain future work.
 
 ## Installation and launch
 
@@ -79,7 +82,12 @@ re-add to filter an existing selection. Folder traversal ignores files with othe
 extensions. Explicit mismatches, inaccessible paths, and skipped directory symlinks
 appear in Discovery messages. Symlinked folders must be selected explicitly.
 
-Click **Import Med-PC** to read the full batch. The overview shows one row per file
+Click **Assign phases…** to label each file as Acquisition, Reversal, or a custom
+phase (for example, Reversal 2). Full paths distinguish duplicate filenames; **Apply
+to all files** supports bulk assignment. Save, then click **Import Med-PC** to read
+the full batch with those assignments. Blank phases leave phase metrics unavailable.
+Each file has one fixed contingency under the confirmed no-omission protocol.
+Pending phase edits apply only on re-import; exports use the reviewed snapshot. The overview shows one row per file
 with subject, program, recorded date, duration, six metrics, and quality status. Sort
 by clicking column headings; combine search, program, and quality filters to find
 sessions needing attention. Click a row to review it below:
@@ -87,6 +95,9 @@ sessions needing attention. Click a row to review it below:
 - **Session details:** identifiers, task duration from `S`, original headers, and provenance.
 - **Session metrics:** five choice/outcome counts and percent correct, with status,
   withholding reasons, and separate recorded-data diagnostics.
+- **Phase metrics:** phase accuracy, perseverative/regressive errors, adjusted error
+  proportion, and four win-stay/lose-shift probabilities, with criterion and
+  numerator/denominator evidence. Undefined ratios remain unavailable.
 - **Decoded choices:** source array index, time, correct/rewarded outcome, raw value,
   and source line. Missing decoded values display as **Unavailable**, not zero.
 - **Warnings and checks:** per-file problems and saved-count comparisons.
@@ -108,7 +119,7 @@ text and sort as text; no calendar format is inferred.
 
 Click **Export CSV…** to export all successful imports, including hidden rows and
 warnings, then choose a parent folder. A new uniquely named folder holds `sessions.csv`,
-`choices.csv`, and `manifest.json`; the saved location appears above the overview.
+`choices.csv`, `phase_metrics.csv`, and `manifest.json`; the saved location appears above the overview.
 Existing files are never overwritten. Failed/unimported files are recorded in the
 manifest. Blank fields mean missing observations, while zero and false stay explicit.
 Session CSV includes the six calculated metrics and their versioned status/reasons;
@@ -121,7 +132,7 @@ beyond filesystem metadata. Full resolved paths are displayed and may appear in 
 review logs before sharing them outside the laboratory.
 
 Click **Export Excel…** for a workbook with **Sessions**, **Choices**, **Quality**,
-and **Provenance** sheets plus a companion manifest in a fresh folder. Identifiers
+**Phase metrics**, and **Provenance** sheets plus a companion manifest in a fresh folder. Identifiers
 and raw decimals remain text; missing values stay blank, zero/false remain explicit,
 and withheld metrics retain reasons. Long text is preserved in numbered provenance
 chunks. Both export buttons include the full batch regardless of overview filters.
@@ -156,6 +167,7 @@ src/trial_cruncher/
   paradigms.py              Explicit task configuration
   metrics.py               Task-specific calculation contract
   prl_metrics.py           Approved PRL summaries and strict eligibility diagnostics
+  phase_metrics.py         Phase errors/strategies, configuration, and ratio evidence
   tables.py                Versioned session/choice table schemas
   exporters.py             Exclusive-create CSV writer and CSV/Excel export bundles
   excel.py                 Literal Excel cells, quality sheet, and provenance chunks
@@ -171,9 +183,12 @@ not empty executable stages. See [architecture](docs/architecture.md) and
 
 ## Project status and next milestones
 
-1. Validate further session variants, including an actual early-stopped or timed-out recording.
+1. Expand independent validation beyond the seven supplied partial sessions. Five
+   timeouts and two manual stops now pass local consistency checks, with unused
+   trailing slots preserved raw under a versioned exclusion rule. See
+   [partial-session validation](docs/partial-session-validation.md).
 2. Review the six implemented PRL summaries against additional independent examples.
-3. Define additional metrics and trial/subject/group tables before implementing them.
-4. Extend the GUI with task/configuration controls.
+3. Define further metrics and subject/group aggregation before implementing them.
+4. Add broader task configuration and, separately, MAT-derived trials per minute.
 
 No software license has been selected. No author identity is declared.

@@ -7,6 +7,7 @@ from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal, 
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QCheckBox,
+    QDialog,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -31,6 +32,7 @@ from trial_cruncher.exporters import ExportFormat
 from trial_cruncher.gui.export_worker import ExportWorker
 from trial_cruncher.gui.import_worker import ImportWorker
 from trial_cruncher.gui.overview import BatchOverview
+from trial_cruncher.gui.phases import PhaseDialog
 from trial_cruncher.gui.review import ReviewPanel
 from trial_cruncher.processing import ImportResult
 
@@ -71,6 +73,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Trial Cruncher")
         self.resize(1300, 900)
         self.selected_files: set[Path] = set()
+        self.phase_assignments: dict[Path, str] = {}
         self._worker: DiscoveryWorker | None = None
         self._import_worker: ImportWorker | None = None
         self._export_worker: ExportWorker | None = None
@@ -83,7 +86,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(QLabel("From raw trials to analysis-ready data."))
         description = QLabel(
             "Add Med-PC session files or a folder, then import to review session details, "
-            "metrics, decoded choices, and warnings. Supports PRL_BO and PRL_OPTO_CORSTIM."
+            "metrics, decoded choices, and warnings. "
+            "Supports PRL_BO, PRL_OPTO, and PRL_OPTO_CORSTIM."
         )
         description.setWordWrap(True)
         layout.addWidget(description)
@@ -103,6 +107,10 @@ class MainWindow(QMainWindow):
         self.add_folder_button = QPushButton("Add folder…")
         self.clear_button = QPushButton("Clear selection")
         self.import_button = QPushButton("Import Med-PC")
+        self.phase_button = QPushButton("Assign phases…")
+        self.phase_button.setToolTip(
+            "Assign phases for all files before import, including hidden rows"
+        )
         self.import_button.setToolTip(
             "Import or re-read all files in the batch, including rows hidden by filters"
         )
@@ -116,13 +124,14 @@ class MainWindow(QMainWindow):
             "filters do not limit export; failed and unimported files are listed in the manifest"
         )
         self.excel_button.setToolTip(
-            "Export all successful imports to Sessions, Choices, Quality, and Provenance sheets "
+            "Export Sessions, Choices, Phase metrics, Quality, and Provenance "
             "in a new folder; filters do not limit export"
         )
         for button in (
             self.add_files_button,
             self.add_folder_button,
             self.clear_button,
+            self.phase_button,
             self.import_button,
             self.cancel_button,
             self.export_button,
@@ -162,6 +171,7 @@ class MainWindow(QMainWindow):
         self.add_folder_button.clicked.connect(self.choose_folder)
         self.clear_button.clicked.connect(self.clear_selection)
         self.import_button.clicked.connect(self.import_selected_files)
+        self.phase_button.clicked.connect(self.assign_phases)
         self.cancel_button.clicked.connect(self.cancel_import)
         self.export_button.clicked.connect(self.export_csv)
         self.excel_button.clicked.connect(self.export_excel)
@@ -240,6 +250,20 @@ class MainWindow(QMainWindow):
             self.review.show_result(result)
 
     @Slot()
+    def assign_phases(self) -> None:
+        if self._closing or self._is_working() or not self.selected_files:
+            return
+        dialog = PhaseDialog(
+            tuple(sorted(self.selected_files, key=str)), self.phase_assignments, self
+        )
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.phase_assignments = dialog.assignments()
+            self.statusBar().showMessage(
+                "Phase assignments saved. Import Med-PC to apply; "
+                "exports use the last imported snapshot."
+            )
+
+    @Slot()
     def import_selected_files(self) -> None:
         if (
             self._closing
@@ -253,7 +277,7 @@ class MainWindow(QMainWindow):
         self.import_results.clear()
         self.overview.start_import()
         self.review_path(self.overview.current_path())
-        self._import_worker = ImportWorker(paths)
+        self._import_worker = ImportWorker(paths, self.phase_assignments)
         self._import_worker.signals.result.connect(self._import_result)
         self._import_worker.signals.progress.connect(self._import_progress)
         self._import_worker.signals.finished.connect(self._import_finished)
@@ -353,7 +377,7 @@ class MainWindow(QMainWindow):
         self.export_status.setText(
             f"Saved results.xlsx and manifest.json in: {destination}"
             if self._export_label == "Excel"
-            else f"Saved sessions.csv, choices.csv, and manifest.json in: {destination}"
+            else f"Saved CSV tables and manifest.json in: {destination}"
         )
         self.statusBar().showMessage(f"{self._export_label} export complete")
         self._finish_close()
@@ -394,6 +418,7 @@ class MainWindow(QMainWindow):
         ):
             widget.setEnabled(not busy and not self._closing)
         self.import_button.setEnabled(not busy and not self._closing and bool(self.selected_files))
+        self.phase_button.setEnabled(self.import_button.isEnabled())
         self.cancel_button.setEnabled(busy and self._import_worker is not None)
         self.export_button.setEnabled(
             not busy
@@ -410,6 +435,7 @@ class MainWindow(QMainWindow):
         if self._closing or self._is_working():
             return
         self.selected_files.clear()
+        self.phase_assignments.clear()
         self.import_results.clear()
         self.overview.clear_filters()
         self.overview.set_files((), {})

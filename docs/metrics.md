@@ -11,16 +11,25 @@ their counts against saved summaries. Calculated metrics remain separate from th
 source observations. Stored `A[5]` retains its `A[0] / Y` meaning and is not the new
 percent-correct metric. Head entries are not recorded, so head-entry and latency
 calculations remain unavailable. Owner approval and software tests do not establish
-general scientific validity; actual partial-session validation remains outstanding.
+general scientific validity. Five supported timeout recordings now pass local
+consistency checks. `PRL_OPTO` uses the owner-confirmed shared interpretation;
+confirmed manual-stop zero tails are excluded as unused storage under
+[definition version 2](prl-unused-slots.md), preserving raw arrays and exclusions. See
+[partial-session validation](partial-session-validation.md).
 
-Beyond the six implemented PRL definitions, the names below describe possible
-future work, not universal definitions: completed trials, response/retrieval latency,
-win-stay, lose-shift, perseverative/regressive errors, trials to criterion, acquisition/reversal performance,
-progressive ratio breakpoint, presses/rates, and session duration.
+Eight additional phase metrics are implemented under `prl-medpc-phase-behavior`
+version 1: phase percent correct, perseverative/regressive errors, adjusted regressive
+error proportion, and four correct/incorrect-conditioned win-stay/lose-shift
+probabilities. Their [implementation specification](medpc-behavioral-metrics-spec.md)
+records the owner-confirmed fixed-contingency/no-omission profile, manual phase
+assignment, strict withholding, formulas, denominators, and acceptance evidence.
+Missing phase labels leave these results unavailable without suppressing the
+existing session summaries. Trials per minute remains deferred to its MAT-based
+source definition; no Med-PC duration fallback is implemented.
 
-Each metric belongs to a documented paradigm. A name alone is insufficient: for
-example, the denominator of percent correct can change when omissions or aborted
-trials are included. Review definitions with a domain expert before implementation.
+Other future metric families include response/retrieval latencies, trials to criterion,
+progressive-ratio breakpoint, and subject/group aggregation. Each needs its own
+paradigm-specific definition and reviewed source observations before implementation.
 
 ## Required metric specification template
 

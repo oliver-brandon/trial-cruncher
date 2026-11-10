@@ -1,5 +1,7 @@
 """Shared synthetic exports; no research recordings are bundled."""
 
+from collections import Counter
+
 import pytest
 
 
@@ -37,3 +39,23 @@ J:
         return path
 
     return write
+
+
+@pytest.fixture
+def phase_input(tmp_path):
+    """Small invented recorded sequences with matching saved counters."""
+
+    def make(codes=(7, 6, 1, 7, 1, 2, 1, 7, 1, 7), *, name="phase.txt", program="PRL_OPTO"):
+        counts = Counter(codes)
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        values = " ".join(f"{i}.{code:02}" for i, code in enumerate(codes))
+        c = f"C:\n  0: {values}\n" if codes else "C:\n"
+        path.write_text(
+            f"File: synthetic\nMSN: {program}\nSubject: 0007\nS: {len(codes) + 1}\n"
+            f"A:\n  0: {counts[1] + counts[2]} {counts[6] + counts[7]} {len(codes)}\n"
+            f"B:\n  0: {counts[1]} {counts[2]} {counts[6]} {counts[7]}\n{c}"
+        )
+        return path
+
+    return make

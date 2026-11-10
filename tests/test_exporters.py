@@ -40,7 +40,8 @@ def test_export_round_trip_provenance_missing_and_raw_fields(write_export, tmp_p
     assert row["source_file_header"] == r"C:\Synthetic\example.txt"
     assert row["time_origin"] == "task_start"
     assert row["time_unit"] == "seconds"
-    assert row["reader_version"] == row["normalizer_version"] == "1"
+    assert row["reader_version"] == "1"
+    assert row["normalizer_version"] == "2"
     assert row["latency_available"] == row["head_entries_recorded"] == "false"
     assert json.loads(row["warnings_json"]) == list(session.warnings)
     raw = json.loads(row["metadata_json"])["raw_medpc"]
@@ -63,16 +64,16 @@ def test_export_round_trip_provenance_missing_and_raw_fields(write_export, tmp_p
     assert [metric["name"] for metric in manifest["configuration"]["metrics"]] == list(
         METRIC_LABELS
     )
-    assert manifest["configuration"]["metric_eligibility_policy"] == "strict-withholding-v1"
-    assert manifest["schema_version"] == row["schema_version"] == "2"
-    assert row["metric_definition_version"] == "1"
-    assert row["metric_policy"] == "strict-withholding-v1"
+    assert manifest["configuration"]["metric_eligibility_policy"] == "strict-withholding-v2"
+    assert manifest["schema_version"] == row["schema_version"] == "3"
+    assert row["metric_definition_version"] == "2"
+    assert row["metric_policy"] == "strict-withholding-v2"
     assert all(row[name] == "" for name in METRIC_LABELS)
     exported_metrics = json.loads(row["metric_results_json"])
     assert len(exported_metrics) == 6
     for metric in exported_metrics:
         assert metric["value"] is None and metric["status"] == "unavailable"
-        assert metric["definition_version"] == "1"
+        assert metric["definition_version"] == "2"
         assert "invalid choice" in metric["reasons"][0]
         assert metric["warnings"] == list(session.warnings)
     diagnostics = json.loads(row["metric_diagnostics_json"])
@@ -171,7 +172,7 @@ def test_csv_writer_refuses_existing_sources_links_and_missing_source_path(tmp_p
     assert not absent_source.exists()
 
 
-@pytest.mark.parametrize("failed_name", ["choices.csv", "manifest.json"])
+@pytest.mark.parametrize("failed_name", ["choices.csv", "phase_metrics.csv", "manifest.json"])
 def test_write_failure_removes_attempt_only(write_export, tmp_path, monkeypatch, failed_name):
     path = write_export()
     result = import_medpc_file(path)
@@ -195,7 +196,10 @@ def test_write_failure_removes_attempt_only(write_export, tmp_path, monkeypatch,
 def test_bad_metadata_and_unwritable_parent_leave_no_export(write_export, tmp_path, monkeypatch):
     path = write_export()
     result = import_medpc_file(path)
-    invalid = replace(result, session=replace(result.session, metadata={"invalid": object()}))
+    invalid = replace(
+        result,
+        session=replace(result.session, metadata={**result.session.metadata, "invalid": object()}),
+    )
     with pytest.raises(TypeError, match="Cannot export"):
         export_import_results({path: invalid}, [path], tmp_path)
     assert not list(tmp_path.glob("trial-cruncher-export-*"))

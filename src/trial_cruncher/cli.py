@@ -52,6 +52,8 @@ def main(argv: list[str] | None = None) -> int:
                     "head_entries_recorded": False,
                     "latency_available": False,
                     "summary_checks": session.metadata["summary_checks"],
+                    "normalizer_version": session.metadata["normalizer_version"],
+                    "choice_storage": session.metadata["choice_storage"],
                     "warnings": session.warnings,
                     "choices": [
                         {

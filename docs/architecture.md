@@ -7,11 +7,11 @@ Selected paths → discovery → format detection/readers → normalization
               → explicit paradigm/configuration → metrics → tables → exporters
 ```
 
-Discovery, selection, Med-PC text extraction, and normalization of two confirmed PRL
+Discovery, selection, Med-PC text extraction, and normalization of three confirmed PRL
 programs are implemented, along with session/choice table builders and CSV/Excel export.
-Six owner-approved PRL session-summary calculations are implemented with strict
-withholding. Additional metric families and configurable batch analysis remain future
-work. The Med-PC reader is exposed through Python, `--inspect-medpc`, and GUI
+Six PRL session-summary calculations and eight phase behavioral metrics are
+implemented with strict withholding. User-assigned phases follow the confirmed
+fixed-contingency/no-omission profile. Further metric families remain future work. The Med-PC reader is exposed through Python, `--inspect-medpc`, and GUI
 import review with per-file results.
 
 ## Current components
@@ -38,8 +38,11 @@ Frozen dataclasses are shallow and callers must treat their mappings as read-onl
 `readers.py` defines the detection/extraction contract. `medpc.py` implements raw
 extraction, retaining Decimal values, original array indices, text, file hash, and
 line provenance. `normalization.py` defines the canonical conversion contract;
-`prl.py` interprets the two confirmed programs without importing Qt, preserves raw
-data, and reports invalid choices and saved-count inconsistencies. See
+`prl.py` interprets the three confirmed program names without importing Qt, preserves raw
+data, and reports invalid choices and saved-count inconsistencies. Normalizer version 2
+recognizes fully corroborated unused zero tails without changing raw arrays. Its
+`choice_storage_info()` helper is also used by the metric calculator to recheck
+exclusions and reject stale storage metadata; see [unused slots](prl-unused-slots.md). See
 [the Med-PC specification](medpc.md) for supported encodings and missing-data policy.
 `paradigms.py` carries a named, versioned
 configuration without assuming automatic task identification. `metrics.py` defines
@@ -47,15 +50,19 @@ the extensible metric contract. `prl_metrics.py` implements the six approved PRL
 summaries under a fixed, versioned eligibility policy, without configurable overrides.
 It consumes canonical choices and structured source/normalizer facts, returning
 `MetricResult` values and separate diagnostics. Values never replace raw observations;
-missing values carry reasons and availability status. `tables.py` builds versioned
-session and choice pandas tables with object dtype to preserve optional integers.
+missing values carry reasons and availability status. `phase_metrics.py` calculates the phase-specific error/strategy definitions and
+retains criterion, ratio, and configuration evidence separately from the session
+summary. It rechecks source integrity before processing choice order.
+`tables.py` builds versioned
+session, choice, and phase pandas tables with object dtype to preserve optional integers.
 `exporters.py` implements the exporter protocol with an exclusive-create CSV writer
 and orchestrates new export bundles with a manifest. See [CSV export](csv-export.md)
 and [Excel export](excel-export.md).
 
 `processing.py` provides `ImportResult` and `import_medpc_file()`, independent of Qt.
 It calculates the PRL summary after normalization and retains it in `ImportResult`,
-so GUI/export use the same result. Expected read/normalization/calculation failures
+so GUI/export use the same result. `ImportResult.phase_summary` additionally stores
+the phase calculation and immutable, hashed configuration from import time. Expected read/normalization/calculation failures
 become explicit errors; raw extraction survives
 an unsupported program so its headers and source text can still be inspected.
 
@@ -100,6 +107,13 @@ independent of Qt and preserve per-input success/failure records. Do not represe
 failed file as a successful empty dataset. GUI imports currently process files serially
 in one worker; parallel analysis and persistent result caching are not implemented.
 
+`gui/phases.py` provides a full-path per-file assignment dialog with custom/bulk labels.
+Assignments are in-memory pending import configuration. ImportWorker copies the
+mapping before work starts; phase editing is disabled during background operations.
+A cancelled/failed re-import cannot retain old phase results. The phase review tab
+shows its own availability, criterion evidence, and ratio counts without overwriting
+the existing session summary status.
+
 Extend `tables.py` for future trial, subject, and group row levels. Session and choice
 rows already carry direct source provenance; aggregated rows will require explicit
 lineage listing every contributing source. Do not fabricate trials for non-trial tasks.
@@ -109,8 +123,9 @@ scope and serialization rules. Per-session metadata retains reader/normalizer ve
 raw acquisition fields, and time units/origin. Schema 2 adds the six calculated
 session columns and their status/reasons/diagnostics; the manifest records metric
 definition IDs/versions and the strict withholding policy. Excel workbook layout
-version 1 reuses schema 2 tables and adds Quality and
-Provenance sheets. `excel.py` stores literal text, chunks long metadata, checks
+version 2 uses schema 3 tables, including Phase metrics, Quality, and
+Provenance sheets. Phase configurations and definitions are recorded independently
+of the existing session definitions. `excel.py` stores literal text, chunks long metadata, checks
 worksheet/XML limits, and exclusively creates `results.xlsx`; the shared export
 orchestrator writes its manifest last and cleans up failed attempts.
 Future metrics must record their definitions and complete analysis configuration.

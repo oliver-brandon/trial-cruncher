@@ -1,4 +1,4 @@
-"""Approved PRL session-summary definitions, version 1; strict withholding."""
+"""Approved PRL session-summary definitions, version 2; corroborated unused slots."""
 
 from collections import Counter
 from collections.abc import Mapping
@@ -6,11 +6,11 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from trial_cruncher.models import MetricResult, Session
-from trial_cruncher.prl import SUPPORTED_PROGRAMS
+from trial_cruncher.prl import NORMALIZER_VERSION, SUPPORTED_PROGRAMS, choice_storage_info
 
 DEFINITION_SET = "prl-session-summary"
-DEFINITION_VERSION = "1"
-ELIGIBILITY_POLICY = "strict-withholding-v1"
+DEFINITION_VERSION = "2"
+ELIGIBILITY_POLICY = "strict-withholding-v2"
 METRIC_LABELS = {
     "prl.choice_count": "Recorded choices",
     "prl.correct_choice_count": "Correct choices",
@@ -35,6 +35,8 @@ class PRLDiagnostics:
     post_terminator_count: int | None
     c_indices_have_gaps: bool | None
     summary_checks: Mapping[str, bool | None]
+    raw_c_entry_count: int | None = None
+    unused_slot_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -56,12 +58,21 @@ def calculate_prl_summary(session: Session) -> PRLSessionSummary:
     raw = metadata.get("raw_medpc", {})
     if (
         metadata.get("program") not in SUPPORTED_PROGRAMS
-        or metadata.get("normalizer_version") != "1"
+        or metadata.get("normalizer_version") != NORMALIZER_VERSION
         or raw.get("reader_version") != "1"
         or raw.get("format") != "medpc-text"
         or raw.get("source_file") != session.source_file
     ):
-        raise ValueError("PRL metrics require the confirmed version 1 Med-PC/PRL interpretation.")
+        raise ValueError(
+            "PRL metrics require reader version 1 and normalizer version 2; re-import."
+        )
+
+    storage = choice_storage_info(raw)
+    if metadata.get("choice_storage") != storage:
+        raise ValueError(
+            "Choice storage metadata does not match the imported C records; re-import."
+        )
+    unused_indices = set(storage["unused_slot_indices"])
 
     choices = raw["arrays"].get("C")
     checks = dict(metadata["summary_checks"])
@@ -79,6 +90,8 @@ def calculate_prl_summary(session: Session) -> PRLSessionSummary:
         terminated = False
         after_count = 0
         for index in indices:
+            if index in unused_indices:
+                continue
             if terminated:
                 after_count += 1
             elif choices[index] == _TERMINATOR:
@@ -119,6 +132,8 @@ def calculate_prl_summary(session: Session) -> PRLSessionSummary:
             after_count,
             gaps,
             checks,
+            raw_c_entry_count=storage["raw_c_entry_count"],
+            unused_slot_count=storage["unused_slot_count"],
         )
     mismatches = [key for key, matches in checks.items() if matches is False]
     if mismatches:

@@ -8,14 +8,17 @@ headers, not a filename extension. `can_read()` examines the first 64 KiB as a f
 probe; `read()` performs structural validation. Program source `.MPC` files and macOS
 AppleDouble `._*` sidecars are not session exports.
 
-`PRLNormalizer` interprets only the exact `MSN` names `PRL_BO` and
-`PRL_OPTO_CORSTIM`. Their supplied program versions and the rules below were confirmed
-by the project owner. Program names do not identify future code revisions reliably:
+`PRLNormalizer` interprets only the exact `MSN` names `PRL_BO`, `PRL_OPTO`, and
+`PRL_OPTO_CORSTIM`. On November 4, 2026, the project owner confirmed that `PRL_OPTO`
+uses the same MPC setup as CORSTIM and PRL_BO, extending the existing confirmed
+interpretation to that program name. Original names are preserved in provenance.
+Program names do not identify future code revisions reliably:
 changes to acquisition code require renewed schema review and a normalizer version
 change when interpretation changes. Other programs can be extracted as raw data, but
 are rejected by this normalizer rather than assigned PRL semantics.
 
-Reader and normalizer contract versions currently both equal `"1"`.
+Reader version is `"1"`; normalizer version is `"2"`. Version 2 recognizes
+[owner-confirmed unused trailing slots](prl-unused-slots.md) with full raw retention.
 
 ## Use
 
@@ -127,7 +130,9 @@ decoded fields and a warning. Decreasing timestamps and choices beyond `S` are f
 The exact `-987.987` terminator written by the supplied programs is retained raw but
 is not a choice. Any values after it remain raw and generate warnings rather than
 being interpreted. No rounded marker variants or zero-padding conventions are assumed;
-unrecognized negative values or zero-valued `C` entries are flagged. Actual sample
+unrecognized negative values or zero-valued `C` entries outside a fully corroborated
+unused tail are flagged. Recognized unused slots are excluded from choice events
+but retain their values, indices, and source lines in raw metadata. Actual sample
 exports omit the terminator.
 
 There is no hardcoded trial count, session maximum, reversal point, subject count,
@@ -141,7 +146,7 @@ Head entries are no longer recorded in this protocol. `A[4]`, `F`, and `J` are
 preserved raw but excluded from interpretation. The session explicitly records
 `head_entries_recorded=False` and `latency_available=False`. A saved zero head-entry
 counter is not treated as a measured zero. No response/retrieval latencies are computed,
-and differences in `F` encoding between the two programs are irrelevant to this normalizer.
+and differences in `F` encoding between programs are irrelevant to this normalizer.
 
 Counts decoded from `C` are checked against `A[0]` (correct), `A[1]` (incorrect),
 `A[2]` (total), and `B[0:4]` (the four outcomes in the table above). Each check is
@@ -175,10 +180,23 @@ Automated tests use independently constructed synthetic exports, including known
 timestamps/outcomes, missing data, sparse arrays, malformed input, summary mismatches,
 unsupported programs, and CLI error behavior. This is software verification and local
 consistency checking, not general scientific validation of Med-PC or PRL analysis.
-An actual early-stopped/timed-out recording is still useful additional evidence.
+On November 4, 2026, after the owner's compatibility confirmation, five note-confirmed
+timeout recordings across CORSTIM and PRL_OPTO passed local raw/decoded/metric/export
+consistency checks. With owner-confirmed unused-tail handling in normalizer version 2,
+two manual stops also produce available metrics. All seven recordings provide 118
+choices and 49 matching saved-count checks; 174 unused slots remain raw and are
+explicitly documented in exclusion metadata. See
+[partial-session validation](partial-session-validation.md) for evidence and limits.
 
 Six PRL session-summary metrics are implemented separately from extraction and
-normalization. Additional metric families, configurable batch analysis, Excel export,
+normalization. Additional metric families, configurable batch analysis,
 general Med-PC dialect support, and a MATLAB reader remain future work.
 Session CSV schema 2 includes the six calculated values with versioned definitions,
 strict withholding reasons, and diagnostics; raw observations remain unchanged.
+Excel export also supports the same reviewed tables; see [Excel export](excel-export.md).
+
+Phase behavioral metrics are now available separately using an explicitly assigned
+phase and the owner-confirmed fixed-contingency/no-omission profile. Use **Assign
+phases…** before import, or pass `phase="Reversal"` to `import_medpc_file()`. The
+reader/normalizer and existing session definitions are unchanged by this addition.
+See [phase metrics](medpc-behavioral-metrics-spec.md). Trials per minute remains deferred.

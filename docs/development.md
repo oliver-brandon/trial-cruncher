@@ -43,6 +43,10 @@ text/Decimal strings, missing and withheld values, quality reasons, complete lon
 chunks, formula-like literals, worksheet limits, invalid XML, and no-overwrite/write
 failure safeguards. Export GUI and filtered-batch tests run for both CSV and Excel.
 See [Excel export](excel-export.md) for the workbook schema and limitations.
+`tests/test_partial_sessions.py` adds synthetic checks for observed-choice denominators
+at short/timeout-length durations, unsupported-program raw preservation, corroborated
+unused-tail exclusions, and refusing exclusions when counters or records conflict. Actual partial-session evidence and
+its remaining boundaries are recorded in [partial-session validation](partial-session-validation.md).
 `tests/test_prl_metrics.py` covers the approved hand-calculated examples, strict
 withholding, saved-count disagreements, missing versus empty choices, independent
 unavailability reasons, and warning-only cases. GUI/CSV integration checks cover
@@ -68,17 +72,17 @@ into committed test fixtures without explicit approval.
 
 For a desktop smoke test, launch the app, select both files and a folder, change
 extensions and recursion, verify deduplication/messages, and clear the selection.
-Import supported Med-PC files, switch between all four review tabs, and include a
+Import supported Med-PC files, switch between the review tabs, and include a
 malformed/unsupported file to verify other sessions still import. Check warnings and
 unavailable values, cancel a multi-file import, and re-import after a file changes.
-Export CSV twice to the same parent folder, verify distinct folders and all three
+Export CSV twice to the same parent folder, verify distinct folders and all four
 files, inspect warnings and blank values, and test cancelling the folder picker.
 Sort the overview numerically in both directions; verify missing values sort last.
 Combine search/program/quality filters and confirm the visible/total count, select
 rows with duplicate filenames from different folders, and check that filtering out
 the selected row clears its review. Export with a filter active and confirm all
 successful imports remain included. Confirm inputs and the first export remain unchanged.
-Repeat with **Export Excel…**: inspect all four sheets, filters/frozen headers, source
+Repeat with **Export Excel…**: inspect all five sheets, filters/frozen headers, source
 IDs, missing/zero/false values, Quality reasons, and complete Provenance chunks. Open
 `results.xlsx` in Microsoft Excel for native rendering verification when available.
 Current CI uses Ubuntu with Python 3.12 and 3.14;
@@ -107,3 +111,22 @@ eligibility policy. Additional metric configuration must be recorded when implem
 
 No license or author identity has been assigned. Publishing and licensing decisions
 remain with the repository owner.
+
+## Phase metric verification
+
+`tests/test_phase_metrics.py` covers the supplied hand-checked example, empty and
+single-choice boundaries, first criterion/maintenance behavior, next-choice reward
+independence, all 341 outcome sequences of length 0–4 against an independent
+window/transition reference, strict withholding, missing phase, unused slots,
+configuration hashes, literal phase labels, and stale phase export rejection.
+The phase-dialog GUI tests cover cancel/save, bulk/custom assignments, duplicate
+filenames, import snapshots, background execution, cancellation/failure, clearing,
+and full-batch exports under active filters.
+
+For desktop review, add files, open **Assign phases…**, set mixed labels (including
+a custom reversal label), and save. Import, then inspect Phase metrics, criterion,
+and each denominator. Edit assignments and export before re-importing to verify the
+old reviewed phase is retained; re-import and confirm the new phase. Blank a phase,
+re-import, and confirm session summaries still show while phase metrics are
+unavailable. Export both formats and verify phase rows, annotations, and manifest
+configuration hashes. Native Excel rendering needs separate verification.

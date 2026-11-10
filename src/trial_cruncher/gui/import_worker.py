@@ -18,9 +18,10 @@ class ImportSignals(QObject):
 
 
 class ImportWorker(QRunnable):
-    def __init__(self, paths: tuple[Path, ...]) -> None:
+    def __init__(self, paths: tuple[Path, ...], phases: dict[Path, str] | None = None) -> None:
         super().__init__()
         self.paths = paths
+        self.phases = dict(phases or {})
         self.signals = ImportSignals()
         self._cancel = Event()
 
@@ -35,7 +36,12 @@ class ImportWorker(QRunnable):
                 if self._cancel.is_set():
                     break
                 try:
-                    result = import_medpc_file(path)
+                    phase = self.phases.get(path)
+                    result = (
+                        import_medpc_file(path, phase)
+                        if phase is not None
+                        else import_medpc_file(path)
+                    )
                 except Exception:
                     logger.exception("Unexpected import failure", extra={"path": path})
                     result = ImportResult(

@@ -18,7 +18,7 @@ def normalized(path):
     return raw, session
 
 
-@pytest.mark.parametrize("program", ["PRL_BO", "PRL_OPTO_CORSTIM"])
+@pytest.mark.parametrize("program", ["PRL_BO", "PRL_OPTO", "PRL_OPTO_CORSTIM"])
 def test_hand_checked_choice_decoding_and_provenance(write_export, program):
     path = write_export(program=program)
     before = path.read_bytes(), path.stat().st_mtime_ns

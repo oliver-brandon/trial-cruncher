@@ -1,15 +1,15 @@
-# PRL session-summary metrics — definition version 1
+# PRL session-summary metrics — definition version 2
 
 Status: **Approved by the project owner and implemented.**
-Definition set: `prl-session-summary`, version `1`.
-Eligibility policy: `strict-withholding-v1`.
-Approval: October 27, 2026, in the task conversation; the owner explicitly accepted
-the definitions and strict withholding rule and authorized implementation. This
+Definition set: `prl-session-summary`, version `2`.
+Eligibility policy: `strict-withholding-v2`.
+Approval: October 27, 2026, for the original formulas and strict withholding;
+November 4, 2026, for recognizing confirmed unused trailing slots while preserving raw data. This
 approval is not a claim of independent scientific validation.
 
-This definition set specifies six session-level metrics for the owner-confirmed `PRL_BO` and
-`PRL_OPTO_CORSTIM` program interpretations documented in [medpc.md](medpc.md), using
-reader and normalizer version `1`. Program names alone do not establish compatibility
+This definition set specifies six session-level metrics for the owner-confirmed
+`PRL_BO`, `PRL_OPTO`, and `PRL_OPTO_CORSTIM` interpretations documented in [medpc.md](medpc.md), using
+reader version `1` and normalizer version `2`. Program names alone do not establish compatibility
 with future acquisition-code revisions. The definitions below are specific to this project,
 not claims of universally accepted PRL definitions or scientific validation.
 
@@ -40,7 +40,7 @@ correct/rewarded, correct/unrewarded, incorrect/rewarded, and incorrect/unreward
 Let `N = n1 + n2 + n6 + n7`.
 
 All six definitions use the eligibility rules below and definition version
-`1`. Each output has row level **session**. Counts are nonnegative integers with unit
+`2`. Each output has row level **session**. Counts are nonnegative integers with unit
 `count`; percentage has unit `%` and range 0–100 inclusive.
 
 | Stable identifier | Display name | Formula | Interpretation |
@@ -65,8 +65,10 @@ valid subset of a damaged or conflicting choice record.** All five counts and th
 percentage share the same choice-record eligibility rule. Diagnostic counts remain
 available separately where they can be observed reliably.
 
+Version 2 first identifies unused trailing slots under the fully corroborated
+[storage rule](prl-unused-slots.md). Those slots remain raw but are not choices.
 A sequence is eligible when `C` is explicitly present, its printed indices are
-contiguous from zero, every entry before the first exact `-987.987` terminator is
+contiguous from zero, every non-padding entry before the first exact `-987.987` terminator is
 decoded by the confirmed normalizer, no values follow that terminator, and no
 available saved-count comparison reports a mismatch. A terminator is optional.
 An explicitly empty `C` satisfies the structural rule. The term "eligible" does
@@ -75,6 +77,7 @@ not assert that an acquisition export captured all behavior.
 | Condition | Result |
 |---|---|
 | Valid nonempty `C`; available saved counts match | All six metrics available |
+| Valid prefix with fully corroborated unused zero tail | Exclude only confirmed storage slots, retain all raw values and exclusion metadata, calculate from the recorded prefix |
 | `C` absent | All six unavailable; absence is not an observed zero |
 | Explicitly empty `C`, or only a terminator at index zero; no saved-count mismatch | Five counts are zero; percent correct unavailable because `N = 0` |
 | Missing C indices, including a first index other than zero | All six unavailable; do not fill gaps or infer omitted choices |
@@ -109,20 +112,22 @@ status as unknown unless documented evidence establishes it.
 Do not infer omissions or aborted trials from inter-choice intervals, a short session,
 missing indices, or the difference from a presumed target. They are not separately
 observed in these inputs and have no denominator contribution in this definition.
-No silent exclusion of individual invalid choices is permitted.
+No silent exclusion of individual invalid choices is permitted. Confirmed storage slots
+are explicitly excluded with recorded indices/counts under [the versioned rule](prl-unused-slots.md).
 
 The exact terminator is excluded as a non-choice control marker. Post-terminator
 values are retained raw and block the session metrics. Source C-array index defines
 event order; no transitions are calculated, and no events are joined across sessions.
 No timing cutoff, warm-up exclusion, minimum sample size, or user-configurable
-eligibility override is implemented in version 1.
+eligibility override is implemented in version 2.
 
 ## Diagnostics and result reporting
 
 Keep quality diagnostics separate from the six behavioral summaries:
 
 - Whether `C` is present and whether a terminator was observed.
-- Number of observed pre-terminator records, including invalid records.
+- Raw C entry count and recognized unused slot count, separately.
+- Number of observed pre-terminator choice records after storage exclusions, including invalid records.
 - Number of valid decoded pre-terminator choices and number of invalid records.
 - Number of raw entries after the terminator and whether C indices have gaps.
 - Each existing saved-count comparison: match, mismatch, or unavailable.
@@ -176,18 +181,22 @@ unavailability reasons, and export round trips of missing versus zero values.
 
 The synthetic tests assert the hand-calculated results above and exercise GUI display,
 CSV values/status/reasons/diagnostics, rounding boundaries, and failure isolation.
-An actual early-stopped/timed-out recording remains needed for validation of that
-case. Reader/export verification and synthetic tests do not establish general
-scientific validity of these metrics.
+Five actual timeout recordings and two manual stops now pass local consistency checks.
+The manual-stop unused slots are retained raw with explicit exclusion metadata. See
+[partial-session validation](partial-session-validation.md) for evidence and limits.
+Reader/export verification and synthetic tests do not establish general scientific
+validity of these metrics.
 
 ## Implementation and reproducibility
 
 `prl_metrics.calculate_prl_summary(session)` returns six `MetricResult` values and
-separate `PRLDiagnostics`. It uses the version 1 normalizer's decoded events, raw C
+separate `PRLDiagnostics`. It uses the version 2 normalizer's decoded events, raw C
 structure, and structured saved-count checks; it does not parse warning messages or
 silently accept unsupported reader/normalizer versions. The approved fixed policy
 has no user overrides. Normalized records that do not correspond to the source C
-sequence raise an error rather than yield a potentially incomplete summary.
+sequence after verified storage exclusions raise an error rather than yield a potentially
+incomplete summary. Inconsistent storage metadata also raises an error; version 1
+snapshots must be re-imported.
 
 `processing.import_medpc_file()` calculates once after normalization, in the existing
 background import worker when called through the GUI. `ImportResult.summary` holds
@@ -205,6 +214,8 @@ retains all observations even when session metrics are withheld. See
 
 Version history: version 1 is the initial owner-approved definition set, with strict
 withholding for invalid/incomplete choice records and saved-count disagreements.
+Version 2 adds the owner-confirmed, corroborated unused-tail exclusion, leaving the
+six formulas unchanged. See [version 2 examples and guards](prl-unused-slots.md).
 Future semantic changes require a new definition version.
 
 ## Local verification record
@@ -217,3 +228,18 @@ Original hashes and modification times were unchanged. Screens for available met
 and a synthetic case with multiple withholding reasons were visually inspected.
 Artifacts remain under ignored `outputs/`. This is a local consistency check, not
 independent scientific validation or evidence for an actual early-stopped session.
+
+In the initial November 4, 2026 check, after the owner confirmed PRL_OPTO's shared MPC interpretation,
+five note-confirmed timeouts passed 35 saved-count checks and independent arithmetic
+comparisons for all 30 metric values. Both CSV and Excel exports preserved all seven
+supplied sessions and 292 C records: 92 valid timeout choices plus 200 manual-stop
+records, including 174 invalid zero entries. The two manual-stop summaries remained
+withheld with reasons. See [partial-session validation](partial-session-validation.md).
+Adding a confirmed program name does not change metric formulas or the strict policy;
+reader, normalizer, and metric definition versions remained 1 at that stage.
+
+After confirmation of unused trailing slots, normalizer/definition version 2 imports
+all seven recordings with 118 recorded choices and all 49 saved-count checks matching.
+The 174 unused slots remain in raw arrays/source text and are recorded as exclusions.
+All 42 metric values and both export formats were rechecked; see
+[partial-session validation](partial-session-validation.md).

@@ -15,7 +15,9 @@ from PySide6.QtWidgets import (
 )
 
 from trial_cruncher.models import Event
-from trial_cruncher.prl_metrics import METRIC_LABELS, PRLSessionSummary
+from trial_cruncher.phase_metrics import METRIC_LABELS as PHASE_LABELS
+from trial_cruncher.phase_metrics import PhaseSummary
+from trial_cruncher.prl_metrics import DEFINITION_VERSION, METRIC_LABELS, PRLSessionSummary
 from trial_cruncher.processing import ImportResult
 
 
@@ -79,12 +81,12 @@ class ReviewPanel(QWidget):
         self.details = self._text_tab("Session details")
         self.metric_page = QWidget()
         metric_layout = QVBoxLayout(self.metric_page)
-        metric_note = QLabel(
-            "Recorded-choice summaries · definition 1 · strict withholding.\n"
+        self.metric_note = QLabel(
+            f"Recorded-choice summaries · definition {DEFINITION_VERSION} · strict withholding.\n"
             "Percent correct uses recorded choices, not the saved A[5] fraction."
         )
-        metric_note.setWordWrap(True)
-        metric_layout.addWidget(metric_note)
+        self.metric_note.setWordWrap(True)
+        metric_layout.addWidget(self.metric_note)
         self.metric_table = QTableWidget(0, 5)
         self.metric_table.setAccessibleName("Session metrics")
         self.metric_table.setHorizontalHeaderLabels(("Metric", "Value", "Unit", "Status", "Reason"))
@@ -101,6 +103,28 @@ class ReviewPanel(QWidget):
         self.metric_diagnostics.setReadOnly(True)
         metric_layout.addWidget(self.metric_diagnostics, 1)
         self.tabs.addTab(self.metric_page, "Session metrics")
+        self.phase_page = QWidget()
+        phase_layout = QVBoxLayout(self.phase_page)
+        self.phase_label = QLabel()
+        self.phase_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.phase_label.setWordWrap(True)
+        phase_layout.addWidget(self.phase_label)
+        self.phase_table = QTableWidget(0, 7)
+        self.phase_table.setWordWrap(False)
+        self.phase_table.verticalHeader().hide()
+        self.phase_table.setHorizontalHeaderLabels(
+            ["Metric", "Value", "Unit", "Numerator", "Denominator", "Status", "Reason"]
+        )
+        self.phase_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.phase_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self.phase_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
+        phase_layout.addWidget(self.phase_table, 2)
+        self.phase_diagnostics = QPlainTextEdit()
+        self.phase_diagnostics.setReadOnly(True)
+        phase_layout.addWidget(self.phase_diagnostics, 1)
+        self.tabs.addTab(self.phase_page, "Phase metrics")
         self.choice_model = ChoiceTableModel(self)
         self.choices = QTableView()
         self.choices.setAccessibleName("Decoded choices")
@@ -127,6 +151,9 @@ class ReviewPanel(QWidget):
         self.source.clear()
         self.choice_model.set_events(())
         self.metric_table.setRowCount(0)
+        self.phase_table.setRowCount(0)
+        self.phase_label.setText("No imported phase results.")
+        self.phase_diagnostics.clear()
         self.metric_diagnostics.setPlainText("No calculated metrics available.")
         self.tabs.setTabText(self.tabs.indexOf(self.choices), "Decoded choices")
 
@@ -158,7 +185,9 @@ class ReviewPanel(QWidget):
             "Recorded-data diagnostics (not substitutes for withheld totals):",
             f"C present: {display(quality.c_present)}",
             f"Terminator observed: {display(quality.terminator_seen)}",
-            f"Observed records before terminator: {display(quality.observed_record_count)}",
+            f"Raw C entries: {display(quality.raw_c_entry_count)}",
+            f"Unused array slots (retained raw): {display(quality.unused_slot_count)}",
+            f"Choice records before terminator: {display(quality.observed_record_count)}",
             f"Valid decoded records: {display(quality.decoded_choice_count)}",
             f"Invalid records: {display(quality.invalid_record_count)}",
             f"Values after terminator: {display(quality.post_terminator_count)}",
@@ -170,6 +199,64 @@ class ReviewPanel(QWidget):
             "Saved-count comparisons are in Warnings and checks.",
         ]
         self.metric_diagnostics.setPlainText("\n".join(lines))
+
+    def show_phase_metrics(self, phase: PhaseSummary) -> None:
+        self.phase_label.setText(
+            f"Imported phase: {phase.config.phase or 'Unassigned'} · "
+            f"definition {phase.definition_version}\n"
+            "One fixed contingency per file; no omissions (owner-confirmed protocol)."
+        )
+        self.phase_table.setRowCount(len(phase.metrics))
+        for row, metric in enumerate(phase.metrics):
+            evidence = (
+                phase.strategies[row - 4]
+                if row >= 4
+                else phase.diagnostics.adjusted_regressive
+                if row == 3
+                else None
+            )
+            value = display(metric.value)
+            if isinstance(metric.value, float):
+                value = f"{metric.value:.4g}"
+            fields = (
+                PHASE_LABELS[metric.name],
+                value,
+                metric.unit,
+                display(evidence.numerator) if evidence else "—",
+                display(evidence.denominator) if evidence else "—",
+                "Withheld"
+                if "source_integrity" in phase.reason_codes[row]
+                else metric.status.replace("_", " ").capitalize(),
+                "\n".join(metric.reasons),
+            )
+            for column, text in enumerate(fields):
+                item = QTableWidgetItem(text)
+                item.setToolTip("\n".join((metric.name, *metric.reasons, *metric.warnings)))
+                self.phase_table.setItem(row, column, item)
+        self.phase_table.resizeRowsToContents()
+        d = phase.diagnostics
+        status = {
+            "available": "Available",
+            "partially_available": "Some metrics unavailable",
+            "unavailable": "Unavailable",
+            "withheld": "Withheld",
+            "phase_unassigned": "Phase not assigned",
+        }[phase.status]
+        self.phase_diagnostics.setPlainText(
+            "\n".join(
+                (
+                    f"Phase result: {status}",
+                    f"Recorded choices: {display(d.valid_choice_count)}",
+                    f"Criterion reached: {display(d.criterion_reached)}",
+                    f"Criterion choice (one-based): {display(d.criterion_choice_ordinal)}",
+                    f"Criterion C index (zero-based): {display(d.criterion_source_index)}",
+                    f"Postcriterion choices: {display(d.postcriterion_choice_count)}",
+                    f"Eligible pairs: {display(d.eligible_pair_count)}",
+                    "Omissions: 0 — protocol assertion, not measured from cues.",
+                    f"Configuration SHA-256: {phase.config.sha256}",
+                )
+            )
+        )
 
     def show_result(self, result: ImportResult) -> None:
         self.clear()
@@ -206,6 +293,8 @@ class ReviewPanel(QWidget):
             )
             if result.summary is not None:
                 self.show_metrics(result.summary)
+            if result.phase_summary is not None:
+                self.show_phase_metrics(result.phase_summary)
             messages += list(session.warnings) or ["No import warnings."]
             messages += ["", "Saved-count consistency checks (not scientific validation):"]
             states = {True: "Match", False: "Mismatch", None: "Unavailable"}

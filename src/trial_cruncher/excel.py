@@ -110,7 +110,7 @@ def _write_table(sheet: Worksheet, table: pd.DataFrame, overflow: list[tuple] | 
                 elif isinstance(value, float):
                     cell.number_format = (
                         '0.00"%"'
-                        if table.columns[column - 1] == "prl.percent_correct"
+                        if table.columns[column - 1].endswith("percent_correct")
                         else "0.###############"
                     )
     sheet.freeze_panes = "C2" if sheet.title in ("Quality", "Provenance") else "A2"
@@ -126,9 +126,9 @@ def _write_table(sheet: Worksheet, table: pd.DataFrame, overflow: list[tuple] | 
 
 
 def build_workbook(
-    sessions: pd.DataFrame, choices: pd.DataFrame, manifest: dict[str, Any]
+    sessions: pd.DataFrame, choices: pd.DataFrame, manifest: dict[str, Any], phases: pd.DataFrame
 ) -> Workbook:
-    """Prepare four sheets before reserving output; add Excel rules to the manifest."""
+    """Prepare five sheets before reserving output; add Excel rules to the manifest."""
     quality = []
     by_source = {row["source_file"]: row for row in sessions.to_dict("records")}
     for item in manifest["inputs"]:
@@ -156,14 +156,37 @@ def build_workbook(
                         "policy": session["metric_policy"],
                     }
                 )
+    for row in phases.to_dict("records"):
+        for metric in json.loads(row["metric_results_json"]):
+            quality.append(
+                {
+                    "record_type": "phase_metric",
+                    "source_file": row["source_file"],
+                    "input_status": "exported",
+                    "source_sha256": row["source_sha256"],
+                    "warnings_json": row["warnings_json"],
+                    "metric": metric["name"],
+                    "value": metric["value"],
+                    "unit": metric["unit"],
+                    "metric_status": metric["status"],
+                    "reasons_json": json_text(metric["reasons"]),
+                    "definition_version": metric["definition_version"],
+                    "policy": row["phase_policy"],
+                }
+            )
     quality_table = pd.DataFrame(
         [[row.get(column) for column in QUALITY_COLUMNS] for row in quality],
         columns=QUALITY_COLUMNS,
         dtype=object,
     )
-    tables = {"Sessions": sessions, "Choices": choices, "Quality": quality_table}
+    tables = {
+        "Sessions": sessions,
+        "Choices": choices,
+        "Phase metrics": phases,
+        "Quality": quality_table,
+    }
     manifest["format"] = "xlsx"
-    manifest["workbook_schema_version"] = "1"
+    manifest["workbook_schema_version"] = "2"
     manifest["workbook"] = "results.xlsx"
     manifest["sheets"] = [*tables, "Provenance"]
     manifest["tables"] = {

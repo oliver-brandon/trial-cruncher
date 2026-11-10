@@ -51,7 +51,7 @@ def test_excel_round_trip_all_tables_and_source_snapshot(write_export, tmp_path)
     before = path.read_bytes(), path.stat().st_mtime_ns
     destination = export_import_results({path: result}, [path], tmp_path, "xlsx")
     book = load_workbook(destination / "results.xlsx")
-    assert book.sheetnames == ["Sessions", "Choices", "Quality", "Provenance"]
+    assert book.sheetnames == ["Sessions", "Choices", "Phase metrics", "Quality", "Provenance"]
     expected = {
         "Sessions": build_session_table([session], {path: result.summary}),
         "Choices": build_choice_table([session]),
@@ -77,18 +77,20 @@ def test_excel_round_trip_all_tables_and_source_snapshot(write_export, tmp_path)
         assert book[name].auto_filter.ref == book[name].dimensions
         assert book[name]["A1"].font.bold
     quality = records(book["Quality"])
-    assert len(quality) == 7
+    assert len(quality) == 15
     assert quality[0]["input_status"] == "exported"
-    assert [row["metric"] for row in quality[1:]] == list(METRIC_LABELS)
+    assert [row["metric"] for row in quality if row["record_type"] == "metric"] == list(
+        METRIC_LABELS
+    )
     manifest = json.loads((destination / "manifest.json").read_text())
     embedded = "".join(
         row["text"] for row in records(book["Provenance"]) if row["kind"] == "manifest"
     )
     assert json.loads(embedded) == manifest
     assert manifest["tables"]["Choices"]["rows"] == 4
-    assert manifest["workbook_schema_version"] == "1"
-    assert manifest["schema_version"] == "2"
-    assert manifest["configuration"]["metric_eligibility_policy"] == "strict-withholding-v1"
+    assert manifest["workbook_schema_version"] == "2"
+    assert manifest["schema_version"] == "3"
+    assert manifest["configuration"]["metric_eligibility_policy"] == "strict-withholding-v2"
     assert all(
         cell.data_type not in ("f", "e") and cell.hyperlink is None
         for sheet in book

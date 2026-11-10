@@ -6,6 +6,7 @@ import platform
 import shutil
 import tempfile
 from collections.abc import Mapping, Sequence
+from dataclasses import asdict
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
@@ -13,7 +14,8 @@ from typing import Literal, Protocol
 
 import pandas as pd
 
-from trial_cruncher import __version__
+from trial_cruncher import __version__, phase_metrics
+from trial_cruncher.prl import CHOICE_STORAGE_POLICY, NORMALIZER_VERSION
 from trial_cruncher.prl_metrics import (
     DEFINITION_SET,
     DEFINITION_VERSION,
@@ -24,6 +26,7 @@ from trial_cruncher.processing import ImportResult
 from trial_cruncher.tables import (
     SCHEMA_VERSION,
     build_choice_table,
+    build_phase_table,
     build_session_table,
     json_text,
 )
@@ -85,6 +88,7 @@ def export_import_results(
     paths = tuple(sorted(set(selected_paths), key=str))
     sessions = []
     summaries = {}
+    phases = {}
     inputs = []
     for path in paths:
         result = results.get(path)
@@ -92,8 +96,33 @@ def export_import_results(
         if session is not None:
             if result.summary is None:
                 raise ValueError("Session metrics are missing; re-import before exporting.")
+            if (
+                session.metadata.get("normalizer_version") != NORMALIZER_VERSION
+                or result.summary.definition_set != DEFINITION_SET
+                or result.summary.definition_version != DEFINITION_VERSION
+                or result.summary.eligibility_policy != ELIGIBILITY_POLICY
+                or any(m.definition_version != DEFINITION_VERSION for m in result.summary.metrics)
+            ):
+                raise ValueError(
+                    "Session interpretation versions have changed; re-import before exporting."
+                )
             sessions.append(session)
             summaries[session.source_file] = result.summary
+            phase = result.phase_summary
+            if phase is None:
+                raise ValueError("Phase results are missing; re-import before exporting.")
+            if (
+                phase.definition_set != phase_metrics.DEFINITION_SET
+                or phase.definition_version != phase_metrics.DEFINITION_VERSION
+                or phase.eligibility_policy != phase_metrics.POLICY
+                or phase.config != phase_metrics.phase_config(phase.config.phase)
+                or phase.source_file != session.source_file
+                or phase.source_sha256 != session.metadata.get("raw_medpc", {}).get("source_sha256")
+                or tuple(m.name for m in phase.metrics) != tuple(phase_metrics.METRIC_LABELS)
+                or any(m.definition_version != phase.definition_version for m in phase.metrics)
+            ):
+                raise ValueError("Phase interpretation has changed; re-import before exporting.")
+            phases[session.source_file] = phase
         raw = result.raw if result else None
         inputs.append(
             {
@@ -112,7 +141,8 @@ def export_import_results(
         raise ValueError("Import at least one supported session before exporting.")
     tables = {
         "sessions.csv": build_session_table(sessions, summaries),
-        "choices.csv": build_choice_table(sessions),
+        "choices.csv": build_choice_table(sessions, phases),
+        "phase_metrics.csv": build_phase_table(sessions, phases, summaries),
     }
     manifest = {
         "schema_version": SCHEMA_VERSION,
@@ -125,7 +155,7 @@ def export_import_results(
         },
         "snapshot": "In-memory import results; sources were not re-read at export time.",
         "configuration": {
-            "row_levels": ["session", "choice"],
+            "row_levels": ["session", "choice", "phase"],
             "session_filter": "Successful imports, including sessions with warnings",
             "choice_filter": "All normalized choice events, including invalid decoded choices",
             "order": "Source path, then normalizer event order (Med-PC C index)",
@@ -140,8 +170,23 @@ def export_import_results(
             "metric_definition_set": DEFINITION_SET,
             "metric_definition_version": DEFINITION_VERSION,
             "metric_eligibility_policy": ELIGIBILITY_POLICY,
+            "choice_storage_policy": CHOICE_STORAGE_POLICY,
             "percent_correct_denominator": "Recorded choices; no configured target substitution",
-            "task_configuration": "No overrides; raw acquisition fields are in metadata_json",
+            "task_configuration": (
+                "User-assigned phase per source; raw acquisition fields in metadata_json"
+            ),
+            "phase_definition_set": phase_metrics.DEFINITION_SET,
+            "phase_definition_version": phase_metrics.DEFINITION_VERSION,
+            "phase_policy": phase_metrics.POLICY,
+            "phase_metrics": list(phase_metrics.METRIC_LABELS),
+            "phase_configurations": [
+                {
+                    "source_file": str(p),
+                    "configuration_sha256": phase.config.sha256,
+                    "configuration": asdict(phase.config),
+                }
+                for p, phase in phases.items()
+            ],
         },
         "serialization": {
             "encoding": "UTF-8",
@@ -162,7 +207,9 @@ def export_import_results(
     if export_format == "xlsx":
         from trial_cruncher.excel import build_workbook
 
-        workbook = build_workbook(tables["sessions.csv"], tables["choices.csv"], manifest)
+        workbook = build_workbook(
+            tables["sessions.csv"], tables["choices.csv"], manifest, tables["phase_metrics.csv"]
+        )
     manifest_text = json_text(manifest)
     destination = Path(tempfile.mkdtemp(prefix="trial-cruncher-export-", dir=parent.resolve()))
     try:

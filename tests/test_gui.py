@@ -14,6 +14,157 @@ from trial_cruncher.gui.window import MainWindow  # noqa: E402
 from trial_cruncher.processing import import_medpc_file  # noqa: E402
 
 
+@pytest.mark.parametrize("export_format", ["csv", "xlsx"])
+def test_phase_assignment_dialog_import_snapshot_and_full_export(
+    app, phase_input, monkeypatch, export_format
+):
+    import csv
+    import json
+
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    from trial_cruncher.gui.phases import PhaseDialog
+
+    first = phase_input(name="a/same.txt")
+    second = phase_input((1, 1, 1), name="b/same.txt")
+    root = first.parent.parent
+    window = MainWindow()
+    window.show()
+    try:
+        assert not window.phase_button.isEnabled()
+        window.add_paths([str(first), str(second)])
+        wait_for_discovery(app, window)
+
+        def edit(cancel=False):
+            dialog = app.activeModalWidget()
+            assert isinstance(dialog, PhaseDialog)
+            assert dialog.paths == (first, second)
+            assert dialog.table.item(0, 0).text() == str(first)
+            dialog.bulk_phase.setCurrentText("Acquisition")
+            dialog.apply_all.click()
+            dialog.pickers[1].setCurrentText("Reversal 2")
+            button = (
+                QDialogButtonBox.StandardButton.Cancel
+                if cancel
+                else QDialogButtonBox.StandardButton.Save
+            )
+            dialog.buttons.button(button).click()
+
+        QTimer.singleShot(0, lambda: edit(True))
+        window.phase_button.click()
+        assert window.phase_assignments == {}
+        QTimer.singleShot(0, edit)
+        window.phase_button.click()
+        assert window.phase_assignments == {first: "Acquisition", second: "Reversal 2"}
+        window.import_button.click()
+        assert not window.phase_button.isEnabled()
+        wait_until(app, lambda: window._import_worker is None)
+        choose_path(window, first)
+        assert "Acquisition" in window.review.phase_label.text()
+        assert window.review.phase_table.rowCount() == 8
+        assert window.review.phase_table.item(1, 1).text() == "3"
+        assert window.review.phase_table.item(4, 3).text() == "1"
+        assert window.review.phase_table.item(4, 4).text() == "4"
+        choose_path(window, second)
+        assert "Reversal 2" in window.review.phase_label.text()
+        assert "Postcriterion choices: 0" in window.review.phase_diagnostics.toPlainText()
+        assert window.review.phase_table.item(3, 1).text() == "Unavailable"
+
+        # Pending edits do not relabel already calculated results or their export.
+        def reassign():
+            d = app.activeModalWidget()
+            d.bulk_phase.setCurrentText("Changed next import")
+            d.apply_all.click()
+            d.accept()
+
+        QTimer.singleShot(0, reassign)
+        window.phase_button.click()
+        assert window.import_results[first].phase_summary.config.phase == "Acquisition"
+        window.overview.search.setText(str(first))
+        assert window.overview.proxy.rowCount() == 1
+        monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(root))
+        (window.excel_button if export_format == "xlsx" else window.export_button).click()
+        wait_until(app, lambda: window._export_worker is None)
+        (out,) = root.glob("trial-cruncher-export-*")
+        if export_format == "csv":
+            with (out / "phase_metrics.csv").open(newline="") as stream:
+                rows = list(csv.DictReader(stream))
+        else:
+            from openpyxl import load_workbook
+
+            book = load_workbook(out / "results.xlsx")
+            header, *body = book["Phase metrics"].values
+            rows = [dict(zip(header, r, strict=True)) for r in body]
+            book.close()
+        assert {r["source_file"]: r["phase"] for r in rows} == {
+            str(first): "Acquisition",
+            str(second): "Reversal 2",
+        }
+        manifest = json.loads((out / "manifest.json").read_text())
+        assert len(manifest["configuration"]["phase_configurations"]) == 2
+        window.import_button.click()
+        wait_until(app, lambda: window._import_worker is None)
+        assert all(
+            r.phase_summary.config.phase == "Changed next import"
+            for r in window.import_results.values()
+        )
+        window.clear_selection()
+        assert window.phase_assignments == {}
+        assert window.review.phase_table.rowCount() == 0
+    finally:
+        window.close()
+
+
+def test_phase_worker_snapshot_cancel_and_failed_reimport(app, phase_input, monkeypatch):
+    first = phase_input(name="a.txt")
+    second = phase_input(name="b.txt")
+    entered, release = ThreadEvent(), ThreadEvent()
+
+    def controlled(path, phase=None):
+        assert QThread.currentThread() != app.thread()
+        if path == first:
+            entered.set()
+            assert release.wait(5)
+        return import_medpc_file(path, phase)
+
+    monkeypatch.setattr(worker_module, "import_medpc_file", controlled)
+    window = MainWindow()
+    try:
+        window.add_paths([str(first), str(second)])
+        wait_for_discovery(app, window)
+        window.phase_assignments = {first: "Acquisition", second: "Reversal"}
+        window.import_button.click()
+        wait_until(app, entered.is_set)
+        window.assign_phases()  # Busy guard must not open a dialog.
+        window.phase_assignments[first] = "Future"
+        window.cancel_import()
+        release.set()
+        wait_until(app, lambda: window._import_worker is None)
+        assert window.import_results[first].phase_summary.config.phase == "Acquisition"
+        assert second not in window.import_results
+        monkeypatch.setattr(worker_module, "import_medpc_file", import_medpc_file)
+        first.write_text("malformed")
+        window.import_button.click()
+        wait_until(app, lambda: window._import_worker is None)
+        choose_path(window, first)
+        assert window.import_results[first].phase_summary is None
+        assert window.review.phase_table.rowCount() == 0
+        choose_path(window, second)
+        assert window.review.phase_table.rowCount() == 8
+        assert window.import_results[second].phase_summary.config.phase == "Reversal"
+        window.phase_assignments.clear()
+        window.import_button.click()
+        wait_until(app, lambda: window._import_worker is None)
+        choose_path(window, second)
+        assert window.review.metric_table.item(0, 1).text() == "10"
+        assert all(window.review.phase_table.item(i, 1).text() == "Unavailable" for i in range(8))
+    finally:
+        release.set()
+        wait_until(app, lambda: window._import_worker is None)
+        window.close()
+
+
 @pytest.fixture(scope="module")
 def app():
     return QApplication.instance() or QApplication([])
@@ -400,6 +551,8 @@ def test_session_metrics_display_withholding_zero_and_clear(app, write_export, m
     import csv
     import json
 
+    from trial_cruncher.prl_metrics import DEFINITION_VERSION
+
     path = write_export()
     mismatch = path.with_name("mismatch.txt")
     mismatch.write_text(path.read_text().replace("2.00 2.00 4.00", "2.00 2.00 5.00"))
@@ -410,6 +563,7 @@ def test_session_metrics_display_withholding_zero_and_clear(app, write_export, m
     bad = path.with_name("bad.txt")
     bad.write_text("Malformed synthetic input")
     window = MainWindow()
+    assert f"definition {DEFINITION_VERSION}" in window.review.metric_note.text()
     window.show()
     try:
         window.add_paths([str(path), str(mismatch), str(empty), str(bad)])

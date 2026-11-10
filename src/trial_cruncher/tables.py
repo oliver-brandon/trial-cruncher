@@ -11,9 +11,11 @@ import pandas as pd
 
 from trial_cruncher import __version__
 from trial_cruncher.models import Session
+from trial_cruncher.phase_metrics import METRIC_LABELS as PHASE_METRIC_LABELS
+from trial_cruncher.phase_metrics import STRATEGIES, PhaseSummary
 from trial_cruncher.prl_metrics import METRIC_LABELS, PRLSessionSummary
 
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "3"
 PROVENANCE_COLUMNS = (
     "schema_version",
     "application_version",
@@ -59,6 +61,46 @@ CHOICE_COLUMNS = PROVENANCE_COLUMNS + (
     "rewarded",
     "raw_values_json",
     "attributes_json",
+    "phase",
+    "phase_error_classification",
+    "phase_criterion_completed_here",
+)
+PHASE_COLUMNS = (
+    PROVENANCE_COLUMNS
+    + (
+        "phase",
+        "phase_status",
+        "phase_definition_set",
+        "phase_definition_version",
+        "phase_policy",
+        "configuration_sha256",
+        "configuration_json",
+        "omission_count",
+        "omission_count_basis",
+        "valid_choice_count",
+        "correct_choice_count",
+        "incorrect_choice_count",
+        "session_total_choices",
+        "criterion_reached",
+        "criterion_choice_ordinal",
+        "criterion_source_index",
+        "postcriterion_choice_count",
+        "eligible_pair_count",
+        "adjusted_regressive_numerator",
+        "adjusted_regressive_denominator",
+    )
+    + tuple(PHASE_METRIC_LABELS)
+    + tuple(
+        f"{name}_{suffix}"
+        for name in STRATEGIES
+        for suffix in ("numerator", "denominator", "undefined")
+    )
+    + (
+        "metric_results_json",
+        "metric_reason_codes_json",
+        "source_diagnostics_json",
+        "choice_storage_json",
+    )
 )
 
 
@@ -126,11 +168,14 @@ def build_session_table(
     return pd.DataFrame(rows, columns=SESSION_COLUMNS, dtype=object)
 
 
-def build_choice_table(sessions: Sequence[Session]) -> pd.DataFrame:
+def build_choice_table(
+    sessions: Sequence[Session], phases: Mapping[Path, PhaseSummary] | None = None
+) -> pd.DataFrame:
     rows = []
     for session in sessions:
         provenance = _provenance(session)
-        for event in session.events:
+        phase = phases.get(session.source_file) if phases is not None else None
+        for ordinal, event in enumerate(session.events):
             if event.name != "choice":
                 continue
             rows.append(
@@ -147,6 +192,67 @@ def build_choice_table(sessions: Sequence[Session]) -> pd.DataFrame:
                     "rewarded": event.attributes.get("rewarded"),
                     "raw_values_json": json_text(event.raw_values),
                     "attributes_json": json_text(event.attributes),
+                    "phase": phase.config.phase if phase else None,
+                    "phase_error_classification": phase.choice_error_classes[ordinal]
+                    if phase
+                    else None,
+                    "phase_criterion_completed_here": (
+                        ordinal + 1 == phase.diagnostics.criterion_choice_ordinal
+                        if phase and phase.choice_error_classes[ordinal] is not None
+                        else None
+                    ),
                 }
             )
     return pd.DataFrame(rows, columns=CHOICE_COLUMNS, dtype=object)
+
+
+def build_phase_table(
+    sessions: Sequence[Session],
+    phases: Mapping[Path, PhaseSummary],
+    summaries: Mapping[Path, PRLSessionSummary],
+) -> pd.DataFrame:
+    rows = []
+    for session in sessions:
+        phase = phases[session.source_file]
+        diagnostic = phase.diagnostics
+        row = {
+            **_provenance(session),
+            "phase": phase.config.phase,
+            "phase_status": phase.status,
+            "phase_definition_set": phase.definition_set,
+            "phase_definition_version": phase.definition_version,
+            "phase_policy": phase.eligibility_policy,
+            "configuration_sha256": phase.config.sha256,
+            "configuration_json": json_text(asdict(phase.config)),
+            "omission_count": 0,
+            "omission_count_basis": "owner-confirmed no-omission protocol",
+            **{
+                key: value
+                for key, value in asdict(diagnostic).items()
+                if key != "adjusted_regressive"
+            },
+            "session_total_choices": summaries[session.source_file].metrics[0].value,
+            "adjusted_regressive_numerator": diagnostic.adjusted_regressive.numerator,
+            "adjusted_regressive_denominator": diagnostic.adjusted_regressive.denominator,
+            **{metric.name: metric.value for metric in phase.metrics},
+            "metric_results_json": json_text(
+                [{**asdict(m), "status": m.status} for m in phase.metrics]
+            ),
+            "metric_reason_codes_json": json_text(
+                dict(zip(PHASE_METRIC_LABELS, phase.reason_codes, strict=True))
+            ),
+            "source_diagnostics_json": json_text(
+                asdict(summaries[session.source_file].diagnostics)
+            ),
+            "choice_storage_json": json_text(session.metadata["choice_storage"]),
+        }
+        for name, evidence in zip(STRATEGIES, phase.strategies, strict=True):
+            row.update(
+                {
+                    f"{name}_numerator": evidence.numerator,
+                    f"{name}_denominator": evidence.denominator,
+                    f"{name}_undefined": evidence.undefined,
+                }
+            )
+        rows.append(row)
+    return pd.DataFrame(rows, columns=PHASE_COLUMNS, dtype=object)

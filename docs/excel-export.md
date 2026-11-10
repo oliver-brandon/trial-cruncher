@@ -3,7 +3,7 @@
 After importing, click **Export Excel…** and choose a parent folder. A new uniquely
 named `trial-cruncher-export-*` folder contains `results.xlsx` and `manifest.json`.
 Export runs in the background, and the saved location appears above the overview.
-The workbook has four sheets, frozen headers, filters, and formatted numeric cells.
+The workbook has five sheets, frozen headers, filters, and formatted numeric cells.
 
 Export uses the full reviewed batch, including rows hidden by overview filters.
 Successful imports with warnings or withheld metrics are included. Failed and
@@ -14,13 +14,17 @@ errors retain imported results for retry. Cancelling the folder picker writes no
 ## Sheets and versions
 
 - **Sessions:** one row per successful session, with the same columns and values as
-  CSV schema 2: identifiers, duration, six PRL metrics, versions, checks, warnings,
+  CSV schema 3: identifiers, duration, six PRL metrics, versions, checks, warnings,
   metric statuses/reasons, diagnostics, and original source metadata/text.
 - **Choices:** all normalized choice records in source/index order, including invalid
   decoded choices. Source array index, line, exact raw value, time in seconds,
   outcomes, and provenance remain available. An empty sequence produces headers only.
-- **Quality:** one `input` row for every selected path, plus six `metric` rows for
-  each successful session. Input rows report `exported`, `failed`, or `not_imported`,
+- **Phase metrics:** one row per successful source, with assigned phase, eight
+  metrics, criterion evidence, ratio numerators/denominators, undefined flags,
+  per-metric reasons, configuration hashes, and source/unused-slot diagnostics.
+  Missing phase leaves new metrics unavailable while session summaries remain usable.
+- **Quality:** one `input` row for every selected path, plus six `metric` rows and eight
+  `phase_metric` rows for each successful session. Input rows report `exported`, `failed`, or `not_imported`,
   hash, error, and warnings. Metric rows add the existing value, unit, availability
   status, reasons, definition version, and eligibility policy. Withheld metrics retain
   their defined `unavailable` status and explicit withholding reasons. This sheet
@@ -29,8 +33,8 @@ errors retain imported results for retry. Cancelling the folder picker writes no
   that exceeds the workbook's per-cell storage budget. It uses the columns `kind`,
   `sheet`, `cell`, `part`, `parts`, and `text`.
 
-The workbook layout is version **1** (`workbook_schema_version`). Shared session and
-choice tables remain version **2** (`schema_version`). `manifest.json` records runtime
+The workbook layout is version **2** (`workbook_schema_version`), and the shared
+session/choice/phase table schema is version **3** (`schema_version`). `manifest.json` records runtime
 versions, metric definitions/policy, UTC export time, input outcomes, table columns
 and row counts, ordering, and Excel serialization rules. The same manifest is embedded
 in Provenance so the workbook can be interpreted independently of the companion file.
@@ -108,3 +112,18 @@ tested in this environment, and partial-session scientific validation remains op
 
 The string handling safeguards account for the library's documented
 [string length and inferred cell type behavior](https://openpyxl.readthedocs.io/en/stable/_modules/openpyxl/cell/cell.html).
+
+Normalizer/metric definition version 2 recognizes corroborated unused zero tails.
+Those slots remain in full raw session metadata (including Provenance chunks when
+needed) and carry explicit excluded indices/counts. Choices contains recorded events
+only; metric diagnostics distinguish raw entries and unused slots. The manifest
+records the storage policy. The initial unused-slot change retained workbook layout 1/table schema 2;
+phase metrics now extend them to workbook layout 2/table schema 3. See [unused-slot interpretation](prl-unused-slots.md).
+
+Phase assignments are saved for the next import, never inferred. Re-import to apply
+assignment edits; export uses the phase in the reviewed snapshot. Phase probabilities
+and adjusted regressive errors remain 0–1 values; percent correct remains 0–100.
+Blank values, zero numerators/denominators, and undefined flags preserve distinct
+meaning. Source strings and custom phase labels are literal text. Choices gains
+phase, error-classification, and criterion-completed annotations; see
+[CSV schema 3](csv-export.md) and [phase definitions](medpc-behavioral-metrics-spec.md).

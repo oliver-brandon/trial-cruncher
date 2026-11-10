@@ -1,4 +1,4 @@
-"""Normalize the two user-confirmed PRL Med-PC programs; no behavioral metrics."""
+"""Normalize the user-confirmed PRL Med-PC programs; no behavioral metrics."""
 
 import logging
 import math
@@ -11,8 +11,9 @@ from typing import Any
 from trial_cruncher.models import Event, Session
 
 logger = logging.getLogger(__name__)
-NORMALIZER_VERSION = "1"
-SUPPORTED_PROGRAMS = frozenset({"PRL_BO", "PRL_OPTO_CORSTIM"})
+NORMALIZER_VERSION = "2"
+CHOICE_STORAGE_POLICY = "validated-zero-tail-v1"
+SUPPORTED_PROGRAMS = frozenset({"PRL_BO", "PRL_OPTO", "PRL_OPTO_CORSTIM"})
 _OUTCOMES = {1: (True, True), 2: (True, False), 6: (False, True), 7: (False, False)}
 # Exact terminator in the supplied programs. Other negative values are not guessed.
 _TERMINATOR = Decimal("-987.987")
@@ -34,6 +35,45 @@ def _decode_choice(value: Decimal) -> tuple[Decimal, int] | None:
             return value - Decimal(code) / 100, code
     except DecimalException:
         return None
+
+
+def choice_storage_info(raw: Mapping[str, Any]) -> dict[str, Any]:
+    """Recognize only fully corroborated unused zero tails; never change raw values."""
+    arrays = raw.get("arrays", {})
+    choices = arrays.get("C")
+    unused: tuple[int, ...] = ()
+    if choices and raw.get("headers", {}).get("MSN") in SUPPORTED_PROGRAMS:
+        total = arrays.get("A", {}).get(2)
+        indices = sorted(choices)
+        if (
+            isinstance(total, Decimal)
+            and total.is_finite()
+            and total == total.to_integral_value()
+            and 0 <= total < len(choices)
+            and all(index == expected for expected, index in enumerate(indices))
+        ):
+            boundary = int(total)
+            prefix = [_decode_choice(choices[i]) for i in range(boundary)]
+            if all(item is not None for item in prefix) and all(
+                choices[i] == 0 for i in range(boundary, len(choices))
+            ):
+                counts = Counter(item[1] for item in prefix if item is not None)
+                expected = {
+                    "A": {0: counts[1] + counts[2], 1: counts[6] + counts[7], 2: boundary},
+                    "B": {i: counts[code] for i, code in enumerate((1, 2, 6, 7))},
+                }
+                if all(
+                    arrays.get(name, {}).get(i) == value
+                    for name, values in expected.items()
+                    for i, value in values.items()
+                ):
+                    unused = tuple(range(boundary, len(choices)))
+    return {
+        "policy": CHOICE_STORAGE_POLICY,
+        "raw_c_entry_count": len(choices) if choices is not None else None,
+        "unused_slot_count": len(unused) if choices is not None else None,
+        "unused_slot_indices": unused,
+    }
 
 
 class PRLNormalizer:
@@ -69,6 +109,8 @@ class PRLNormalizer:
         if subject is None:
             warn("Subject: identifier is missing; none was generated.")
 
+        storage = choice_storage_info(raw)
+        unused_indices = set(storage["unused_slot_indices"])
         choices = arrays.get("C")
         comparable = choices is not None
         if choices is None:
@@ -81,6 +123,8 @@ class PRLNormalizer:
         previous_time: Decimal | None = None
         terminated = False
         for index, value in sorted(choices.items()):
+            if index in unused_indices:
+                continue
             if terminated:
                 warn(f"C[{index}]: value after the terminator retained raw and not interpreted.")
                 comparable = False
@@ -164,6 +208,7 @@ class PRLNormalizer:
                     "latency_available": False,
                     "raw_only_fields": ("A[4]", "F", "J"),
                     "summary_checks": checks,
+                    "choice_storage": storage,
                     "raw_medpc": raw,
                 },
                 warnings=tuple(warnings),

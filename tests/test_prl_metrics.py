@@ -32,7 +32,7 @@ def imported(tmp_path):
     return load
 
 
-@pytest.mark.parametrize("program", ["PRL_BO", "PRL_OPTO_CORSTIM"])
+@pytest.mark.parametrize("program", ["PRL_BO", "PRL_OPTO", "PRL_OPTO_CORSTIM"])
 @pytest.mark.parametrize(
     "choices,summaries,expected",
     [
@@ -50,9 +50,9 @@ def test_hand_calculated_examples(imported, program, choices, summaries, expecte
     assert tuple(m.value for m in summary.metrics) == expected
     assert all(isinstance(m.value, int) for m in summary.metrics[:5])
     assert all(m.status == "available" and not m.reasons for m in summary.metrics)
-    assert all(m.definition_version == "1" for m in summary.metrics)
+    assert all(m.definition_version == "2" for m in summary.metrics)
     assert [m.unit for m in summary.metrics] == ["count"] * 5 + ["%"]
-    assert summary.eligibility_policy == "strict-withholding-v1"
+    assert summary.eligibility_policy == "strict-withholding-v2"
 
 
 @pytest.mark.parametrize("c", ["C:\n", "C:\n  0: -987.987\n"])
@@ -218,9 +218,11 @@ def test_failed_inputs_have_no_metric_results(tmp_path, text):
 
 def test_unsupported_normalizer_or_stale_events_fail_closed(imported):
     result = imported()
-    with pytest.raises(ValueError, match="confirmed version 1"):
+    with pytest.raises(ValueError, match="normalizer version 2"):
         calculate_prl_summary(
-            replace(result.session, metadata={**result.session.metadata, "normalizer_version": "2"})
+            replace(
+                result.session, metadata={**result.session.metadata, "normalizer_version": "999"}
+            )
         )
     with pytest.raises(ValueError, match="do not match"):
         calculate_prl_summary(replace(result.session, events=result.session.events[:-1]))

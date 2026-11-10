@@ -1,10 +1,10 @@
-# Session and choice CSV export (schema 2)
+# Session, choice, and phase CSV export (schema 3)
 
 ## GUI workflow
 
 Import files, review the results, then click **Export CSV…** and choose a parent
 folder. The application creates a fresh `trial-cruncher-export-<unique suffix>`
-subfolder containing `sessions.csv`, `choices.csv`, and `manifest.json`. The saved
+subfolder containing `sessions.csv`, `choices.csv`, `phase_metrics.csv`, and `manifest.json`. The saved
 folder path is displayed as selectable text above the overview. Export always
 includes **all successfully imported sessions in the list**, including those with
 warnings, regardless of which file is highlighted or hidden by overview filters. Sorting and
@@ -54,7 +54,7 @@ Additional `sessions.csv` columns:
 | `metadata_json` | Complete session metadata, including raw Med-PC headers, scalars, arrays, source text, line numbers, warnings, and versions |
 | `prl.choice_count`, `prl.correct_choice_count`, `prl.incorrect_choice_count` | Calculated recorded/correct/incorrect choice counts |
 | `prl.rewarded_choice_count`, `prl.unrewarded_choice_count`, `prl.percent_correct` | Calculated outcome counts and percent correct using recorded choices |
-| `metric_definition_set`, `metric_definition_version`, `metric_policy` | `prl-session-summary`, `1`, and `strict-withholding-v1` |
+| `metric_definition_set`, `metric_definition_version`, `metric_policy` | `prl-session-summary`, `2`, and `strict-withholding-v2` |
 | `metric_results_json` | All six results: stable name, definition version, numeric value or null, unit, availability status, reasons, and warnings |
 | `metric_diagnostics_json` | C presence, terminator observation, observed/decoded/invalid record counts, post-terminator entries, index gaps, and saved-count checks |
 
@@ -145,3 +145,49 @@ remain under ignored `outputs/`; research recordings are not committed as fixtur
 Excel export is also available with the same session/choice schema and a dedicated
 Quality sheet, literal text cells, and complete provenance chunks. See
 [Excel export](excel-export.md) for its distinct serialization rules.
+
+Normalizer and metric definition version 2 recognize fully corroborated unused trailing
+slots ([rule](prl-unused-slots.md)). Choices contain only recorded events; Sessions
+`metadata_json` retains every raw slot and its source line, plus `choice_storage` with
+the policy, raw count, excluded count, and excluded indices. `metric_diagnostics_json`
+reports raw entries and unused slots separately from choice counts. The manifest
+records `choice_storage_policy=validated-zero-tail-v1`. These storage additions were introduced with schema 2; schema 3 retains them
+and adds the phase table and choice annotations described below.
+
+## Phase results in schema 3
+
+Use **Assign phases…** before importing. Assignments are per source path and may use
+custom labels. An empty label is not inferred from filenames: all eight phase
+metrics are unavailable until assigned and re-imported. Session summaries retain
+their separate eligibility/status. Saving a pending phase edit never changes an
+already reviewed export snapshot.
+
+`phase_metrics.csv` has one row per successful source, even if phase is unassigned
+or metrics are withheld. It retains the shared source provenance columns, phase
+label/status, the eight `prl.phase.*` values, configuration JSON/SHA-256, definition
+set/version/policy, recorded/correct/incorrect choice counts, whole-session count,
+criterion reached and one-based choice ordinal/zero-based C index, postcriterion
+count, adjusted-error numerator/denominator, and all four strategy numerator,
+denominator, and undefined flags. `metric_results_json` and
+`metric_reason_codes_json` preserve per-value status/reasons; raw source diagnostics
+and unused-slot metadata are separate. `omission_count=0` is explicitly labeled as
+an owner-confirmed protocol assertion, not a measurement from cues.
+
+`choices.csv` gains `phase`, `phase_error_classification`, and
+`phase_criterion_completed_here`. Classification is `correct`, `perseverative`, or
+`regressive` only for eligible assigned phases; otherwise it is blank. The criterion
+flag is true only on the choice completing the first run of three correct choices,
+false on other eligible choices, and blank when classification is unavailable.
+Original C indices and raw observations are unchanged.
+
+The manifest adds the phase definition set/version, metric IDs, strict policy, and
+per-source configuration snapshots/hashes. Technical source identity is the existing
+pair `(source_file, source_sha256)`; biological IDs are never invented. The new
+phase set is version 1; session summaries remain definition version 2. Export rejects
+missing or stale phase results/configuration/provenance before creating files.
+
+Probability/adjusted proportion scales are 0–1; phase accuracy is 0–100 percent.
+Known zero denominators retain zero and an undefined flag, while withheld denominators
+stay blank with a missing flag. Neither becomes a fabricated zero probability.
+No trials-per-minute value or MAT duration fallback is produced. See the
+[phase specification](medpc-behavioral-metrics-spec.md) for formulas and examples.
