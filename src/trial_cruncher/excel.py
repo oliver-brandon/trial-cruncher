@@ -15,7 +15,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
-from trial_cruncher.tables import json_text
+from trial_cruncher.tables import WHOLE_SESSION_RATE_COLUMN, json_text
 
 MAX_ROWS = 1_048_576
 MAX_COLUMNS = 16_384
@@ -122,6 +122,8 @@ def _write_table(sheet: Worksheet, table: pd.DataFrame, overflow: list[tuple] | 
         cell.alignment = Alignment(wrap_text=True, vertical="center")
     for column, label in enumerate(table.columns, 1):
         width = 48 if label in ("source_file", "text", "error") or label.endswith("_json") else 24
+        if label == WHOLE_SESSION_RATE_COLUMN:
+            width = 38
         sheet.column_dimensions[get_column_letter(column)].width = width
 
 
@@ -186,7 +188,7 @@ def build_workbook(
         "Quality": quality_table,
     }
     manifest["format"] = "xlsx"
-    manifest["workbook_schema_version"] = "4"
+    manifest["workbook_schema_version"] = "5"
     manifest["workbook"] = "results.xlsx"
     manifest["sheets"] = [*tables, "Provenance"]
     manifest["tables"] = {

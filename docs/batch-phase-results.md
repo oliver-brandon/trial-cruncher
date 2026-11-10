@@ -121,5 +121,6 @@ layout resets the status filter. Click-through opens Session metrics for the rat
 other layouts continue to open phase details. **All metrics** also includes the
 session rate/count/duration/status columns, while its status filter remains phase-based.
 The label includes Med-PC and the whole-session scope to avoid suggesting a new
-phase rate or the deferred MAT definition. Exported rate values are in Sessions;
+phase rate or the deferred MAT definition. Exported rate values are in Sessions and are copied into Phase metrics with
+explicit whole-session labels;
 see [rate definition](medpc-trials-per-minute.md).

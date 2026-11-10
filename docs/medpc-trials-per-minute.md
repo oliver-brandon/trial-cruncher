@@ -68,10 +68,14 @@ own availability status. These are session values, not an independently computed
 phase rate, and remain usable when a phase label is unassigned.
 
 CSV/Excel Sessions tables include the new metric alongside duration_s and recorded
-choice count, with versioned unit/status/reasons. The rate is not added to the eight
-phase metrics or duplicated as a phase-specific metric in phase_metrics.csv.
+choice count, with versioned unit/status/reasons. The rate is also copied into Phase metrics under
+`whole_session_medpc_trials_per_minute`, with its own duration, scope, unit,
+status/reasons, and complete original metric result. It remains a whole-session
+metric, separate from the eight phase metrics.
 The manifest records its whole-session formula, duration source, and unit.
-Table schema advances to 5 and workbook layout to 4. Existing saved projects with
+The rate was introduced in table schema 5/workbook layout 4. The explicit whole-session
+copy in Phase metrics advances the export layout to table schema 6/workbook layout 5
+without changing scientific definition versions. Existing saved projects with
 the exact prior session-3/phase-2 setup (or the supported earlier percentage setup)
 retain paths/phases/hashes, receive an explicit upgrade notice, and require re-import;
 Save explicitly persists the updated configuration. Other configuration mismatches
@@ -94,3 +98,10 @@ invalid duration isolation, numeric sorting without phase assignments, and expor
 precision/provenance. Ruff lint/format, dependency, documentation-link, and diff checks
 passed. GUI inspection was offscreen; native Excel rendering was not tested. These
 are software and local arithmetic checks, not general scientific validation.
+
+The subsequent Phase metrics export-copy change passed **333 tests** and Ruff checks.
+Both formats were checked against all seven supplied recordings: the copied rate,
+duration, choice count, unit, scope, status/reasons, and original result metadata
+matched Sessions. The eight phase metrics and single session-rate Quality entry
+remained separate. Original recording hashes/mtimes were unchanged. Artifacts are
+under ignored `outputs/phase-rate-copy-validation-*/`; this adds no new calculation.

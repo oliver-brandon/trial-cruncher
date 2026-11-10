@@ -45,9 +45,9 @@ def test_accuracy_proportions_in_both_export_tables(phase_input, tmp_path, codes
     if format == "xlsx":
         book.close()
     manifest = json.loads((out / "manifest.json").read_text())
-    assert manifest["schema_version"] == "5"
+    assert manifest["schema_version"] == "6"
     if format == "xlsx":
-        assert manifest["workbook_schema_version"] == "4"
+        assert manifest["workbook_schema_version"] == "5"
     assert manifest["configuration"]["metric_definition_version"] == "4"
     assert manifest["configuration"]["phase_definition_version"] == "2"
     assert manifest["configuration"]["metrics"][5]["unit"] == "proportion"

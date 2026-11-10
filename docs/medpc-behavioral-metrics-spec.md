@@ -206,7 +206,7 @@ missing, never "correct" or "no error". Excluded storage remains fully preserved
 raw metadata. No input mutation, overwrite, formula interpretation, long-text loss,
 or export filtering is allowed. Both export formats use the same reviewed snapshot.
 
-Export table/bundle schema is version 5; Excel workbook layout is version 4, adding
+Export table/bundle schema is version 6; Excel workbook layout is version 5, adding
 Phase metrics and phase/error annotations on Choices. Do not stamp new manifest
 definitions onto old computed results. Definition IDs and any
 configuration affecting semantics must be recorded so results can be reproduced.
@@ -349,3 +349,9 @@ The upper **Phase results** tab now provides a read-only batch comparison of the
 same imported metrics and denominators, with focused error/win-stay/lose-shift layouts
 and independent phase/status filters. It introduces no new scientific definition or
 export version. See [batch phase results](batch-phase-results.md).
+
+The Phase metrics exports also carry an explicitly labeled copy of the whole-session
+Med-PC rate, its duration, unit, independent status/reasons, and result metadata.
+This is a presentation convenience, not a ninth phase calculation. The existing
+`session_total_choices` supplies the full-session count. Phase status and phase
+metric JSON remain separate from the session-rate status; see [CSV fields](csv-export.md).

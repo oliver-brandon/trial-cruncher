@@ -123,7 +123,7 @@ scope and serialization rules. Per-session metadata retains reader/normalizer ve
 raw acquisition fields, and time units/origin. Schema 2 adds the six calculated
 session columns and their status/reasons/diagnostics; the manifest records metric
 definition IDs/versions and the strict withholding policy. Excel workbook layout
-version 4 uses schema 5 tables, including Phase metrics, Quality, and
+version 5 uses schema 6 tables, including Phase metrics, Quality, and
 Provenance sheets. Phase configurations and definitions are recorded independently
 of the existing session definitions. `excel.py` stores literal text, chunks long metadata, checks
 worksheet/XML limits, and exclusively creates `results.xlsx`; the shared export
@@ -187,4 +187,7 @@ The session definition set is now version 4, adding `prl.medpc_trials_per_minute
 from validated choice count and positive S. Rate-specific timing failures do not
 suppress existing count/phase calculations. The batch phase projection also exposes
 session-rate columns/layout without recomputing or treating them as phase metrics.
-The rate is exported in Sessions, with scope/formula provenance in the manifest.
+The rate is exported in Sessions and copied into Phase metrics under an explicit
+whole-session column, with scope/formula and copy-column mapping in the manifest.
+The table builder copies the stored MetricResult without invoking calculations;
+phase metric JSON and Quality phase rows remain the original eight phase metrics.

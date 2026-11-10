@@ -13,9 +13,10 @@ from trial_cruncher import __version__
 from trial_cruncher.models import Session
 from trial_cruncher.phase_metrics import METRIC_LABELS as PHASE_METRIC_LABELS
 from trial_cruncher.phase_metrics import STRATEGIES, PhaseSummary
-from trial_cruncher.prl_metrics import METRIC_LABELS, PRLSessionSummary
+from trial_cruncher.prl_metrics import MEDPC_RATE, METRIC_LABELS, PRLSessionSummary
 
-SCHEMA_VERSION = "5"
+SCHEMA_VERSION = "6"
+WHOLE_SESSION_RATE_COLUMN = "whole_session_medpc_trials_per_minute"
 PROVENANCE_COLUMNS = (
     "schema_version",
     "application_version",
@@ -90,6 +91,15 @@ PHASE_COLUMNS = (
         "adjusted_regressive_denominator",
     )
     + tuple(PHASE_METRIC_LABELS)
+    + (
+        WHOLE_SESSION_RATE_COLUMN,
+        "whole_session_duration_s",
+        "whole_session_rate_scope",
+        "whole_session_rate_unit",
+        "whole_session_rate_status",
+        "whole_session_rate_reasons_json",
+        "whole_session_rate_result_json",
+    )
     + tuple(
         f"{name}_{suffix}"
         for name in STRATEGIES
@@ -214,6 +224,11 @@ def build_phase_table(
     rows = []
     for session in sessions:
         phase = phases[session.source_file]
+        rate = next(
+            (m for m in summaries[session.source_file].metrics if m.name == MEDPC_RATE), None
+        )
+        if rate is None:
+            raise ValueError("Med-PC session rate is missing; re-import before exporting.")
         diagnostic = phase.diagnostics
         row = {
             **_provenance(session),
@@ -235,6 +250,13 @@ def build_phase_table(
             "adjusted_regressive_numerator": diagnostic.adjusted_regressive.numerator,
             "adjusted_regressive_denominator": diagnostic.adjusted_regressive.denominator,
             **{metric.name: metric.value for metric in phase.metrics},
+            WHOLE_SESSION_RATE_COLUMN: rate.value,
+            "whole_session_duration_s": session.duration_s,
+            "whole_session_rate_scope": "whole session",
+            "whole_session_rate_unit": rate.unit,
+            "whole_session_rate_status": rate.status,
+            "whole_session_rate_reasons_json": json_text(rate.reasons),
+            "whole_session_rate_result_json": json_text({**asdict(rate), "status": rate.status}),
             "metric_results_json": json_text(
                 [{**asdict(m), "status": m.status} for m in phase.metrics]
             ),

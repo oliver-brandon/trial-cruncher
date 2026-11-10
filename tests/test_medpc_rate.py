@@ -126,11 +126,13 @@ def test_rate_export_precision_provenance_and_manifest(phase_input, tmp_path, fo
         book.close()
     assert float(row[MEDPC_RATE]) == pytest.approx(1 / 6, rel=1e-14)
     assert float(row["duration_s"]) == 3600 and int(row["prl.choice_count"]) == 10
-    assert MEDPC_RATE not in phase  # No separate phase rate is invented.
+    assert MEDPC_RATE not in phase  # Explicit whole-session alias, not a phase metric.
+    assert float(phase["whole_session_medpc_trials_per_minute"]) == pytest.approx(1 / 6)
+    assert phase["whole_session_rate_scope"] == "whole session"
     detail = next(m for m in json.loads(row["metric_results_json"]) if m["name"] == MEDPC_RATE)
     assert detail["unit"] == "choices/min" and detail["status"] == "available"
     manifest = json.loads((dest / "manifest.json").read_text())
-    assert manifest["schema_version"] == "5"
+    assert manifest["schema_version"] == "6"
     assert manifest["configuration"]["medpc_trials_per_minute"]["scope"] == "whole session"
     assert "S" in manifest["configuration"]["medpc_trials_per_minute"]["duration_source"]
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before

@@ -27,6 +27,7 @@ from trial_cruncher.processing import ImportResult
 from trial_cruncher.source_tracking import require_current_sources
 from trial_cruncher.tables import (
     SCHEMA_VERSION,
+    WHOLE_SESSION_RATE_COLUMN,
     build_choice_table,
     build_phase_table,
     build_session_table,
@@ -188,6 +189,15 @@ def export_import_results(
                 "duration_source": "S (task-relative seconds)",
                 "unit": "choices/min",
                 "saved_A3": "raw only; not substituted",
+                "phase_table_copy": {
+                    "value_column": WHOLE_SESSION_RATE_COLUMN,
+                    "count_column": "session_total_choices",
+                    "duration_column": "whole_session_duration_s",
+                    "scope_column": "whole_session_rate_scope",
+                    "status_column": "whole_session_rate_status",
+                    "result_column": "whole_session_rate_result_json",
+                    "meaning": "Same whole-session result copied for convenience; not a phase rate",
+                },
             },
             "proportion_correct_denominator": "Recorded choices; no configured target substitution",
             "task_configuration": (

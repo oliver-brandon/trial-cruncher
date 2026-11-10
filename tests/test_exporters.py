@@ -65,7 +65,7 @@ def test_export_round_trip_provenance_missing_and_raw_fields(write_export, tmp_p
         METRIC_LABELS
     )
     assert manifest["configuration"]["metric_eligibility_policy"] == "strict-withholding-v2"
-    assert manifest["schema_version"] == row["schema_version"] == "5"
+    assert manifest["schema_version"] == row["schema_version"] == "6"
     assert row["metric_definition_version"] == "4"
     assert row["metric_policy"] == "strict-withholding-v2"
     assert all(row[name] == "" for name in METRIC_LABELS)

@@ -87,8 +87,8 @@ def test_excel_round_trip_all_tables_and_source_snapshot(write_export, tmp_path)
     )
     assert json.loads(embedded) == manifest
     assert manifest["tables"]["Choices"]["rows"] == 4
-    assert manifest["workbook_schema_version"] == "4"
-    assert manifest["schema_version"] == "5"
+    assert manifest["workbook_schema_version"] == "5"
+    assert manifest["schema_version"] == "6"
     assert manifest["configuration"]["metric_eligibility_policy"] == "strict-withholding-v2"
     assert all(
         cell.data_type not in ("f", "e") and cell.hyperlink is None

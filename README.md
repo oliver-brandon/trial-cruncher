@@ -134,7 +134,10 @@ warnings, then choose a parent folder. A new uniquely named folder holds `sessio
 `choices.csv`, `phase_metrics.csv`, and `manifest.json`; the saved location appears above the overview.
 Existing files are never overwritten. Failed/unimported files are recorded in the
 manifest. Blank fields mean missing observations, while zero and false stay explicit.
-Session CSV includes the seven calculated metrics and their versioned status/reasons;
+Phase metrics exports also include **whole_session_medpc_trials_per_minute** with
+its whole-session duration, count, unit, and independent availability reasons, so
+behavioral metrics can be reviewed together. Session CSV includes the seven
+calculated metrics and their versioned status/reasons;
 withheld values stay blank. Exports verify the reviewed snapshot against current source
 hashes; changed or unavailable sources require re-import. See
 [CSV schemas, provenance, and limitations](docs/csv-export.md).

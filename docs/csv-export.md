@@ -1,4 +1,4 @@
-# Session, choice, and phase CSV export (schema 5)
+# Session, choice, and phase CSV export (schema 6)
 
 ## GUI workflow
 
@@ -191,7 +191,8 @@ Probability/adjusted proportion scales are 0–1; phase accuracy is also a 0–1
 Known zero denominators retain zero and an undefined flag, while withheld denominators
 stay blank with a missing flag. Neither becomes a fabricated zero probability.
 The phase table does not invent a phase-specific rate. The whole-session Med-PC
-rate is in Sessions, and the separate MAT rate remains deferred. See the
+rate is in Sessions and is copied into Phase metrics with explicit whole-session
+labels. The separate MAT rate remains deferred. See the
 [phase specification](medpc-behavioral-metrics-spec.md) for formulas and examples.
 
 Schema 4 replaces percentage columns with `prl.proportion_correct` and
@@ -208,3 +209,27 @@ because it was rounded or not finalized. Definition set version 4 and the manife
 record the formula, whole-session scope, source, unit, availability, and reasons.
 Invalid duration or a choice beyond S makes the rate blank without withholding
 otherwise eligible choice/phase metrics. See [rate definition](medpc-trials-per-minute.md).
+
+## Whole-session rate alongside phase metrics (schema 6)
+
+`phase_metrics.csv` now includes the same reviewed session rate for convenience:
+
+| Column | Meaning |
+|---|---|
+| `whole_session_medpc_trials_per_minute` | Exact value copied from Sessions `prl.medpc_trials_per_minute`; not a recalculated phase rate |
+| `whole_session_duration_s` | The session's recorded S duration in seconds |
+| `session_total_choices` | Existing full-session validated choice count, also the rate numerator before multiplying by 60 |
+| `whole_session_rate_scope` | Explicit text `whole session` |
+| `whole_session_rate_unit` | `choices/min` |
+| `whole_session_rate_status` | Independent session-rate availability status |
+| `whole_session_rate_reasons_json` | Session-rate unavailability reasons, with missing values preserved |
+| `whole_session_rate_result_json` | Original metric ID, definition version, value, unit, warnings, status, and reasons |
+
+The numeric rate sits immediately after the eight phase metric value columns.
+`metric_results_json`, `phase_status`, and phase-definition fields still describe
+only the phase metrics; the copied rate has its own scope/status. An unassigned phase
+can therefore have available session-rate data. Missing/withheld rate values stay
+blank; a genuine zero remains numeric zero. Both copies use the same stored result,
+not a calculation during export. The manifest describes this column mapping.
+Session/phase scientific definitions and saved-project configurations are unchanged;
+only the export layout advances. Create a new export to obtain the additional columns.

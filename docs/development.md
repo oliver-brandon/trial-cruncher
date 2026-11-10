@@ -166,3 +166,10 @@ zero versus unavailable rates, missing/nonpositive/unrepresentable durations,
 out-of-duration choices, strict count withholding, full export precision/provenance,
 project updates, and rate sorting/filtering without phase assignments. Use the
 **Session rate** batch layout and Session metrics tab for manual inspection.
+
+`tests/test_phase_rate_export.py` checks that Phase metrics copies the exact session
+rate/duration/count and preserves scope, unit, status, reasons, and result metadata
+in both formats. Coverage includes unassigned phases, zero choices, invalid duration,
+strict withholding, and warning-only results. Phase metric JSON remains eight metrics,
+and Quality does not duplicate the rate as a phase metric. No recalculation occurs
+in the export path. Export table/workbook versions are 6/5; scientific versions stay 4/2.
