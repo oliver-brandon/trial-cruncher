@@ -80,6 +80,13 @@ Animal summaries, pooling and pairing use definition version 1. One saved projec
 
 ## Using the analysis
 
+The cohort dropdown uses the **Cohort** field in **Session metadata…**. Older projects
+can have phase assignments and blank cohort fields. If the list is empty, choose
+**Open session metadata…**, enter a cohort per file, or select **Cohort** and
+**Apply field to all files** for a single-cohort batch. Save the assignments and
+use **Save project** to keep them. After reopening a project, use **Import Med-PC**
+to rebuild its phase results before previewing an analysis.
+
 1. Import files with their phase assignments. Use **Session metadata…** to set cohort, treatment, and Include for the intended recording in each animal × condition × phase cell. Use Exclude and its reason to resolve a retest. Use **Save project as…** when another analysis needs a different recording selection.
 2. Open **Animal analysis…**. Choose one cohort and the design, then check the exact condition and phase labels. **Apply and preview** calculates from the full reviewed batch in a background worker. The standard acquisition and reversal labels appear in that order. Custom labels retain their exact text.
 3. Inspect **Pooled metrics** for the ratio of sums, **Condition comparison** for individual observations, **Animal metrics** for source values and evidence, and **Analysis audit** for the disposition of every file. Resolve ambiguous cells through metadata and reopen the analysis to refresh the preview.

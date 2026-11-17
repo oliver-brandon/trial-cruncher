@@ -78,3 +78,62 @@ def test_configure_preview_save_load_export_disable(phase_input, tmp_path, monke
         assert w.analysis_plan is None
     finally:
         w.close()
+
+
+def test_legacy_project_empty_cohort_opens_metadata_editor(phase_input, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QPushButton
+
+    from trial_cruncher.gui.metadata import MetadataDialog
+    from trial_cruncher.projects import save_project
+
+    app = QApplication.instance() or QApplication([])
+    path = phase_input()
+    target = tmp_path / "legacy.tcproj.json"
+    save_project(target, [path], {path: "Reversal"}, {}, extensions=[".txt"], recursive=False)
+    data = json.loads(target.read_text())
+    data["schema_version"] = "1"
+    del data["sources"][0]["analysis_metadata"]
+    target.write_text(json.dumps(data))
+    before = target.read_bytes()
+    w = MainWindow()
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a, **kw: (str(target), ""))
+    try:
+        w.open_project()
+        deadline = time.monotonic() + 5
+        while w._project_worker is not None and time.monotonic() < deadline:
+            app.processEvents()
+            time.sleep(0.005)
+        assert w.selected_files == {path}
+        checks = []
+
+        def edit_metadata():
+            editor = app.activeModalWidget()
+            if isinstance(editor, MetadataDialog):
+                editor.editors[0].cohort.setText("Cohort 01")
+                editor.editors[0].condition.setText("Control")
+                editor.accept()
+
+        def open_editor():
+            dialog = app.activeModalWidget()
+            checks.append((dialog.cohort.count(), dialog.cohort.placeholderText()))
+            QTimer.singleShot(0, edit_metadata)
+            next(
+                b for b in dialog.findChildren(QPushButton) if b.text() == "Open session metadata…"
+            ).click()
+
+        QTimer.singleShot(0, open_editor)
+        w.configure_analysis()
+        assert checks == [(0, "Assign a cohort in Session metadata…")]
+        assert w.metadata_assignments[path].cohort == "Cohort 01"
+
+        def inspect():
+            dialog = app.activeModalWidget()
+            checks.append(dialog.cohort.currentText())
+            dialog.reject()
+
+        QTimer.singleShot(0, inspect)
+        w.configure_analysis()
+        assert checks[-1] == "Cohort 01"
+        assert w.analysis_plan is None and target.read_bytes() == before
+    finally:
+        w.close()

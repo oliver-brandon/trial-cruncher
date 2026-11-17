@@ -45,6 +45,8 @@ def _checked(widget):
 
 
 class PlanDialog(QDialog):
+    EDIT_METADATA = 2
+
     def __init__(self, cohorts, conditions, phases, plan, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Animal analysis")
@@ -52,6 +54,8 @@ class PlanDialog(QDialog):
         layout = QFormLayout(self)
         self.cohort = QComboBox()
         self.cohort.addItems(sorted(cohorts | ({plan.cohort} if plan else set())))
+        if not self.cohort.count():
+            self.cohort.setPlaceholderText("Assign a cohort in Session metadata…")
         self.design = QComboBox()
         self.design.addItems(["between-subjects", "within-subjects"])
         self.design.setPlaceholderText("Choose comparison design")
@@ -81,6 +85,18 @@ class PlanDialog(QDialog):
             ("Phases", self.phases),
         ):
             layout.addRow(label, control)
+        if not cohorts or not conditions:
+            missing = " and ".join(
+                label
+                for label, values in (("cohort", cohorts), ("condition", conditions))
+                if not values
+            )
+            layout.addRow(QLabel(f"Assign a {missing} to the recordings in Session metadata."))
+            edit = QPushButton("Open session metadata…")
+            edit.clicked.connect(lambda: self.done(self.EDIT_METADATA))
+            layout.addRow(edit)
+        if not phases:
+            layout.addRow(QLabel("Use Assign phases… and Import Med-PC to load phase results."))
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
         buttons.addButton("Apply and preview", QDialogButtonBox.ButtonRole.AcceptRole)
         clear = buttons.addButton("Disable analysis", QDialogButtonBox.ButtonRole.ResetRole)

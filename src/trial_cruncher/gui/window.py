@@ -561,7 +561,11 @@ class MainWindow(QMainWindow):
             self.analysis_plan,
             self,
         )
-        if dialog.exec() != QDialog.DialogCode.Accepted:
+        action = dialog.exec()
+        if action == PlanDialog.EDIT_METADATA:
+            self.assign_metadata()
+            return
+        if action != QDialog.DialogCode.Accepted:
             return
         if self.analysis_plan != dialog.plan:
             self.analysis_plan = dialog.plan
