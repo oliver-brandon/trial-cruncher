@@ -55,7 +55,7 @@ These flags describe the investigator's intended analysis set. This milestone st
 calculates per-file metrics for every readable supported recording so excluded data
 can be inspected. Include never overrides strict withholding, source freshness, or
 missing-data rules. Exclude never deletes raw data or fabricates unavailable/zero
-measurements. No group summaries or statistical selection calculations are added.
+measurements. The optional animal analysis uses Included recordings for its descriptive summaries.
 
 **All successful recordings remain in exports, including Excluded and Not reviewed.**
 Failed/unimported paths remain in the manifest with their metadata and reasons. A
@@ -131,3 +131,5 @@ Final checks: **359 tests passed**, along with Ruff lint/format, dependency,
 documentation-link, and diff whitespace checks. The metadata editor and read-only
 detail view were visually inspected offscreen. Native dialogs and native Microsoft
 Excel rendering were not verified in this environment.
+
+An optional [animal analysis plan](aggregation-pairing-spec.md) adds analysis-audit, individual-animal, condition-comparison, and pooled-metric tables to CSV and Excel exports. Save the plan, Included recording selections, and phase assignments together in project format 3.

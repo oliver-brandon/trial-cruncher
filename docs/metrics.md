@@ -30,8 +30,13 @@ recorded choices divided by S. The independently defined MAT rate remains deferr
 the Med-PC rate is not a silent fallback for it.
 
 Other future metric families include response/retrieval latencies, trials to criterion,
-progressive-ratio breakpoint, and subject/group aggregation. Each needs its own
+and progressive-ratio breakpoint. Each needs its own
 paradigm-specific definition and reviewed source observations before implementation.
+
+[Animal aggregation and pairing](aggregation-pairing-spec.md) implements the confirmed
+single-recording selection and pooling rules. It uses globally unique Subject IDs,
+one cohort per analysis, metric-specific valid animal counts, and the individual
+values for condition and phase comparisons.
 
 ## Required metric specification template
 

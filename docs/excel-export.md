@@ -160,3 +160,5 @@ date or session ID. Text labels/reasons remain literal, and long reasons use the
 existing provenance overflow mechanism. Every successful recording is retained
 regardless of inclusion; no metrics are rewritten or suppressed by the manual flag.
 See [manual metadata](analysis-metadata.md).
+
+An optional [animal analysis plan](aggregation-pairing-spec.md) adds analysis-audit, individual-animal, condition-comparison, and pooled-metric tables to CSV and Excel exports. Save the plan, Included recording selections, and phase assignments together in project format 3.

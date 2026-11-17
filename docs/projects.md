@@ -173,3 +173,5 @@ its paths, phases, and hashes and adds unassigned metadata, with an explicit uns
 upgrade notice. Loading does not write the file; Save persists format 2. Imported
 results are still rebuilt on load. Inclusion never bypasses source freshness or
 strict withholding. See [manual metadata](analysis-metadata.md).
+
+An optional [animal analysis plan](aggregation-pairing-spec.md) adds analysis-audit, individual-animal, condition-comparison, and pooled-metric tables to CSV and Excel exports. Save the plan, Included recording selections, and phase assignments together in project format 3.

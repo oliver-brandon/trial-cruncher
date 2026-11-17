@@ -244,3 +244,5 @@ The manifest includes the same assignments for failed/unimported inputs. Display
 filters do not select the exported analysis set. An inclusion flag is independent
 of metric validity; no calculations or raw headers are changed. See
 [the complete metadata contract](analysis-metadata.md).
+
+An optional [animal analysis plan](aggregation-pairing-spec.md) adds analysis-audit, individual-animal, condition-comparison, and pooled-metric tables to CSV and Excel exports. Save the plan, Included recording selections, and phase assignments together in project format 3.

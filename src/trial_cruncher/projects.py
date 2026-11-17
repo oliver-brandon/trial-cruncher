@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from trial_cruncher import __version__, phase_metrics, prl_metrics
+from trial_cruncher.aggregation import AnalysisPlan
 from trial_cruncher.analysis_metadata import AnalysisMetadata, analysis_metadata_from_dict
 from trial_cruncher.discovery import normalize_extensions
 from trial_cruncher.prl import CHOICE_STORAGE_POLICY, NORMALIZER_VERSION
@@ -59,6 +60,7 @@ class Project:
     recursive: bool
     configuration_updated: bool = False
     configuration_update_message: str | None = None
+    analysis_plan: AnalysisPlan | None = None
 
 
 @dataclass(frozen=True)
@@ -100,10 +102,15 @@ def _parse(payload: bytes, project_path: Path) -> Project:
             "analysis_configuration",
             "discovery",
             "sources",
-        },
+        }
+        | (
+            {"analysis_plan"}
+            if isinstance(obj, dict) and obj.get("schema_version") == "3"
+            else set()
+        ),
         "project",
     )
-    if obj["format"] != PROJECT_FORMAT or obj["schema_version"] not in ("1", PROJECT_VERSION):
+    if obj["format"] != PROJECT_FORMAT or obj["schema_version"] not in ("1", PROJECT_VERSION, "3"):
         raise ValueError("Unsupported project format or version.")
     current_configuration = analysis_configuration()
     percentage_configuration = {
@@ -157,7 +164,7 @@ def _parse(payload: bytes, project_path: Path) -> Project:
     sources, seen = [], set()
     for item in obj["sources"]:
         keys = {"path", "phase", "sha256"}
-        if obj["schema_version"] == PROJECT_VERSION:
+        if obj["schema_version"] in (PROJECT_VERSION, "3"):
             keys.add("analysis_metadata")
         _keys(item, keys, "source")
         annotation = (
@@ -183,7 +190,12 @@ def _parse(payload: bytes, project_path: Path) -> Project:
             raise ValueError("Source SHA-256 must be 64 lowercase hex digits or null.")
         sources.append(ProjectSource(path, phase, digest, annotation))
     return Project(
-        tuple(sources), extensions, discovery["recursive"], configuration_updated, update_message
+        tuple(sources),
+        extensions,
+        discovery["recursive"],
+        configuration_updated,
+        update_message,
+        AnalysisPlan.restore(obj["analysis_plan"]) if obj["schema_version"] == "3" else None,
     )
 
 
@@ -216,6 +228,7 @@ def save_project(
     recursive: bool,
     expected_project_sha256: str | None = None,
     analysis_metadata: Mapping[Path, AnalysisMetadata] | None = None,
+    analysis_plan: AnalysisPlan | None = None,
 ) -> ProjectResult:
     """Save setup only. Existing baselines never advance merely because of a save.
 
@@ -261,7 +274,8 @@ def save_project(
         json.dumps(
             {
                 "format": PROJECT_FORMAT,
-                "schema_version": PROJECT_VERSION,
+                "schema_version": "3" if analysis_plan else PROJECT_VERSION,
+                **({"analysis_plan": analysis_plan.record()} if analysis_plan else {}),
                 "application_version": __version__,
                 "saved_at_utc": datetime.now(UTC).isoformat(),
                 "analysis_configuration": analysis_configuration(),

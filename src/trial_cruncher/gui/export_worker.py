@@ -5,6 +5,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot
 
+from trial_cruncher.aggregation import AnalysisPlan
 from trial_cruncher.analysis_metadata import AnalysisMetadata
 from trial_cruncher.exporters import ExportFormat, export_import_results
 from trial_cruncher.processing import ImportResult
@@ -27,12 +28,14 @@ class ExportWorker(QRunnable):
         parent: Path,
         export_format: ExportFormat = "csv",
         metadata: dict[Path, AnalysisMetadata] | None = None,
+        analysis_plan: AnalysisPlan | None = None,
     ) -> None:
         super().__init__()
         self.results = dict(results)
         self.paths = paths
         self.parent = parent
         self.export_format = export_format
+        self.analysis_plan = analysis_plan
         self.metadata = dict(metadata or {})
         self.signals = ExportSignals()
 
@@ -40,11 +43,16 @@ class ExportWorker(QRunnable):
     def run(self) -> None:
         try:
             args = (self.results, self.paths, self.parent, self.export_format)
-            destination = (
-                export_import_results(*args, assignments=self.metadata)
-                if self.metadata
-                else export_import_results(*args)
-            )
+            if self.analysis_plan:
+                destination = export_import_results(
+                    *args, assignments=self.metadata, analysis_plan=self.analysis_plan
+                )
+            else:
+                destination = (
+                    export_import_results(*args, assignments=self.metadata)
+                    if self.metadata
+                    else export_import_results(*args)
+                )
         except Exception as exc:
             if isinstance(exc, SourcesChangedError):
                 self.signals.sources_changed.emit(exc.checks)

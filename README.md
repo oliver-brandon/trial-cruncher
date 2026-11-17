@@ -161,6 +161,15 @@ and withheld metrics retain reasons. Long text is preserved in numbered provenan
 chunks. Both export buttons include the full batch regardless of overview filters.
 See [Excel export and safeguards](docs/excel-export.md).
 
+## Pool animals and compare conditions
+
+Assign a cohort, condition, phase, and **Include** to the intended recording for each
+animal × condition × phase. Open **Animal analysis…**, choose within- or between-subjects,
+and select the cohort, conditions, and phases. **Apply and preview** shows the pooled
+evidence, individual animal values, side-by-side comparisons, and a source audit.
+With a plan enabled, both export buttons include those four tables. Save the project
+to retain the analysis. See [aggregation and pairing](docs/aggregation-pairing-spec.md).
+
 ## Save and reopen an analysis
 
 Use **Save project** to store the selected paths, phase assignments, analysis
@@ -212,8 +221,7 @@ docs/                      Architecture, metric standards, development
 .github/workflows/ci.yml    Python 3.12/3.14 lint and test jobs
 ```
 
-Additional metric analysis and aggregate tables are documented next-stage components,
-not empty executable stages. See [architecture](docs/architecture.md) and
+Animal aggregation and condition pairing are available through **Animal analysis…**. See [architecture](docs/architecture.md) and
 [metric conventions](docs/metrics.md).
 
 ## Project status and next milestones
@@ -223,7 +231,7 @@ not empty executable stages. See [architecture](docs/architecture.md) and
    trailing slots preserved raw under a versioned exclusion rule. See
    [partial-session validation](docs/partial-session-validation.md).
 2. Review the seven implemented PRL summaries against additional independent examples.
-3. Define further metrics and subject/group aggregation before implementing them.
+3. Validate animal-level comparisons on a representative experiment with reviewed treatment assignments.
 4. Add broader task configuration and, separately, MAT-derived trials per minute.
 
 No software license has been selected. No author identity is declared.

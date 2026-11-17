@@ -15,6 +15,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
+from trial_cruncher.aggregation import SHEETS
 from trial_cruncher.analysis_metadata import ANNOTATION_COLUMNS, analysis_metadata_from_dict
 from trial_cruncher.tables import WHOLE_SESSION_RATE_COLUMN, json_text
 
@@ -129,7 +130,11 @@ def _write_table(sheet: Worksheet, table: pd.DataFrame, overflow: list[tuple] | 
 
 
 def build_workbook(
-    sessions: pd.DataFrame, choices: pd.DataFrame, manifest: dict[str, Any], phases: pd.DataFrame
+    sessions: pd.DataFrame,
+    choices: pd.DataFrame,
+    manifest: dict[str, Any],
+    phases: pd.DataFrame,
+    derived: dict[str, pd.DataFrame] | None = None,
 ) -> Workbook:
     """Prepare five sheets before reserving output; add Excel rules to the manifest."""
     quality = []
@@ -190,6 +195,7 @@ def build_workbook(
         "Phase metrics": phases,
         "Quality": quality_table,
     }
+    tables.update({SHEETS[name]: table for name, table in (derived or {}).items()})
     manifest["format"] = "xlsx"
     manifest["workbook_schema_version"] = "6"
     manifest["workbook"] = "results.xlsx"

@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from trial_cruncher.aggregation import AnalysisPlan
 from trial_cruncher.analysis_metadata import AnalysisMetadata
 from trial_cruncher.discovery import (
     DEFAULT_EXTENSIONS,
@@ -32,6 +33,7 @@ from trial_cruncher.discovery import (
     normalize_extensions,
 )
 from trial_cruncher.exporters import ExportFormat
+from trial_cruncher.gui.animal_analysis import AnalysisReview, AnalysisWorker, PlanDialog
 from trial_cruncher.gui.export_worker import ExportWorker
 from trial_cruncher.gui.import_worker import ImportWorker
 from trial_cruncher.gui.metadata import MetadataDialog
@@ -83,6 +85,8 @@ class MainWindow(QMainWindow):
         self.selected_files: set[Path] = set()
         self.phase_assignments: dict[Path, str] = {}
         self.metadata_assignments: dict[Path, AnalysisMetadata] = {}
+        self.analysis_plan: AnalysisPlan | None = None
+        self._analysis_worker: AnalysisWorker | None = None
         self._worker: DiscoveryWorker | None = None
         self._import_worker: ImportWorker | None = None
         self._export_worker: ExportWorker | None = None
@@ -119,6 +123,9 @@ class MainWindow(QMainWindow):
             self.check_sources_button,
         ):
             project_bar.addWidget(button)
+        self.analysis_button = QPushButton("Animal analysis…")
+        self.analysis_button.clicked.connect(self.configure_analysis)
+        project_bar.addWidget(self.analysis_button)
         project_bar.addStretch()
         layout.addLayout(project_bar)
         self.project_label = QLabel("Project: unsaved")
@@ -464,6 +471,7 @@ class MainWindow(QMainWindow):
                 self._import_worker,
                 self._export_worker,
                 self._project_worker,
+                self._analysis_worker,
             )
         )
 
@@ -496,6 +504,7 @@ class MainWindow(QMainWindow):
             Path(parent),
             export_format,
             self.metadata_assignments,
+            self.analysis_plan,
         )
         self._export_worker.signals.finished.connect(self._export_finished)
         self._export_worker.signals.failed.connect(self._export_failed)
@@ -536,6 +545,62 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, f"{self._export_label} export failed", message)
         self._finish_close()
 
+    @Slot()
+    def configure_analysis(self):
+        if self._closing or self._is_working():
+            return
+        labels = self.metadata_assignments.values()
+        dialog = PlanDialog(
+            {a.cohort for a in labels if a.cohort},
+            {a.condition for a in labels if a.condition},
+            {
+                r.phase_summary.config.phase
+                for r in self.import_results.values()
+                if r.phase_summary and r.phase_summary.config.phase
+            },
+            self.analysis_plan,
+            self,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        if self.analysis_plan != dialog.plan:
+            self.analysis_plan = dialog.plan
+            self._mark_project_dirty()
+        if self.analysis_plan is None:
+            return
+        worker = AnalysisWorker(
+            self.analysis_plan, self.import_results, self.selected_files, self.metadata_assignments
+        )
+        self._analysis_worker = worker
+        worker.signals.finished.connect(self._analysis_finished)
+        worker.signals.failed.connect(self._analysis_failed)
+        worker.signals.changed.connect(self._apply_source_checks)
+        self._set_busy(True)
+        self.statusBar().showMessage("Building animal analysis…")
+        self._pool.start(worker)
+
+    @Slot(object)
+    def _analysis_finished(self, tables):
+        self._analysis_worker = None
+        self._set_busy(False)
+        self.statusBar().showMessage(
+            "Animal analysis ready. CSV and Excel exports include the analysis tables."
+        )
+        if not self._closing:
+            review = AnalysisReview(self.analysis_plan, tables, self)
+            review.exec()
+            review.deleteLater()
+        self._finish_close()
+
+    @Slot(str)
+    def _analysis_failed(self, message):
+        self._analysis_worker = None
+        self._set_busy(False)
+        self.statusBar().showMessage("Animal analysis unavailable")
+        if not self._closing:
+            QMessageBox.warning(self, "Animal analysis", message)
+        self._finish_close()
+
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._is_working():
             self._closing = True
@@ -562,6 +627,7 @@ class MainWindow(QMainWindow):
         ):
             widget.setEnabled(not busy and not self._closing)
         self.import_button.setEnabled(not busy and not self._closing and bool(self.selected_files))
+        self.analysis_button.setEnabled(self.import_button.isEnabled())
         self.phase_button.setEnabled(self.import_button.isEnabled())
         self.metadata_button.setEnabled(self.import_button.isEnabled())
         self.check_sources_button.setEnabled(self.import_button.isEnabled())
@@ -580,6 +646,7 @@ class MainWindow(QMainWindow):
     def clear_selection(self) -> None:
         if self._closing or self._is_working():
             return
+        self.analysis_plan = None
         self.selected_files.clear()
         self.phase_assignments.clear()
         self.metadata_assignments.clear()
@@ -600,7 +667,12 @@ class MainWindow(QMainWindow):
         name = str(self._project_path) if self._project_path else "unsaved"
         dirty = " · unsaved changes" if self._project_dirty else ""
         issues = f" · {len(self._source_issues)} source issue(s)" if self._source_issues else ""
-        self.project_label.setText(f"Project: {name}{dirty}{issues}")
+        analysis = (
+            f" · Animal analysis: {self.analysis_plan.cohort} ({self.analysis_plan.design})"
+            if self.analysis_plan
+            else ""
+        )
+        self.project_label.setText(f"Project: {name}{dirty}{issues}{analysis}")
 
     def _mark_project_dirty(self) -> None:
         self._project_dirty = True
@@ -692,6 +764,7 @@ class MainWindow(QMainWindow):
                 recursive=self.recursive.isChecked(),
                 expected_project_sha256=expected,
                 metadata=self.metadata_assignments,
+                analysis_plan=self.analysis_plan,
             )
         )
 
@@ -719,6 +792,7 @@ class MainWindow(QMainWindow):
         else:
             project = result.project
             if mode == "load":
+                self.analysis_plan = project.analysis_plan
                 self.selected_files = {s.path for s in project.sources}
                 self.phase_assignments = {s.path: s.phase for s in project.sources if s.phase}
                 self.metadata_assignments = {

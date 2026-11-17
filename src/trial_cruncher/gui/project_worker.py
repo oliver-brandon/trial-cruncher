@@ -6,6 +6,7 @@ from typing import Literal
 
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot
 
+from trial_cruncher.aggregation import AnalysisPlan
 from trial_cruncher.analysis_metadata import AnalysisMetadata
 from trial_cruncher.projects import load_project, save_project
 from trial_cruncher.source_tracking import check_sources
@@ -31,10 +32,12 @@ class ProjectWorker(QRunnable):
         recursive: bool = False,
         expected_project_sha256: str | None = None,
         metadata: dict[Path, AnalysisMetadata] | None = None,
+        analysis_plan: AnalysisPlan | None = None,
     ) -> None:
         super().__init__()
         self.mode, self.path, self.paths = mode, path, paths
         self.phases, self.hashes = dict(phases or {}), dict(hashes or {})
+        self.analysis_plan = analysis_plan
         self.metadata = dict(metadata or {})
         self.extensions, self.recursive = extensions, recursive
         self.expected_project_sha256 = expected_project_sha256
@@ -55,6 +58,7 @@ class ProjectWorker(QRunnable):
                     recursive=self.recursive,
                     expected_project_sha256=self.expected_project_sha256,
                     analysis_metadata=self.metadata,
+                    analysis_plan=self.analysis_plan,
                 )
             else:
                 result = check_sources(self.hashes)

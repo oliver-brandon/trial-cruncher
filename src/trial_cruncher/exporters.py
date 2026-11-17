@@ -15,8 +15,9 @@ from typing import Literal, Protocol
 import pandas as pd
 
 from trial_cruncher import __version__, phase_metrics
+from trial_cruncher.aggregation import AnalysisPlan, build_analysis
 from trial_cruncher.analysis_metadata import AnalysisMetadata
-from trial_cruncher.prl import CHOICE_STORAGE_POLICY, NORMALIZER_VERSION
+from trial_cruncher.prl import CHOICE_STORAGE_POLICY
 from trial_cruncher.prl_metrics import (
     DEFINITION_SET,
     DEFINITION_VERSION,
@@ -24,7 +25,7 @@ from trial_cruncher.prl_metrics import (
     METRIC_LABELS,
     METRIC_UNITS,
 )
-from trial_cruncher.processing import ImportResult
+from trial_cruncher.processing import ImportResult, validate_reviewed_result
 from trial_cruncher.source_tracking import require_current_sources
 from trial_cruncher.tables import (
     SCHEMA_VERSION,
@@ -83,6 +84,7 @@ def export_import_results(
     export_format: ExportFormat = "csv",
     *,
     assignments: Mapping[Path, AnalysisMetadata] | None = None,
+    analysis_plan: AnalysisPlan | None = None,
 ) -> Path:
     """Export the reviewed snapshot into a fresh folder; record excluded inputs.
 
@@ -110,36 +112,11 @@ def export_import_results(
             )
         session = result.session if result and not result.error else None
         if session is not None:
-            if result.summary is None:
-                raise ValueError("Session metrics are missing; re-import before exporting.")
-            if (
-                session.metadata.get("normalizer_version") != NORMALIZER_VERSION
-                or result.summary.definition_set != DEFINITION_SET
-                or result.summary.definition_version != DEFINITION_VERSION
-                or result.summary.eligibility_policy != ELIGIBILITY_POLICY
-                or tuple(m.name for m in result.summary.metrics) != tuple(METRIC_LABELS)
-                or any(m.definition_version != DEFINITION_VERSION for m in result.summary.metrics)
-            ):
-                raise ValueError(
-                    "Session interpretation versions have changed; re-import before exporting."
-                )
+            validate_reviewed_result(result)
             sessions.append(session)
             annotations[session.source_file] = annotation
             summaries[session.source_file] = result.summary
             phase = result.phase_summary
-            if phase is None:
-                raise ValueError("Phase results are missing; re-import before exporting.")
-            if (
-                phase.definition_set != phase_metrics.DEFINITION_SET
-                or phase.definition_version != phase_metrics.DEFINITION_VERSION
-                or phase.eligibility_policy != phase_metrics.POLICY
-                or phase.config != phase_metrics.phase_config(phase.config.phase)
-                or phase.source_file != session.source_file
-                or phase.source_sha256 != session.metadata.get("raw_medpc", {}).get("source_sha256")
-                or tuple(m.name for m in phase.metrics) != tuple(phase_metrics.METRIC_LABELS)
-                or any(m.definition_version != phase.definition_version for m in phase.metrics)
-            ):
-                raise ValueError("Phase interpretation has changed; re-import before exporting.")
             phases[session.source_file] = phase
         raw = result.raw if result else None
         inputs.append(
@@ -166,12 +143,15 @@ def export_import_results(
         for path in paths
         if results.get(path) and results[path].raw is not None
     }
-    require_current_sources(expected_hashes)
+    if analysis_plan is None:
+        require_current_sources(expected_hashes)
     tables = {
         "sessions.csv": build_session_table(sessions, summaries, annotations),
         "choices.csv": build_choice_table(sessions, phases, annotations),
         "phase_metrics.csv": build_phase_table(sessions, phases, summaries, annotations),
     }
+    derived = build_analysis(analysis_plan, results, paths, assignments) if analysis_plan else {}
+    tables.update(derived)
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "application_version": __version__,
@@ -253,13 +233,29 @@ def export_import_results(
             for name, table in tables.items()
         },
         "inputs": inputs,
+        **(
+            {
+                "aggregation": {
+                    **analysis_plan.record(),
+                    "plan_sha256": analysis_plan.sha256,
+                    "analysis_table_version": "1",
+                    "tables": list(derived),
+                }
+            }
+            if analysis_plan
+            else {}
+        ),
     }
     workbook = None
     if export_format == "xlsx":
         from trial_cruncher.excel import build_workbook
 
         workbook = build_workbook(
-            tables["sessions.csv"], tables["choices.csv"], manifest, tables["phase_metrics.csv"]
+            tables["sessions.csv"],
+            tables["choices.csv"],
+            manifest,
+            tables["phase_metrics.csv"],
+            derived,
         )
     manifest_text = json_text(manifest)
     destination = Path(tempfile.mkdtemp(prefix="trial-cruncher-export-", dir=parent.resolve()))
