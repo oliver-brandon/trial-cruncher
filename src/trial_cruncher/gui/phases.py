@@ -1,22 +1,22 @@
 """Explicit per-file phase assignment before an import snapshot is taken."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
+
+from trial_cruncher.gui.assignment_table import SELECTION_HINT, AssignmentTable
 
 
 def phase_picker(value: str = "") -> QComboBox:
@@ -41,17 +41,18 @@ class PhaseDialog(QDialog):
             "Assign one phase per file. Type a custom label if needed. Blank phases leave "
             "phase metrics unavailable. Save, then Import Med-PC to apply these assignments."
         )
+        note.setText(f"{note.text()} {SELECTION_HINT}")
         note.setWordWrap(True)
         layout.addWidget(note)
+        self.table = AssignmentTable(len(paths), 2)
         bulk = QHBoxLayout()
         self.bulk_phase = phase_picker()
         self.apply_all = QPushButton("Apply to all files")
         bulk.addWidget(self.bulk_phase)
+        bulk.addWidget(self.table.apply_selected)
         bulk.addWidget(self.apply_all)
         layout.addLayout(bulk)
-        self.table = QTableWidget(len(paths), 2)
         self.table.setHorizontalHeaderLabels(["Source file (full path)", "Phase"])
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setColumnWidth(0, 650)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.pickers = []
@@ -69,12 +70,19 @@ class PhaseDialog(QDialog):
         )
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
+        self.table.apply_selected.clicked.connect(self._apply_selected)
         self.apply_all.clicked.connect(self._apply_all)
         layout.addWidget(self.buttons)
 
+    def _apply_selected(self) -> None:
+        self._apply_rows(self.table.selected_rows())
+
     def _apply_all(self) -> None:
-        for picker in self.pickers:
-            picker.setCurrentText(self.bulk_phase.currentText())
+        self._apply_rows(range(len(self.paths)))
+
+    def _apply_rows(self, rows: Iterable[int]) -> None:
+        for row in rows:
+            self.pickers[row].setCurrentText(self.bulk_phase.currentText())
 
     def assignments(self) -> dict[Path, str]:
         return {

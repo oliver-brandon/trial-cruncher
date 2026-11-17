@@ -96,8 +96,10 @@ changing calculations. Excluded recordings remain in exports with their flags.
 See [manual analysis metadata](docs/analysis-metadata.md).
 
 Click **Assign phases…** to label each file as Acquisition, Reversal, or a custom
-phase (for example, Reversal 2). Full paths distinguish duplicate filenames; **Apply
-to all files** supports bulk assignment. Save, then click **Import Med-PC** to read
+phase (for example, Reversal 2). In either assignment editor, click names in the **Source file** column.
+Shift-click selects a range. Ctrl-click (Command-click on macOS) toggles individual files.
+Choose the phase or metadata value, then click **Apply to selected**. The button shows
+the number of selected files. **Apply to all files** is also available. Save, then click **Import Med-PC** to read
 the full batch with those assignments. Blank phases leave phase metrics unavailable.
 Each file has one fixed contingency under the confirmed no-omission protocol.
 Pending phase edits apply only on re-import; exports use the reviewed snapshot. The overview shows one row per file

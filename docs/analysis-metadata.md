@@ -24,8 +24,9 @@ or inheritance across files from the same subject are invented. For example, two
 different animals can both have session order 1. Session order does not replace the
 original session ID or C-array indices and does not reorder source observations.
 
-The bulk control applies one chosen field to **all files in the editor**, preserving
-other fields. Inclusion and reason are applied together. Session order is entered
+Select file names with Shift-click for a range or Ctrl-click (Command-click on macOS)
+for individual rows. **Apply to selected** updates the chosen field on those rows.
+**Apply field to all files** updates that field across the editor. Inclusion and reason are applied together. Session order is entered
 per file; no automatic numbering is performed. An invalid exclusion remains in the
 editor until a reason is supplied or the edit is cancelled. Cancel preserves all
 prior assignments; Save validates every row before applying anything.

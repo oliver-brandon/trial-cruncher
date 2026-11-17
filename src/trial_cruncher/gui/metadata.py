@@ -1,13 +1,12 @@
 """Manual per-file annotations; never infer treatment or study inclusion."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -18,13 +17,13 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QSpinBox,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from trial_cruncher.analysis_metadata import AnalysisMetadata
+from trial_cruncher.gui.assignment_table import SELECTION_HINT, AssignmentTable
 
 
 def inclusion_picker(included: bool | None = None) -> QComboBox:
@@ -72,8 +71,10 @@ class MetadataDialog(QDialog):
             "Excluded and Not reviewed recordings remain in exports with their flags. "
             "Nothing is inferred from Med-PC Group or other headers."
         )
+        note.setText(f"{note.text()} {SELECTION_HINT}")
         note.setWordWrap(True)
         layout.addWidget(note)
+        self.table = AssignmentTable(len(paths), 6)
         bulk = QHBoxLayout()
         self.bulk_field = QComboBox()
         self.bulk_field.addItems(["Condition / treatment", "Cohort", "Inclusion and reason"])
@@ -88,11 +89,11 @@ class MetadataDialog(QDialog):
             self.bulk_text,
             self.bulk_inclusion,
             self.bulk_reason,
+            self.table.apply_selected,
             self.apply_all,
         ):
             bulk.addWidget(widget)
         layout.addLayout(bulk)
-        self.table = QTableWidget(len(paths), 6)
         self.table.setHorizontalHeaderLabels(
             [
                 "Source file (full path)",
@@ -103,7 +104,6 @@ class MetadataDialog(QDialog):
                 "Reason",
             ]
         )
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setTextElideMode(Qt.TextElideMode.ElideMiddle)
         for col, width in enumerate((400, 170, 135, 105, 135, 250)):
             self.table.setColumnWidth(col, width)
@@ -137,6 +137,7 @@ class MetadataDialog(QDialog):
         self.buttons.rejected.connect(self.reject)
         layout.addWidget(self.buttons)
         self.bulk_field.currentIndexChanged.connect(self._bulk_mode)
+        self.table.apply_selected.clicked.connect(self._apply_selected)
         self.apply_all.clicked.connect(self._apply_all)
         self._bulk_mode()
 
@@ -146,8 +147,15 @@ class MetadataDialog(QDialog):
         self.bulk_inclusion.setVisible(inclusion)
         self.bulk_reason.setVisible(inclusion)
 
+    def _apply_selected(self) -> None:
+        self._apply_rows(self.table.selected_rows())
+
     def _apply_all(self) -> None:
-        for editors in self.editors:
+        self._apply_rows(range(len(self.paths)))
+
+    def _apply_rows(self, rows: Iterable[int]) -> None:
+        for row in rows:
+            editors = self.editors[row]
             if self.bulk_field.currentIndex() == 0:
                 editors.condition.setText(self.bulk_text.text())
             elif self.bulk_field.currentIndex() == 1:
