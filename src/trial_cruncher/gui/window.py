@@ -8,6 +8,7 @@ from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal, 
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QFileDialog,
     QHBoxLayout,
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QSplitter,
     QTabWidget,
     QVBoxLayout,
@@ -103,15 +105,19 @@ class MainWindow(QMainWindow):
 
         container = QWidget()
         layout = QVBoxLayout(container)
-        layout.addWidget(QLabel("From raw trials to analysis-ready data."))
-        description = QLabel(
-            "Add Med-PC session files or a folder, then import to review session details, "
-            "metrics, decoded choices, and warnings. "
-            "Supports PRL_BO, PRL_OPTO, and PRL_OPTO_CORSTIM."
-        )
-        description.setWordWrap(True)
-        layout.addWidget(description)
-        project_bar = QHBoxLayout()
+        self.workflow = QTabWidget()
+        self.workflow.setAccessibleName("Workflow controls")
+        self.workflow.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+        layout.addWidget(self.workflow)
+        self.import_page, import_bar = self._action_page("Import")
+        self.review_page, review_bar = self._action_page("Review")
+        self.export_page, export_bar = self._action_page("Export")
+        self.project_page, project_bar = self._action_page("Project")
+        self.view_mode = QComboBox()
+        self.view_mode.addItems(["Split view", "Batch only", "Detail only"])
+        self.view_mode.setAccessibleName("Data pane layout")
+        self.view_mode.setToolTip("Choose which data panes use the workspace")
+        self.workflow.setCornerWidget(self.view_mode)
         self.open_project_button = QPushButton("Open project…")
         self.save_project_button = QPushButton("Save project")
         self.save_project_as_button = QPushButton("Save project as…")
@@ -125,14 +131,14 @@ class MainWindow(QMainWindow):
             project_bar.addWidget(button)
         self.analysis_button = QPushButton("Animal analysis…")
         self.analysis_button.clicked.connect(self.configure_analysis)
-        project_bar.addWidget(self.analysis_button)
-        project_bar.addStretch()
-        layout.addLayout(project_bar)
+        review_bar.addWidget(self.analysis_button)
         self.project_label = QLabel("Project: unsaved")
         self.project_label.setTextFormat(Qt.TextFormat.PlainText)
         self.project_label.setWordWrap(True)
-        layout.addWidget(self.project_label)
-        options = QHBoxLayout()
+        project_bar.addWidget(self.project_label, 1)
+        self.import_options = QWidget()
+        options = QHBoxLayout(self.import_options)
+        options.setContentsMargins(0, 0, 0, 0)
         label = QLabel("File extensions (comma-separated):")
         self.extensions = QLineEdit(", ".join(DEFAULT_EXTENSIONS))
         label.setBuddy(self.extensions)
@@ -141,9 +147,18 @@ class MainWindow(QMainWindow):
         self.recursive = QCheckBox("Include subfolders")
         self.recursive.setChecked(True)
         options.addWidget(self.recursive)
-        layout.addLayout(options)
+        self.options_button = QPushButton("File options…")
+        self.options_button.setCheckable(True)
+        self.options_button.toggled.connect(self.import_options.setVisible)
+        self.import_options.hide()
+        layout.addWidget(self.import_options)
+        self.workflow.currentChanged.connect(
+            lambda _: self.import_options.setVisible(
+                self.workflow.currentWidget() is self.import_page
+                and self.options_button.isChecked()
+            )
+        )
 
-        buttons = QHBoxLayout()
         self.add_files_button = QPushButton("Add files…")
         self.add_folder_button = QPushButton("Add folder…")
         self.clear_button = QPushButton("Clear selection")
@@ -172,46 +187,67 @@ class MainWindow(QMainWindow):
         for button in (
             self.add_files_button,
             self.add_folder_button,
-            self.clear_button,
+            self.options_button,
             self.phase_button,
             self.metadata_button,
             self.import_button,
-            self.cancel_button,
-            self.export_button,
-            self.excel_button,
         ):
-            buttons.addWidget(button)
-        buttons.addStretch()
-        layout.addLayout(buttons)
-        self.export_status = QLabel(
-            "Exports retain all successful files with inclusion flags, including Excluded, "
-            "Not reviewed, and rows hidden by filters."
+            import_bar.addWidget(button)
+        import_bar.addStretch()
+        options.addWidget(self.clear_button)
+        self.return_to_import = QPushButton("Edit files and assignments…")
+        self.return_to_import.clicked.connect(
+            lambda: self.workflow.setCurrentWidget(self.import_page)
         )
+        review_bar.addWidget(self.return_to_import)
+        review_bar.addStretch()
+        self.go_to_export = QPushButton("Export results…")
+        self.go_to_export.clicked.connect(lambda: self.workflow.setCurrentWidget(self.export_page))
+        review_bar.addWidget(self.go_to_export)
+        export_bar.addWidget(self.export_button)
+        export_bar.addWidget(self.excel_button)
+        self.export_status = QLabel("Exports include all successfully imported files.")
         self.export_status.setWordWrap(True)
         self.export_status.setTextFormat(Qt.TextFormat.PlainText)
         self.export_status.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        layout.addWidget(self.export_status)
+        export_bar.addWidget(self.export_status, 1)
         self.overview = BatchOverview()
         self.phase_overview = BatchPhaseOverview(self.overview.model)
         self.batch_tabs = QTabWidget()
         self.batch_tabs.addTab(self.overview, "Sessions")
         self.batch_tabs.addTab(self.phase_overview, "Phase results")
         self.review = ReviewPanel()
-        splitter = QSplitter(Qt.Orientation.Vertical)
-        splitter.addWidget(self.batch_tabs)
-        splitter.addWidget(self.review)
-        splitter.setStretchFactor(0, 2)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([380, 300])
-        layout.addWidget(splitter, 1)
+        self.data_splitter = QSplitter(Qt.Orientation.Vertical)
+        self.data_splitter.setHandleWidth(7)
+        self.data_splitter.setChildrenCollapsible(False)
+        self.data_splitter.addWidget(self.batch_tabs)
+        self.data_splitter.addWidget(self.review)
+        self.data_splitter.setStretchFactor(0, 1)
+        self.data_splitter.setStretchFactor(1, 1)
+        self.data_splitter.setSizes([400, 390])
+        layout.addWidget(self.data_splitter, 1)
+        self.view_mode.currentIndexChanged.connect(self._set_data_layout)
         self.progress = QProgressBar()
+        self.progress.setMaximumWidth(180)
         self.progress.hide()
-        layout.addWidget(self.progress)
-        layout.addWidget(QLabel("File and project messages:"))
+        self.statusBar().addPermanentWidget(self.progress)
+        self.statusBar().addPermanentWidget(self.cancel_button)
+        self.cancel_button.hide()
         self.issue_list = QListWidget()
-        self.issue_list.setAccessibleName("Discovery messages")
-        self.issue_list.setMaximumHeight(75)
+        self.issue_list.setAccessibleName("File and project messages")
+        self.issue_list.setMaximumHeight(80)
         layout.addWidget(self.issue_list)
+        self.issue_list.hide()
+        self.messages_button = QPushButton("Messages (0)")
+        self.messages_button.setCheckable(True)
+        self.messages_button.toggled.connect(self.issue_list.setVisible)
+        self.statusBar().addPermanentWidget(self.messages_button)
+        for signal in (
+            self.issue_list.model().rowsInserted,
+            self.issue_list.model().modelReset,
+            self.issue_list.model().rowsRemoved,
+        ):
+            signal.connect(self._update_message_count)
         self.setCentralWidget(container)
         self.statusBar().showMessage("0 candidate files selected")
         self.add_files_button.clicked.connect(self.choose_files)
@@ -237,6 +273,21 @@ class MainWindow(QMainWindow):
         self.extensions.textChanged.connect(self._mark_project_dirty)
         self.recursive.toggled.connect(self._mark_project_dirty)
         self._set_busy(False)
+
+    def _action_page(self, title: str) -> tuple[QWidget, QHBoxLayout]:
+        page = QWidget()
+        bar = QHBoxLayout(page)
+        bar.setContentsMargins(6, 4, 6, 4)
+        self.workflow.addTab(page, title)
+        return page, bar
+
+    @Slot(int)
+    def _set_data_layout(self, index: int) -> None:
+        self.batch_tabs.setVisible(index != 2)
+        self.review.setVisible(index != 1)
+
+    def _update_message_count(self, *args) -> None:
+        self.messages_button.setText(f"Messages ({self.issue_list.count()})")
 
     @Slot()
     def choose_files(self) -> None:
@@ -439,13 +490,17 @@ class MainWindow(QMainWindow):
     @Slot(bool)
     def _import_finished(self, cancelled: bool) -> None:
         self._import_worker = None
+        self.export_status.setText("Exports include all successfully imported files.")
         self.overview.finish_import()
+        self.progress.hide()
         failures = sum(result.error is not None for result in self.import_results.values())
         warnings = sum(
             bool(result.session and result.session.warnings)
             for result in self.import_results.values()
         )
         count = len(self.import_results) - failures
+        if count and self.workflow.currentWidget() is self.import_page:
+            self.workflow.setCurrentWidget(self.review_page)
         prefix = "Cancelled" if cancelled else "Import complete"
         self.statusBar().showMessage(
             f"{prefix}: {count} imported ({warnings} with warnings), {failures} failed; "
@@ -635,6 +690,7 @@ class MainWindow(QMainWindow):
         self.phase_button.setEnabled(self.import_button.isEnabled())
         self.metadata_button.setEnabled(self.import_button.isEnabled())
         self.check_sources_button.setEnabled(self.import_button.isEnabled())
+        self.cancel_button.setVisible(self._import_worker is not None)
         self.cancel_button.setEnabled(busy and self._import_worker is not None)
         self.export_button.setEnabled(
             not busy
@@ -651,6 +707,7 @@ class MainWindow(QMainWindow):
         if self._closing or self._is_working():
             return
         self.analysis_plan = None
+        self.workflow.setCurrentWidget(self.import_page)
         self.selected_files.clear()
         self.phase_assignments.clear()
         self.metadata_assignments.clear()
@@ -677,6 +734,8 @@ class MainWindow(QMainWindow):
             else ""
         )
         self.project_label.setText(f"Project: {name}{dirty}{issues}{analysis}")
+        project_name = f" · {self._project_path.name}" if self._project_path else ""
+        self.setWindowTitle(f"Trial Cruncher{project_name}{dirty}")
 
     def _mark_project_dirty(self) -> None:
         self._project_dirty = True
@@ -796,6 +855,7 @@ class MainWindow(QMainWindow):
         else:
             project = result.project
             if mode == "load":
+                self.workflow.setCurrentWidget(self.import_page)
                 self.analysis_plan = project.analysis_plan
                 self.selected_files = {s.path for s in project.sources}
                 self.phase_assignments = {s.path: s.phase for s in project.sources if s.phase}

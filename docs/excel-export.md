@@ -2,7 +2,7 @@
 
 After importing, click **Export Excel…** and choose a parent folder. A new uniquely
 named `trial-cruncher-export-*` folder contains `results.xlsx` and `manifest.json`.
-Export runs in the background, and the saved location appears above the overview.
+Export runs in the background, and the saved location appears on the **Export** tab.
 The workbook has five sheets, frozen headers, filters, and formatted numeric cells.
 
 Export uses the full reviewed batch, including rows hidden by overview filters.

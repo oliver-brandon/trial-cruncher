@@ -14,7 +14,8 @@ calculate new metrics, average sessions, infer identifiers, or change source fil
 Add files or a folder, then click **Import Med-PC**. The overview updates as each file
 finishes. Click a row, or move between rows with the keyboard, to review its source,
 metrics, decoded choices, warnings, and checks below. Drag the divider to give the
-overview or review more space. Columns can be resized; scroll horizontally to see all
+overview or review more space. The layout selector at the upper right also offers
+**Batch only** and **Detail only**, each using the full data area. Columns can be resized; scroll horizontally to see all
 metrics and the warning count on smaller windows.
 
 Rows show filename, quality status, subject, program, recorded Start Date, duration

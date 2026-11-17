@@ -5,7 +5,7 @@
 Import files, review the results, then click **Export CSV…** and choose a parent
 folder. The application creates a fresh `trial-cruncher-export-<unique suffix>`
 subfolder containing `sessions.csv`, `choices.csv`, `phase_metrics.csv`, and `manifest.json`. The saved
-folder path is displayed as selectable text above the overview. Export always
+folder path is displayed as selectable text on the **Export** tab. Export always
 includes **all successfully imported sessions in the list**, including those with
 warnings, regardless of which file is highlighted or hidden by overview filters. Sorting and
 filtering change only the GUI view; the visible/total file count states that import

@@ -82,12 +82,25 @@ supports the same CLI options. Some Linux systems name Python `python3` and requ
 their `python3-venv` package to create virtual environments. A graphical desktop and
 Qt's platform libraries are needed for interactive GUI use.
 
+The top tabs group controls by task. Start in **Import** to add recordings, assign
+phases and metadata, and run **Import Med-PC**. **File options…** opens the extension
+filter, subfolder setting, and Clear selection. After an import with usable results,
+the window advances from Import to **Review**. Use the Sessions or Phase results
+table to select a recording, then choose **Export results…** for CSV or Excel.
+**Project** holds open, save, and source-check controls.
+
+Use the **Split view** selector at the upper right to choose **Batch only** or
+**Detail only** for full-height tables. Switching back restores both panes and
+keeps the selected recording. In split view, drag the divider to resize either pane.
+Expand **Diagnostics** beneath a metric table for its supporting counts and warnings.
+**Messages** on the status bar opens the file and project log.
+
 Choose **Add files…** or **Add folder…**. Defaults are `.mat`, `.txt`, `.med`, and `.mpc`;
 change the comma-separated extension field for other naming conventions. Extensions
 are case-insensitive. They apply to subsequent additions; **Clear selection** and
 re-add to filter an existing selection. Folder traversal ignores files with other
 extensions. Explicit mismatches, inaccessible paths, and skipped directory symlinks
-appear in Discovery messages. Symlinked folders must be selected explicitly.
+appear under **Messages**. Symlinked folders must be selected explicitly.
 
 Use **Session metadata…** to assign condition/treatment, cohort, session order, and
 study inclusion. Exclusions require a reason; the default is Not reviewed. Save
@@ -141,7 +154,7 @@ ratios say **Unavailable**. See [batch phase results](docs/batch-phase-results.m
 
 Click **Export CSV…** to export all successful imports, including hidden rows and
 warnings, then choose a parent folder. A new uniquely named folder holds `sessions.csv`,
-`choices.csv`, `phase_metrics.csv`, and `manifest.json`; the saved location appears above the overview.
+`choices.csv`, `phase_metrics.csv`, and `manifest.json`; the saved location appears on the **Export** tab.
 Existing files are never overwritten. Failed/unimported files are recorded in the
 manifest. Blank fields mean missing observations, while zero and false stay explicit.
 Phase metrics exports also include **whole_session_medpc_trials_per_minute** with

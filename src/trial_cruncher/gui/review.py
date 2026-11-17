@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -75,6 +76,7 @@ class ReviewPanel(QWidget):
     def __init__(self) -> None:
         super().__init__()
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
         self.summary = QLabel()
         self.summary.setTextFormat(Qt.TextFormat.PlainText)
         self.summary.setWordWrap(True)
@@ -104,7 +106,9 @@ class ReviewPanel(QWidget):
         self.metric_diagnostics = QPlainTextEdit()
         self.metric_diagnostics.setAccessibleName("Metric diagnostics and warnings")
         self.metric_diagnostics.setReadOnly(True)
-        metric_layout.addWidget(self.metric_diagnostics, 1)
+        self.metric_diagnostics_toggle = self._add_diagnostics(
+            metric_layout, self.metric_diagnostics
+        )
         self.tabs.addTab(self.metric_page, "Session metrics")
         self.phase_page = QWidget()
         phase_layout = QVBoxLayout(self.phase_page)
@@ -126,7 +130,7 @@ class ReviewPanel(QWidget):
         phase_layout.addWidget(self.phase_table, 2)
         self.phase_diagnostics = QPlainTextEdit()
         self.phase_diagnostics.setReadOnly(True)
-        phase_layout.addWidget(self.phase_diagnostics, 1)
+        self.phase_diagnostics_toggle = self._add_diagnostics(phase_layout, self.phase_diagnostics)
         self.tabs.addTab(self.phase_page, "Phase metrics")
         self.analysis_details = self._text_tab("Analysis metadata")
         self.choice_model = ChoiceTableModel(self)
@@ -140,6 +144,24 @@ class ReviewPanel(QWidget):
         self.warnings = self._text_tab("Warnings and checks")
         self.source = self._text_tab("Source text")
         self.clear()
+
+    @staticmethod
+    def _add_diagnostics(layout: QVBoxLayout, details: QPlainTextEdit) -> QToolButton:
+        toggle = QToolButton()
+        toggle.setText("Diagnostics")
+        toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        toggle.setArrowType(Qt.ArrowType.RightArrow)
+        toggle.setCheckable(True)
+        toggle.toggled.connect(details.setVisible)
+        toggle.toggled.connect(
+            lambda open_: toggle.setArrowType(
+                Qt.ArrowType.DownArrow if open_ else Qt.ArrowType.RightArrow
+            )
+        )
+        layout.addWidget(toggle)
+        details.hide()
+        layout.addWidget(details, 1)
+        return toggle
 
     def _text_tab(self, name: str) -> QPlainTextEdit:
         widget = QPlainTextEdit()
