@@ -78,9 +78,22 @@
         if (!dialog.open || generation !== drawGeneration) return;
         table.replaceChildren();
         const head = table.createTHead().insertRow();
-        data.headers.forEach(value => head.append(make("th", value.replaceAll("_", " "))));
+        data.display_headers.forEach(label => head.append(make("th", label)));
         const body = table.createTBody();
-        data.rows.forEach(row => { const tr = body.insertRow(); row.forEach(value => tr.append(make("td", value))); });
+        data.rows.forEach((row, rowIndex) => {
+          const tr = body.insertRow();
+          row.forEach((value, columnIndex) => {
+            const cell = tr.insertCell();
+            const evidence = data.cell_details[rowIndex][columnIndex];
+            if (evidence) {
+              const details = make("details");
+              details.append(make("summary", value), make("div", evidence));
+              cell.append(details);
+            } else {
+              cell.textContent = value;
+            }
+          });
+        });
         count.textContent = data.total ? `${offset + 1}–${Math.min(offset + 100, data.total)} of ${data.total}` : "No rows";
         previous.disabled = offset === 0; next.disabled = offset + 100 >= data.total;
         [...tabs.children].forEach((button, i) => button.classList.toggle("active", sheets[i][0] === selected));
@@ -109,7 +122,10 @@
         setWorking(false);
         if (state.error) message.textContent = state.error;
         else if (state.ready) {
-          message.textContent = "Analysis ready. Exports include these tables.";
+          message.textContent = `${state.selected_count} of ${state.audit_count} recordings selected for this analysis.`;
+          if (state.selected_count < state.audit_count) {
+            message.textContent += " Open Analysis audit for recording values and selection reasons.";
+          }
           preview.hidden = false;
           await draw();
         }

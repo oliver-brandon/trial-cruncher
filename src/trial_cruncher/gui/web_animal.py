@@ -1,5 +1,8 @@
 """Web-facing animal analysis configuration and paged review."""
 
+import json
+from pathlib import Path
+
 from trial_cruncher.aggregation import SHEETS
 from trial_cruncher.analysis_plan import AnalysisPlan
 from trial_cruncher.gui.animal_analysis import AnalysisModel
@@ -9,7 +12,13 @@ from trial_cruncher.gui.window import MainWindow
 def configuration(window: MainWindow) -> dict:
     annotations = window.metadata_assignments.values()
     plan = window.analysis_plan
+    tables = window._web_analysis_tables
+    audit = tables["analysis_audit.csv"] if tables is not None else None
     return {
+        "selected_count": int(audit["disposition"].eq("selected").sum())
+        if audit is not None
+        else 0,
+        "audit_count": len(audit) if audit is not None else 0,
         "cohorts": sorted(
             {a.cohort for a in annotations if a.cohort} | ({plan.cohort} if plan else set())
         ),
@@ -67,8 +76,8 @@ def page(window: MainWindow, table: str, offset: int, limit: int) -> dict:
     if offset < 0 or not 1 <= limit <= 250:
         raise ValueError("Invalid page.")
     frame = tables[table]
-    if table == "pooled_metrics.csv":
-        front = [
+    preferred = {
+        "pooled_metrics.csv": [
             "condition",
             "phase",
             "metric",
@@ -77,14 +86,95 @@ def page(window: MainWindow, table: str, offset: int, limit: int) -> dict:
             "sum_numerator",
             "sum_denominator",
             "unit",
-        ]
-        columns = front + [col for col in frame if col not in front]
-    else:
-        columns = list(frame.columns)
+        ],
+        "analysis_audit.csv": [
+            "subject_id",
+            "condition",
+            "phase",
+            "disposition",
+            "source_file",
+            "inclusion",
+            "inclusion_reason",
+            "cohort",
+            "import_status",
+            "import_error",
+        ],
+        "condition_comparison.csv": [
+            "subject_id",
+            "treatment_group",
+            "metric",
+            *(key for key in frame.columns if key.startswith("[")),
+        ],
+        "animal_metrics.csv": [
+            "subject_id",
+            "condition",
+            "phase",
+            "metric",
+            "value",
+            "unit",
+            "status",
+            "reasons",
+            "source_file",
+            "cohort",
+        ],
+    }
+    front = [name for name in preferred.get(table, ()) if name in frame.columns]
+    columns = front + [name for name in frame.columns if name not in front]
     subset = frame.iloc[offset : offset + limit].loc[:, columns]
     model = AnalysisModel(subset)
     rows = [
         [model.data(model.index(row, column)) for column in range(len(columns))]
         for row in range(len(subset))
     ]
-    return {"headers": columns, "rows": rows, "total": len(frame), "offset": offset}
+    display_headers = [name if name.startswith("[") else name.replace("_", " ") for name in columns]
+    cell_details = [["" for _ in columns] for _ in rows]
+    if table == "condition_comparison.csv":
+        _comparison_cells(subset, columns, display_headers, rows, cell_details)
+    elif table == "analysis_audit.csv":
+        # Show the reviewed recording even when a repeat prevents its use in the comparison.
+        col = columns.index("disposition")
+        columns.insert(col, "recording_proportion_correct")
+        display_headers.insert(col, "Recording proportion correct")
+        for i, path in enumerate(subset["source_file"]):
+            result = window.import_results.get(Path(path))
+            value, reason = "Import required", ""
+            if result and result.error:
+                value, reason = "Import failed", result.error
+            elif result and result.summary:
+                metric = next(
+                    m for m in result.summary.metrics if m.name == "prl.proportion_correct"
+                )
+                value = "Unavailable" if metric.value is None else str(metric.value)
+                reason = "\n".join(metric.reasons)
+            rows[i].insert(col, value)
+            cell_details[i].insert(col, reason)
+    return {
+        "headers": columns,
+        "display_headers": display_headers,
+        "rows": rows,
+        "cell_details": cell_details,
+        "total": len(frame),
+        "offset": offset,
+    }
+
+
+def _comparison_cells(subset, columns, headers, rows, details):
+    treatment = columns.index("treatment_group")
+    headers[treatment] = "Assigned conditions"
+    cells = [(i, key) for i, key in enumerate(columns) if key.startswith("[")]
+    for row, notes, record in zip(rows, details, subset.to_dict("records"), strict=True):
+        evidence = json.loads(record["cell_evidence_json"])
+        conditions = {json.loads(key)[0] for key, info in evidence.items() if info["sources"]}
+        row[treatment] = ", ".join(sorted(conditions))
+        for i, key in cells:
+            if key not in evidence:
+                row[i] = "Outside group"
+                continue
+            info = evidence[key]
+            if record[key] is None:
+                # The analysis engine has already distinguished repeats, missing
+                # partners and metric-specific unavailability. Preserve its reason.
+                row[i] = " · ".join(info["reasons"]) or "Unavailable"
+            else:
+                row[i] = str(record[key])
+            notes[i] = "\n".join(f"Source: {path}" for path in info["sources"])

@@ -154,6 +154,7 @@ class AnalysisWorker(QRunnable):
 
 
 METRIC_TITLES = {**SESSION_LABELS, **PHASE_LABELS}
+METRIC_TITLES["prl.proportion_correct"] = "Session proportion correct"
 METRIC_TITLES["prl.phase.proportion_correct"] = "Phase proportion correct"
 
 

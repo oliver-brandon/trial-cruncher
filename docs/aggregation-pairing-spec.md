@@ -92,6 +92,18 @@ to rebuild its phase results before previewing an analysis.
 3. Inspect **Pooled metrics** for the ratio of sums, **Condition comparison** for individual observations, **Animal metrics** for source values and evidence, and **Analysis audit** for the disposition of every file. Resolve ambiguous cells through metadata and reopen the analysis to refresh the preview.
 4. Close the preview, then use **Export CSV…** or **Export Excel…**. Exports rebuild the four tables from the current reviewed snapshot and verify source freshness. **Disable analysis** removes the analysis plan from future exports. **Save project** persists the current plan and per-file selection.
 
+The preview reports how many recordings were selected from the batch. In **Condition
+comparison**, **Assigned conditions** lists the treatments represented by source
+recordings for that animal in the selected scope. Each condition × phase has its own
+value column. A missing partner or blocked comparison shows its recorded reason.
+Expand cells with source evidence to see the recording paths.
+
+In **Analysis audit**, **Recording proportion correct** comes from the reviewed session.
+It remains visible for a repeat that cannot contribute to the animal comparison.
+If two recordings are Included for the same animal, condition and phase, use Session
+metadata to keep the intended recording Included and mark the other Excluded with a
+reason. Reopen **Animal analysis** and apply the plan again.
+
 The optional analysis tables use schema 1 alongside the existing full-batch tables. The manifest's aggregation entry records the scope, design, identity and pooling policies, definition version and plan hash. Join source references in derived rows to the audit and manifest for recording hashes, annotation hashes and phase configurations. Projects saved with an analysis plan use project format 3. Projects without a plan use the existing format 2. Opening a saved project requires re-import to rebuild the observations.
 
 Individual results use long format with one row per selected animal cell and existing metric ID. The seven pooled rows per condition and phase cover accuracy, adjusted regressive proportion, four strategy probabilities, and the Med-PC session rate. Rate evidence columns give choices and seconds with scale 60. Raw count metrics and criterion positions are available on individual rows. A pool with no positive denominator has a blank value and an explanatory reason. Known zero-opportunity evidence retains zero sums. An entirely unobserved pool has blank sums.
