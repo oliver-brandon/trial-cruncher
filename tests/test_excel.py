@@ -81,7 +81,7 @@ def test_excel_round_trip_all_tables_and_source_snapshot(write_export, tmp_path)
     assert [row["metric"] for row in quality if row["record_type"] == "metric"] == list(
         METRIC_LABELS
     )
-    manifest = json.loads((destination / "manifest.json").read_text())
+    manifest = json.loads((destination / "manifest.json").read_text(encoding="utf-8"))
     embedded = "".join(
         row["text"] for row in records(book["Provenance"]) if row["kind"] == "manifest"
     )

@@ -38,15 +38,15 @@ def test_partial_duration_uses_recorded_denominator_and_exports_snapshot(
         assert book["Choices"].max_row == 5
         book.close()
     else:
-        with (destination / "sessions.csv").open(newline="") as stream:
+        with (destination / "sessions.csv").open(encoding="utf-8", newline="") as stream:
             (row,) = csv.DictReader(stream)
-        with (destination / "choices.csv").open(newline="") as stream:
+        with (destination / "choices.csv").open(encoding="utf-8", newline="") as stream:
             assert len(list(csv.DictReader(stream))) == 4
     assert float(row["prl.proportion_correct"]) == 0.5
     assert float(row["duration_s"]) == float(duration)
     raw = json.loads(row["metadata_json"])["raw_medpc"]
     assert row["program"] == raw["headers"]["MSN"] == program
-    assert raw["source_text"] == text
+    assert raw["source_text"] == before[0].decode("utf-8")
     assert raw["arrays"]["A"]["5"] == "0.07"
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before
 
@@ -60,7 +60,7 @@ def test_unknown_program_retains_raw_array_including_zero_tail(write_export):
     assert len(result.raw["arrays"]["C"]) == 6
     assert result.raw["arrays"]["C"][4] == result.raw["arrays"]["C"][5] == 0
     assert result.raw["arrays"]["A"][2] == 4
-    assert result.raw["source_text"] == path.read_text()
+    assert result.raw["source_text"] == path.read_bytes().decode("utf-8")
 
 
 @pytest.mark.parametrize("program", ["PRL_BO", "PRL_OPTO", "PRL_OPTO_CORSTIM"])
@@ -92,9 +92,9 @@ def test_corroborated_zero_tail_preserves_raw_and_exports_exclusions(
     assert not result.session.warnings
     destination = export_import_results({path: result}, [path], tmp_path, export_format)
     if export_format == "csv":
-        with (destination / "sessions.csv").open(newline="") as stream:
+        with (destination / "sessions.csv").open(encoding="utf-8", newline="") as stream:
             (row,) = csv.DictReader(stream)
-        with (destination / "choices.csv").open(newline="") as stream:
+        with (destination / "choices.csv").open(encoding="utf-8", newline="") as stream:
             assert len(list(csv.DictReader(stream))) == 4
     else:
         book = load_workbook(destination / "results.xlsx")
@@ -112,7 +112,7 @@ def test_corroborated_zero_tail_preserves_raw_and_exports_exclusions(
     assert row["normalizer_version"] == "2"
     assert row["metric_definition_version"] == "4"
     assert (
-        json.loads((destination / "manifest.json").read_text())["configuration"][
+        json.loads((destination / "manifest.json").read_text(encoding="utf-8"))["configuration"][
             "choice_storage_policy"
         ]
         == "validated-zero-tail-v1"

@@ -29,7 +29,7 @@ def test_percentage_project_load_notifies_and_reimports_as_proportions(
     p = phase_input((1, 7))
     target = tmp_path / "old.tcproj.json"
     save_project(target, [p], {p: "Reversal"}, {}, extensions=[".txt"], recursive=False)
-    data = json.loads(target.read_text())
+    data = json.loads(target.read_text(encoding="utf-8"))
     data["analysis_configuration"]["session_definition_version"] = "2"
     data["analysis_configuration"]["phase_definition_version"] = "1"
     target.write_text(json.dumps(data))
@@ -53,7 +53,9 @@ def test_percentage_project_load_notifies_and_reimports_as_proportions(
         wait_until(app, lambda: window._project_worker is None)
         assert not window._project_dirty
         assert (
-            json.loads(target.read_text())["analysis_configuration"]["session_definition_version"]
+            json.loads(target.read_text(encoding="utf-8"))["analysis_configuration"][
+                "session_definition_version"
+            ]
             == "4"
         )
     finally:
@@ -79,7 +81,7 @@ def test_save_load_restores_phases_settings_and_changed_missing_paths(
         window.recursive.setChecked(False)
         window.save_project_button.click()
         wait_until(app, lambda: window._project_worker is None)
-        saved = json.loads(target.read_text())
+        saved = json.loads(target.read_text(encoding="utf-8"))
         assert window._project_path == target and not window._project_dirty
         assert {s["path"]: s["phase"] for s in saved["sources"]} == {
             str(a): "Acquisition",
@@ -110,7 +112,7 @@ def test_save_load_restores_phases_settings_and_changed_missing_paths(
         assert window._project_dirty
         window.save_project_button.click()
         wait_until(app, lambda: window._project_worker is None)
-        refreshed = json.loads(target.read_text())
+        refreshed = json.loads(target.read_text(encoding="utf-8"))
         assert {s["path"]: s["sha256"] for s in refreshed["sources"]} == {
             str(p): source_sha256(p) for p in (a, b)
         }
@@ -170,7 +172,7 @@ def test_check_and_save_invalidate_changed_source_without_advancing_baseline(
         p.write_text(p.read_text().replace("0007", "0008"))
         window.save_project_button.click()
         wait_until(app, lambda: window._project_worker is None)
-        assert json.loads(target.read_text())["sources"][0]["sha256"] == baseline
+        assert json.loads(target.read_text(encoding="utf-8"))["sources"][0]["sha256"] == baseline
         assert not window.import_results and "changed" in window._source_issues[p]
         window.check_sources_button.click()
         wait_until(app, lambda: window._project_worker is None)

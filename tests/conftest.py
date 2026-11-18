@@ -65,7 +65,23 @@ def phase_input(tmp_path):
 
 
 @pytest.fixture(scope="module")
-def app():
+def _application():
     from PySide6.QtWidgets import QApplication
 
     return QApplication.instance() or QApplication([])
+
+
+@pytest.fixture
+def app(_application, monkeypatch):
+    """Unexpected worker warnings should fail the test without waiting for a user."""
+    from PySide6.QtWidgets import QMessageBox
+
+    warnings = []
+
+    def record_warning(parent, title, message):
+        warnings.append(f"{title}: {message}")
+        return QMessageBox.StandardButton.Ok
+
+    monkeypatch.setattr(QMessageBox, "warning", record_warning)
+    yield _application
+    assert not warnings, "\n".join(warnings)

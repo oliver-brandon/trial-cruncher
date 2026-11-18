@@ -104,7 +104,10 @@ successful imports remain included. Confirm inputs and the first export remain u
 Repeat with **Export Excel…**: inspect all five sheets, filters/frozen headers, source
 IDs, missing/zero/false values, Quality reasons, and complete Provenance chunks. Open
 `results.xlsx` in Microsoft Excel for native rendering verification when available.
-CI is configured for Ubuntu, macOS and Windows with Python 3.12 and 3.14.
+CI runs on Ubuntu, macOS and Windows with Python 3.12 and 3.14. Each job has a
+10-minute limit. During pytest, a test that stalls for 90 seconds prints thread stacks
+and terminates that test process. A newer run on the same ref cancels the older run.
+GUI tests drive dialog controls directly and report unexpected worker warnings as failures.
 Native dialog appearance and display scaling need a desktop check on each target. Linux Qt may
 require EGL/OpenGL libraries (`libegl1` and `libopengl0` on Ubuntu). Remote desktops
 may need additional platform-specific Qt/X11 libraries.

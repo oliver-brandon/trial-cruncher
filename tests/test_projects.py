@@ -1,10 +1,12 @@
 """Synthetic project persistence, source freshness, and failure recovery."""
 
+import hashlib
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Barrier
+from types import SimpleNamespace
 
 import pytest
 
@@ -243,6 +245,34 @@ def test_unreadable_and_nonregular_source_checks(tmp_path, monkeypatch):
 
     monkeypatch.setattr(source_tracking, "source_sha256", denied)
     assert check_sources({tmp_path / "input": None})[0].status == "unreadable"
+
+
+@pytest.mark.parametrize("changed_during_read", [False, True])
+def test_hash_compares_descriptor_ctime_only_to_itself(tmp_path, monkeypatch, changed_during_read):
+    path = tmp_path / "source.txt"
+    content = b"unchanged synthetic recording"
+    path.write_bytes(content)
+    info = path.stat()
+    # Windows can report birth time through stat(path) and change time through fstat(fd).
+    descriptor_ctime = info.st_ctime_ns + 100
+    times = iter((descriptor_ctime, descriptor_ctime + (100 if changed_during_read else 0)))
+
+    def fstat(fd):
+        return SimpleNamespace(
+            st_mode=info.st_mode,
+            st_dev=info.st_dev,
+            st_ino=info.st_ino,
+            st_size=info.st_size,
+            st_mtime_ns=info.st_mtime_ns,
+            st_ctime_ns=next(times),
+        )
+
+    monkeypatch.setattr(source_tracking, "fstat", fstat)
+    if changed_during_read:
+        with pytest.raises(OSError, match="changed while"):
+            source_sha256(path)
+    else:
+        assert source_sha256(path) == hashlib.sha256(content).hexdigest()
 
 
 def test_file_changed_during_hash_is_rejected(phase_input, monkeypatch):

@@ -5,9 +5,9 @@ import json
 from threading import Event
 
 import pytest
-from PySide6.QtCore import Qt, QThread, QTimer
+from PySide6.QtCore import Qt, QThread
 from PySide6.QtWidgets import QDialogButtonBox, QFileDialog, QMessageBox
-from qt_helpers import wait_until
+from qt_helpers import answer_dialog, wait_until
 
 from trial_cruncher import phase_metrics
 from trial_cruncher.analysis_metadata import AnalysisMetadata
@@ -35,8 +35,7 @@ def test_manual_editor_validation_immediate_updates_filters_and_project(
         wait_until(app, lambda: window._import_worker is None)
         before = dict(window.import_results)
 
-        def cancelled():
-            d = app.activeModalWidget()
+        def cancelled(d):
             assert isinstance(d, MetadataDialog)
             d.editors[1].inclusion.setCurrentIndex(2)
             d.buttons.button(QDialogButtonBox.StandardButton.Save).click()
@@ -44,12 +43,11 @@ def test_manual_editor_validation_immediate_updates_filters_and_project(
             assert d.isVisible() and window.metadata_assignments == {}
             d.reject()
 
-        QTimer.singleShot(0, cancelled)
-        window.metadata_button.click()
+        with answer_dialog(monkeypatch, MetadataDialog, cancelled):
+            window.metadata_button.click()
         assert window.import_results == before
 
-        def edit():
-            d = app.activeModalWidget()
+        def edit(d):
             assert d.paths == (a, b)
             assert d.table.item(0, 0).text() == str(a)
             d.bulk_text.setText("Vehicle")
@@ -72,8 +70,8 @@ def test_manual_editor_validation_immediate_updates_filters_and_project(
             "calculate_prl_summary",
             lambda *_: pytest.fail("Metadata edit recalculated metrics"),
         )
-        QTimer.singleShot(0, edit)
-        window.metadata_button.click()
+        with answer_dialog(monkeypatch, MetadataDialog, edit):
+            window.metadata_button.click()
         for path in (a, b):
             assert window.import_results[path].summary is before[path].summary
             assert window.import_results[path].phase_summary is before[path].phase_summary
@@ -111,14 +109,13 @@ def test_manual_editor_validation_immediate_updates_filters_and_project(
         view.select_path(a)
 
         # Excluding the visible row applies immediately and clears hidden detail.
-        def exclude():
-            d = app.activeModalWidget()
+        def exclude(d):
             d.editors[0].inclusion.setCurrentIndex(2)
             d.editors[0].reason.setPlainText("Review decision")
             d.accept()
 
-        QTimer.singleShot(0, exclude)
-        window.metadata_button.click()
+        with answer_dialog(monkeypatch, MetadataDialog, exclude):
+            window.metadata_button.click()
         assert view.proxy.rowCount() == 0 and window.review.phase_table.rowCount() == 0
         target = tmp_path / "study.tcproj.json"
         monkeypatch.setattr(

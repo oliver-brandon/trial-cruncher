@@ -5,8 +5,13 @@ on: [push, pull_request]
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   checks:
+    timeout-minutes: 10
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -33,4 +38,4 @@ jobs:
       - name: Check formatting
         run: ruff format --check .
       - name: Test
-        run: pytest
+        run: python -m pytest -vv --timeout=90 --timeout-method=thread

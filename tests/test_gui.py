@@ -3,7 +3,7 @@ from threading import Event as ThreadEvent
 import pytest
 from PySide6.QtCore import Qt, QThread
 from PySide6.QtWidgets import QFileDialog, QMessageBox
-from qt_helpers import wait_until
+from qt_helpers import answer_dialog, wait_until
 
 from trial_cruncher.gui import import_worker as worker_module
 from trial_cruncher.gui import window as window_module
@@ -18,7 +18,6 @@ def test_phase_assignment_dialog_import_snapshot_and_full_export(
     import csv
     import json
 
-    from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QDialogButtonBox
 
     from trial_cruncher.gui.phases import PhaseDialog
@@ -33,8 +32,7 @@ def test_phase_assignment_dialog_import_snapshot_and_full_export(
         window.add_paths([str(first), str(second)])
         wait_for_discovery(app, window)
 
-        def edit(cancel=False):
-            dialog = app.activeModalWidget()
+        def edit(dialog, cancel=False):
             assert isinstance(dialog, PhaseDialog)
             assert dialog.paths == (first, second)
             assert dialog.table.item(0, 0).text() == str(first)
@@ -48,11 +46,11 @@ def test_phase_assignment_dialog_import_snapshot_and_full_export(
             )
             dialog.buttons.button(button).click()
 
-        QTimer.singleShot(0, lambda: edit(True))
-        window.phase_button.click()
+        with answer_dialog(monkeypatch, PhaseDialog, lambda d: edit(d, cancel=True)):
+            window.phase_button.click()
         assert window.phase_assignments == {}
-        QTimer.singleShot(0, edit)
-        window.phase_button.click()
+        with answer_dialog(monkeypatch, PhaseDialog, edit):
+            window.phase_button.click()
         assert window.phase_assignments == {first: "Acquisition", second: "Reversal 2"}
         window.import_button.click()
         assert not window.phase_button.isEnabled()
@@ -69,14 +67,13 @@ def test_phase_assignment_dialog_import_snapshot_and_full_export(
         assert window.review.phase_table.item(3, 1).text() == "Unavailable"
 
         # Pending edits do not relabel already calculated results or their export.
-        def reassign():
-            d = app.activeModalWidget()
+        def reassign(d):
             d.bulk_phase.setCurrentText("Changed next import")
             d.apply_all.click()
             d.accept()
 
-        QTimer.singleShot(0, reassign)
-        window.phase_button.click()
+        with answer_dialog(monkeypatch, PhaseDialog, reassign):
+            window.phase_button.click()
         assert window.import_results[first].phase_summary.config.phase == "Acquisition"
         window.overview.search.setText(str(first))
         assert window.overview.proxy.rowCount() == 1

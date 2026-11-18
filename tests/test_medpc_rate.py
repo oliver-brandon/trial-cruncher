@@ -49,14 +49,14 @@ def test_bad_duration_does_not_block_choice_or_phase_accuracy(write_export, dura
 def test_no_saved_a3_substitution_or_header_duration_fallback(write_export):
     path = write_export()
     original = path.read_text().replace("24.00", "0.00").replace("4.57", "4.57 0 0")
-    path.write_text(original)
+    path.write_bytes(original.replace("\n", "\r\n").encode("utf-8"))
     result = import_medpc_file(path, "Acquisition")
     assert result.raw["arrays"]["A"][3] == 0
     assert result.summary.diagnostics.unused_slot_count == 2
     assert (
         rate(result).value == 24
     )  # 4 recorded choices / ten seconds, despite one-hour header interval.
-    assert result.raw["source_text"] == original
+    assert result.raw["source_text"] == path.read_bytes().decode("utf-8")
 
 
 def test_out_of_duration_choice_blocks_only_rate_and_order_warning_does_not(write_export):

@@ -2,9 +2,9 @@
 
 import json
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFileDialog, QTabWidget
-from qt_helpers import wait_until
+from qt_helpers import answer_dialog, wait_until
 
 from trial_cruncher.analysis_metadata import AnalysisMetadata
 from trial_cruncher.gui.animal_analysis import AnalysisReview, PlanDialog
@@ -23,8 +23,7 @@ def test_configure_preview_save_load_export_disable(app, phase_input, tmp_path, 
         w.import_selected_files()
         wait_until(app, lambda: w._import_worker is None)
 
-        def configure():
-            d = app.activeModalWidget()
+        def configure(d):
             assert isinstance(d, PlanDialog)
             for widget in (d.conditions, d.phases):
                 widget.item(0).setCheckState(Qt.CheckState.Checked)
@@ -38,8 +37,8 @@ def test_configure_preview_save_load_export_disable(app, phase_input, tmp_path, 
             return 1
 
         monkeypatch.setattr(AnalysisReview, "exec", review)
-        QTimer.singleShot(0, configure)
-        w.analysis_button.click()
+        with answer_dialog(monkeypatch, PlanDialog, configure):
+            w.analysis_button.click()
         wait_until(app, lambda: bool(preview))
         assert preview == [4] and w.analysis_plan.phases == ("Reversal",)
         target = tmp_path / "example.tcproj.json"
@@ -62,8 +61,8 @@ def test_configure_preview_save_load_export_disable(app, phase_input, tmp_path, 
             json.loads((out / "manifest.json").read_text())["aggregation"]["plan_sha256"]
             == w.analysis_plan.sha256
         )
-        QTimer.singleShot(0, lambda: app.activeModalWidget().disable())
-        w.analysis_button.click()
+        with answer_dialog(monkeypatch, PlanDialog, lambda d: d.disable()):
+            w.analysis_button.click()
         assert w.analysis_plan is None
     finally:
         w.close()
@@ -91,33 +90,31 @@ def test_legacy_project_empty_cohort_opens_metadata_editor(app, phase_input, tmp
         assert w.selected_files == {path}
         checks = []
 
-        def edit_metadata():
-            editor = app.activeModalWidget()
-            if isinstance(editor, MetadataDialog):
-                editor.editors[0].cohort.setText("Cohort 01")
-                editor.editors[0].condition.setText("Control")
-                editor.accept()
+        def edit_metadata(editor):
+            editor.editors[0].cohort.setText("Cohort 01")
+            editor.editors[0].condition.setText("Control")
+            editor.accept()
 
-        def open_editor():
-            dialog = app.activeModalWidget()
+        def open_editor(dialog):
             checks.append((dialog.cohort.count(), dialog.cohort.placeholderText()))
-            QTimer.singleShot(0, edit_metadata)
             next(
                 b for b in dialog.findChildren(QPushButton) if b.text() == "Open session metadata…"
             ).click()
 
-        QTimer.singleShot(0, open_editor)
-        w.configure_analysis()
+        with (
+            answer_dialog(monkeypatch, PlanDialog, open_editor),
+            answer_dialog(monkeypatch, MetadataDialog, edit_metadata),
+        ):
+            w.configure_analysis()
         assert checks == [(0, "Assign a cohort in Session metadata…")]
         assert w.metadata_assignments[path].cohort == "Cohort 01"
 
-        def inspect():
-            dialog = app.activeModalWidget()
+        def inspect(dialog):
             checks.append(dialog.cohort.currentText())
             dialog.reject()
 
-        QTimer.singleShot(0, inspect)
-        w.configure_analysis()
+        with answer_dialog(monkeypatch, PlanDialog, inspect):
+            w.configure_analysis()
         assert checks[-1] == "Cohort 01"
         assert w.analysis_plan is None and target.read_bytes() == before
     finally:

@@ -75,7 +75,7 @@ def test_project_roundtrip_and_legacy_not_reviewed_migration(phase_input, tmp_pa
     loaded = load_project(target)
     assert loaded.project == saved.project
     assert {s.path: s.analysis_metadata for s in loaded.project.sources} == metadata
-    data = json.loads(target.read_text())
+    data = json.loads(target.read_text(encoding="utf-8"))
     assert data["schema_version"] == "2"
     data["schema_version"] = "1"
     for item in data["sources"]:
@@ -99,7 +99,7 @@ def test_project_metadata_validation_is_transactional(phase_input, tmp_path, dam
     path = phase_input()
     target = tmp_path / "bad.tcproj.json"
     save_project(target, [path], {}, {}, extensions=[".txt"], recursive=False)
-    data = json.loads(target.read_text())
+    data = json.loads(target.read_text(encoding="utf-8"))
     m = data["sources"][0]["analysis_metadata"]
     if damage == "missing":
         m.pop("included")
@@ -150,7 +150,7 @@ def test_every_record_and_annotation_is_exported_regardless_of_inclusion(
         ("phase_metrics.csv", "Phase metrics"),
     ]:
         if format == "csv":
-            with (dest / filename).open(newline="") as stream:
+            with (dest / filename).open(encoding="utf-8", newline="") as stream:
                 rows = list(csv.DictReader(stream))
         else:
             rows = records(book[sheet])
@@ -194,7 +194,7 @@ def test_every_record_and_annotation_is_exported_regardless_of_inclusion(
             str(p) for p in paths
         }
         book.close()
-    manifest = json.loads((dest / "manifest.json").read_text())
+    manifest = json.loads((dest / "manifest.json").read_text(encoding="utf-8"))
     entries = {row["source_file"]: row for row in manifest["inputs"]}
     assert entries[str(excluded)]["status"] == "exported"
     assert (

@@ -1,10 +1,10 @@
 """Content fingerprints and explicit stale-source checks, independent of Qt."""
 
 import hashlib
-import os
 import stat
 from collections.abc import Mapping
 from dataclasses import dataclass
+from os import fstat, stat_result
 from pathlib import Path
 
 
@@ -24,18 +24,24 @@ def source_sha256(path: Path) -> str:
         raise OSError("Source is not a regular file.")
     digest = hashlib.sha256()
     with path.open("rb") as stream:
-        opened = os.fstat(stream.fileno())
+        opened = fstat(stream.fileno())
         if not stat.S_ISREG(opened.st_mode):
             raise OSError("Source is not a regular file.")
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
-        finished = os.fstat(stream.fileno())
+        finished = fstat(stream.fileno())
     after = path.stat()
 
-    def identity(info: os.stat_result) -> tuple[int, ...]:
-        return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+    def identity(info: stat_result) -> tuple[int, ...]:
+        return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
 
-    if len({identity(s) for s in (before, opened, finished, after)}) != 1:
+    # On Windows stat(path) may report creation time as ctime while fstat(fd)
+    # reports change time. Compare ctime within each API across the read.
+    if (
+        len({identity(s) for s in (before, opened, finished, after)}) != 1
+        or before.st_ctime_ns != after.st_ctime_ns
+        or opened.st_ctime_ns != finished.st_ctime_ns
+    ):
         raise OSError("Source changed while it was being checked; retry after writing finishes.")
     return digest.hexdigest()
 
