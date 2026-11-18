@@ -6,8 +6,8 @@ from typing import Literal
 
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot
 
-from trial_cruncher.aggregation import AnalysisPlan
 from trial_cruncher.analysis_metadata import AnalysisMetadata
+from trial_cruncher.analysis_plan import AnalysisPlan
 from trial_cruncher.projects import load_project, save_project
 from trial_cruncher.source_tracking import check_sources
 

@@ -52,7 +52,10 @@ It consumes canonical choices and structured source/normalizer facts, returning
 `MetricResult` values and separate diagnostics. Values never replace raw observations;
 missing values carry reasons and availability status. `phase_metrics.py` calculates the phase-specific error/strategy definitions and
 retains criterion, ratio, and configuration evidence separately from the session
-summary. It rechecks source integrity before processing choice order.
+summary. During import, `calculate_prl_summaries()` validates the session once and
+uses that result for both calculations. Calling the phase calculator on its own
+performs the same integrity checks. All four strategy ratios are accumulated in one
+pass over adjacent choices.
 `tables.py` builds versioned
 session, choice, and phase pandas tables with object dtype to preserve optional integers.
 `exporters.py` implements the exporter protocol with an exclusive-create CSV writer
@@ -149,10 +152,12 @@ engine without importing GUI dependencies into calculations.
 
 ## Project persistence and source freshness
 
-`projects.py` validates version 1 `.tcproj.json` setup files and writes atomically
-with exclusive creation or an expected-project-hash replacement guard. Files retain
+`projects.py` reads versions 1 through 3 of the `.tcproj.json` setup format. Saves are
+atomic, with exclusive creation or an expected-project-hash replacement guard. Files retain
 absolute source paths, nullable phase labels/reference hashes, discovery settings,
-and the fixed analysis configuration. Incompatible definitions/policies fail closed.
+and the fixed analysis configuration. Saves use version 2 for manual session annotations
+and version 3 when an animal analysis plan is included. The plan lives in `analysis_plan.py` so opening
+or saving a project does not load pandas or Qt. Incompatible definitions/policies fail closed.
 Calculated results and raw recordings are not serialized; loading clears results
 and requires import. Unknown or missing sources stay explicit in the selection.
 

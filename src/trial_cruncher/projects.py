@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from trial_cruncher import __version__, phase_metrics, prl_metrics
-from trial_cruncher.aggregation import AnalysisPlan
 from trial_cruncher.analysis_metadata import AnalysisMetadata, analysis_metadata_from_dict
+from trial_cruncher.analysis_plan import AnalysisPlan
 from trial_cruncher.discovery import normalize_extensions
 from trial_cruncher.prl import CHOICE_STORAGE_POLICY, NORMALIZER_VERSION
 from trial_cruncher.source_tracking import SourceCheck, check_sources, source_sha256
@@ -161,6 +161,7 @@ def _parse(payload: bytes, project_path: Path) -> Project:
     extensions = tuple(sorted(normalize_extensions(discovery["extensions"])))
     if not isinstance(obj["sources"], list):
         raise ValueError("Project sources must be a list.")
+    resolved_project = project_path.resolve()
     sources, seen = [], set()
     for item in obj["sources"]:
         keys = {"path", "phase", "sha256"}
@@ -179,7 +180,7 @@ def _parse(payload: bytes, project_path: Path) -> Project:
             raise ValueError("Project source paths must be absolute, without parent traversal.")
         if path in seen:
             raise ValueError("Duplicate source paths are not allowed.")
-        if path.resolve() == project_path.resolve():
+        if path.resolve() == resolved_project:
             raise ValueError("A project cannot use itself as a source recording.")
         seen.add(path)
         phase = phase_metrics.phase_config(item["phase"]).phase
@@ -199,23 +200,37 @@ def _parse(payload: bytes, project_path: Path) -> Project:
     )
 
 
-def load_project(path: Path) -> ProjectResult:
-    path = path.absolute()
+def _read_payload(path: Path) -> bytes:
     if not path.is_file() or path.stat().st_size > MAX_PROJECT_BYTES:
         raise ValueError("Project must be a regular file of at most 16 MiB.")
     with path.open("rb") as stream:
-        payload = stream.read(MAX_PROJECT_BYTES + 1)
+        return stream.read(MAX_PROJECT_BYTES + 1)
+
+
+def load_project(path: Path) -> ProjectResult:
+    path = path.absolute()
+    payload = _read_payload(path)
     project = _parse(payload, path)
     checks = check_sources({s.path: s.sha256 for s in project.sources})
     return ProjectResult(project, path, hashlib.sha256(payload).hexdigest(), checks)
 
 
 def _protect_sources(destination: Path, sources: Sequence[ProjectSource]) -> None:
+    resolved_destination = destination.resolve()
+    try:
+        dest_stat = destination.stat()
+    except FileNotFoundError:
+        dest_stat = None
     for source in sources:
-        if destination.resolve() == source.path.resolve():
+        if resolved_destination == source.path.resolve():
             raise ValueError("A project cannot overwrite a source recording.")
-        if destination.exists() and source.path.exists() and destination.samefile(source.path):
-            raise ValueError("A project cannot replace an alias of a source recording.")
+        if dest_stat is not None:
+            try:
+                source_stat = source.path.stat()
+            except FileNotFoundError:
+                continue
+            if os.path.samestat(dest_stat, source_stat):
+                raise ValueError("A project cannot replace an alias of a source recording.")
 
 
 def save_project(
@@ -301,7 +316,7 @@ def save_project(
     ).encode("utf-8")
     project = _parse(payload, path)
 
-    def check_destination() -> None:
+    def check_destination(*, validate_existing: bool) -> None:
         _protect_sources(path, sources)
         if path.is_symlink():
             raise ValueError("Saving over a symbolic link is not supported.")
@@ -311,27 +326,33 @@ def save_project(
                     "Destination exists. Use Save for the open project, or a new filename."
                 )
         else:
-            if source_sha256(path) != expected_project_sha256:
+            if validate_existing:
+                existing = _read_payload(path)
+                digest = hashlib.sha256(existing).hexdigest()
+            else:
+                # Final check also detects edits/replacements during the read.
+                digest = source_sha256(path)
+            if digest != expected_project_sha256:
                 raise ValueError(
                     "Project changed outside this window; reopen it or Save As a new file."
                 )
-            if path.stat().st_size > MAX_PROJECT_BYTES:
-                raise ValueError("Existing project exceeds the size limit.")
-            _parse(path.read_bytes(), path)
+
+            if validate_existing:
+                _parse(existing, path)
 
     lock = path.with_name(f".{path.name}.lock")
     lock_fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     os.close(lock_fd)
     temp = None
     try:
-        check_destination()
+        check_destination(validate_existing=True)
         fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
         temp = Path(temp_name)
         with os.fdopen(fd, "wb") as stream:
             stream.write(payload)
             stream.flush()
             os.fsync(stream.fileno())
-        check_destination()
+        check_destination(validate_existing=False)
         if expected_project_sha256 is None:
             os.link(temp, path)  # Atomic and exclusive, including concurrent creators.
         else:

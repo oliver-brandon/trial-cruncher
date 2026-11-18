@@ -2,35 +2,19 @@
 
 import csv
 import json
-import os
-import time
 from threading import Event
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+import pytest
+from PySide6.QtCore import Qt, QThread, QTimer
+from PySide6.QtWidgets import QDialogButtonBox, QFileDialog, QMessageBox
+from qt_helpers import wait_until
 
-import pytest  # noqa: E402
-from PySide6.QtCore import Qt, QThread, QTimer  # noqa: E402
-from PySide6.QtWidgets import QApplication, QDialogButtonBox, QFileDialog, QMessageBox  # noqa: E402
-
-from trial_cruncher import processing  # noqa: E402
-from trial_cruncher.analysis_metadata import AnalysisMetadata  # noqa: E402
-from trial_cruncher.gui import import_worker  # noqa: E402
-from trial_cruncher.gui.metadata import MetadataDialog  # noqa: E402
-from trial_cruncher.gui.window import MainWindow  # noqa: E402
-from trial_cruncher.processing import import_medpc_file  # noqa: E402
-
-
-@pytest.fixture(scope="module")
-def app():
-    return QApplication.instance() or QApplication([])
-
-
-def wait(app, predicate):
-    end = time.monotonic() + 5
-    while not predicate() and time.monotonic() < end:
-        app.processEvents()
-        time.sleep(0.01)
-    assert predicate()
+from trial_cruncher import phase_metrics
+from trial_cruncher.analysis_metadata import AnalysisMetadata
+from trial_cruncher.gui import import_worker
+from trial_cruncher.gui.metadata import MetadataDialog
+from trial_cruncher.gui.window import MainWindow
+from trial_cruncher.processing import import_medpc_file
 
 
 def test_manual_editor_validation_immediate_updates_filters_and_project(
@@ -45,10 +29,10 @@ def test_manual_editor_validation_immediate_updates_filters_and_project(
     try:
         assert not window.metadata_button.isEnabled()
         window.add_paths([str(a), str(b)])
-        wait(app, lambda: window._worker is None)
+        wait_until(app, lambda: window._worker is None)
         window.phase_assignments = {a: "Acquisition", b: "Reversal"}
         window.import_button.click()
-        wait(app, lambda: window._import_worker is None)
+        wait_until(app, lambda: window._import_worker is None)
         before = dict(window.import_results)
 
         def cancelled():
@@ -82,9 +66,9 @@ def test_manual_editor_validation_immediate_updates_filters_and_project(
             d.editors[1].reason.setPlainText("Technical exclusion")
             d.accept()
 
-        original_calc = processing.calculate_prl_summary
+        original_calc = phase_metrics.calculate_prl_summary
         monkeypatch.setattr(
-            processing,
+            phase_metrics,
             "calculate_prl_summary",
             lambda *_: pytest.fail("Metadata edit recalculated metrics"),
         )
@@ -94,7 +78,7 @@ def test_manual_editor_validation_immediate_updates_filters_and_project(
             assert window.import_results[path].summary is before[path].summary
             assert window.import_results[path].phase_summary is before[path].phase_summary
             assert window.import_results[path].session is before[path].session
-        monkeypatch.setattr(processing, "calculate_prl_summary", original_calc)
+        monkeypatch.setattr(phase_metrics, "calculate_prl_summary", original_calc)
         assert window.metadata_assignments[b].included is False
         assert window.metadata_assignments[a].session_order == 2
         view = window.phase_overview
@@ -144,12 +128,12 @@ def test_manual_editor_validation_immediate_updates_filters_and_project(
             QFileDialog, "getOpenFileName", lambda *args, **kwargs: (str(target), "")
         )
         window.save_project_button.click()
-        wait(app, lambda: window._project_worker is None)
+        wait_until(app, lambda: window._project_worker is None)
         expected = dict(window.metadata_assignments)
         window.clear_selection()
         assert window.metadata_assignments == {}
         window.open_project_button.click()
-        wait(app, lambda: window._project_worker is None)
+        wait_until(app, lambda: window._project_worker is None)
         assert window.metadata_assignments == expected and not window.import_results
         assert (
             view.inclusion_filter.currentIndex()
@@ -160,7 +144,7 @@ def test_manual_editor_validation_immediate_updates_filters_and_project(
         # Manual flags remain visible before re-import; they are not measurements.
         assert all(view.model.row(i).value(34) == "Excluded" for i in range(2))
         window.import_button.click()
-        wait(app, lambda: window._import_worker is None)
+        wait_until(app, lambda: window._import_worker is None)
         assert {p: r.analysis_metadata for p, r in window.import_results.items()} == expected
         # Re-import still includes excluded files and preserves their numerical results.
         assert all(r.summary.metrics[0].value == 10 for r in window.import_results.values())
@@ -179,15 +163,15 @@ def test_filtered_inclusion_does_not_drop_export_rows_and_preserves_pending_meta
     window.show()
     try:
         window.add_paths([str(a), str(b)])
-        wait(app, lambda: window._worker is None)
+        wait_until(app, lambda: window._worker is None)
         window.metadata_assignments = {
             a: AnalysisMetadata("Vehicle", "001", 2, True),
             b: AnalysisMetadata("Drug", "001", 10, False, "Excluded for review"),
         }
         window.import_button.click()
-        wait(app, lambda: window._import_worker is None)
+        wait_until(app, lambda: window._import_worker is None)
         window.add_paths([str(later)])
-        wait(app, lambda: window._worker is None)
+        wait_until(app, lambda: window._worker is None)
         window.metadata_assignments[later] = AnalysisMetadata(
             included=False, inclusion_reason="Not yet reviewed"
         )
@@ -197,7 +181,7 @@ def test_filtered_inclusion_does_not_drop_export_rows_and_preserves_pending_meta
         assert view.proxy.rowCount() == 1
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(tmp_path))
         (window.excel_button if format == "xlsx" else window.export_button).click()
-        wait(app, lambda: window._export_worker is None)
+        wait_until(app, lambda: window._export_worker is None)
         (dest,) = tmp_path.glob("trial-cruncher-export-*")
         if format == "csv":
             with (dest / "phase_metrics.csv").open(newline="") as f:
@@ -240,16 +224,16 @@ def test_worker_freezes_metadata_and_retains_it_for_failures_and_stale_sources(
     window = MainWindow()
     try:
         window.add_paths([str(a), str(b)])
-        wait(app, lambda: window._worker is None)
+        wait_until(app, lambda: window._worker is None)
         assignment = AnalysisMetadata("A", None, 1, False, "Technical")
         window.metadata_assignments = {a: assignment, b: assignment}
         window.import_button.click()
-        wait(app, entered.is_set)
+        wait_until(app, entered.is_set)
         assert not window.metadata_button.isEnabled()
         window.assign_metadata()  # Busy guard must not open a modal dialog.
         window.metadata_assignments[a] = AnalysisMetadata("Future")
         release.set()
-        wait(app, lambda: window._import_worker is None)
+        wait_until(app, lambda: window._import_worker is None)
         assert window.import_results[a].analysis_metadata == assignment
         assert (
             window.import_results[b].error
@@ -259,11 +243,11 @@ def test_worker_freezes_metadata_and_retains_it_for_failures_and_stale_sources(
         window.metadata_assignments[a] = assignment
         a.write_text(a.read_text().replace("0007", "0008"))
         window.check_sources_button.click()
-        wait(app, lambda: window._project_worker is None)
+        wait_until(app, lambda: window._project_worker is None)
         row = window.phase_overview.model.row(window.overview.model._row_by_path[a])
         assert row.value(34) == "Excluded" and row.status == "Re-import required"
         assert a not in window.import_results
     finally:
         release.set()
-        wait(app, lambda: window._import_worker is None)
+        wait_until(app, lambda: window._import_worker is None)
         window.close()

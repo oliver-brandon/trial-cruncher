@@ -11,7 +11,7 @@ import pandas as pd
 
 from trial_cruncher import __version__
 from trial_cruncher.analysis_metadata import ANNOTATION_COLUMNS, AnalysisMetadata
-from trial_cruncher.models import Session
+from trial_cruncher.models import MetricResult, Session
 from trial_cruncher.phase_metrics import METRIC_LABELS as PHASE_METRIC_LABELS
 from trial_cruncher.phase_metrics import STRATEGIES, PhaseSummary
 from trial_cruncher.prl_metrics import MEDPC_RATE, METRIC_LABELS, PRLSessionSummary
@@ -126,6 +126,19 @@ def json_text(value: Any) -> str:
     return json.dumps(value, default=encode, ensure_ascii=False, allow_nan=False)
 
 
+def _metric_record(metric: MetricResult) -> dict[str, Any]:
+    """Serialize the immutable fields without recursively copying warnings and reasons."""
+    return {
+        "name": metric.name,
+        "definition_version": metric.definition_version,
+        "value": metric.value,
+        "unit": metric.unit,
+        "warnings": metric.warnings,
+        "reasons": metric.reasons,
+        "status": metric.status,
+    }
+
+
 def _provenance(session: Session, annotation: AnalysisMetadata | None = None) -> dict[str, Any]:
     metadata = session.metadata
     raw = metadata.get("raw_medpc", {})
@@ -169,7 +182,7 @@ def build_session_table(
                 "metric_definition_version": summary.definition_version if summary else None,
                 "metric_policy": summary.eligibility_policy if summary else None,
                 "metric_results_json": json_text(
-                    [{**asdict(metric), "status": metric.status} for metric in summary.metrics]
+                    [_metric_record(metric) for metric in summary.metrics]
                 )
                 if summary
                 else None,
@@ -190,34 +203,38 @@ def build_choice_table(
     rows = []
     for session in sessions:
         provenance = _provenance(session, (annotations or {}).get(session.source_file))
+        source_fields = tuple(provenance[name] for name in PROVENANCE_COLUMNS)
         phase = phases.get(session.source_file) if phases is not None else None
+        label = phase.config.phase if phase else None
         for ordinal, event in enumerate(session.events):
             if event.name != "choice":
                 continue
+            error_class = phase.choice_error_classes[ordinal] if phase else None
+            reached = (
+                ordinal + 1 == phase.diagnostics.criterion_choice_ordinal
+                if phase and error_class is not None
+                else None
+            )
+            raw = event.raw_values
+            attrs = event.attributes
             rows.append(
-                {
-                    **provenance,
-                    "event_name": event.name,
-                    "source_array": event.raw_values.get("array"),
-                    "source_index": event.raw_values.get("index"),
-                    "source_line": event.raw_values.get("line_number"),
-                    "raw_value": event.raw_values.get("value"),
-                    "timestamp_s": event.timestamp_s,
-                    "outcome_code": event.attributes.get("outcome_code"),
-                    "correct": event.attributes.get("correct"),
-                    "rewarded": event.attributes.get("rewarded"),
-                    "raw_values_json": json_text(event.raw_values),
-                    "attributes_json": json_text(event.attributes),
-                    "phase": phase.config.phase if phase else None,
-                    "phase_error_classification": phase.choice_error_classes[ordinal]
-                    if phase
-                    else None,
-                    "phase_criterion_completed_here": (
-                        ordinal + 1 == phase.diagnostics.criterion_choice_ordinal
-                        if phase and phase.choice_error_classes[ordinal] is not None
-                        else None
-                    ),
-                }
+                source_fields
+                + (
+                    event.name,
+                    raw.get("array"),
+                    raw.get("index"),
+                    raw.get("line_number"),
+                    raw.get("value"),
+                    event.timestamp_s,
+                    attrs.get("outcome_code"),
+                    attrs.get("correct"),
+                    attrs.get("rewarded"),
+                    json_text(raw),
+                    json_text(attrs),
+                    label,
+                    error_class,
+                    reached,
+                )
             )
     return pd.DataFrame(rows, columns=CHOICE_COLUMNS, dtype=object)
 
@@ -263,10 +280,8 @@ def build_phase_table(
             "whole_session_rate_unit": rate.unit,
             "whole_session_rate_status": rate.status,
             "whole_session_rate_reasons_json": json_text(rate.reasons),
-            "whole_session_rate_result_json": json_text({**asdict(rate), "status": rate.status}),
-            "metric_results_json": json_text(
-                [{**asdict(m), "status": m.status} for m in phase.metrics]
-            ),
+            "whole_session_rate_result_json": json_text(_metric_record(rate)),
+            "metric_results_json": json_text([_metric_record(m) for m in phase.metrics]),
             "metric_reason_codes_json": json_text(
                 dict(zip(PHASE_METRIC_LABELS, phase.reason_codes, strict=True))
             ),

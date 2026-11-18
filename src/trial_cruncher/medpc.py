@@ -4,6 +4,7 @@ import hashlib
 import logging
 import re
 from decimal import Decimal, DecimalException
+from itertools import pairwise
 from pathlib import Path
 from typing import NoReturn, TypedDict
 
@@ -139,11 +140,12 @@ class MedPCReader:
                 fail("Unrecognized line; no source data was discarded.", line_number)
 
         for name, values in arrays.items():
-            if any(index != expected for expected, index in enumerate(sorted(values))):
+            # Parsed indices are unique, nonnegative integers.
+            if max(values, default=-1) + 1 != len(values):
                 warnings.append(
                     f"{name}: indices are not contiguous from zero; no values filled in."
                 )
-            if list(values) != sorted(values):
+            if any(a > b for a, b in pairwise(values)):
                 warnings.append(f"{name}: array rows are out of index order; indices retained.")
         for warning in warnings:
             logger.warning(warning, extra={"path": source, "operation": "read_medpc"})

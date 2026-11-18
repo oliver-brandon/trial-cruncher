@@ -8,9 +8,9 @@ from trial_cruncher import phase_metrics, prl_metrics
 from trial_cruncher.analysis_metadata import AnalysisMetadata
 from trial_cruncher.medpc import MedPCData, MedPCReader
 from trial_cruncher.models import Session
-from trial_cruncher.phase_metrics import PhaseSummary, calculate_phase_metrics
+from trial_cruncher.phase_metrics import PhaseSummary, calculate_prl_summaries
 from trial_cruncher.prl import NORMALIZER_VERSION, PRLNormalizer
-from trial_cruncher.prl_metrics import PRLSessionSummary, calculate_prl_summary
+from trial_cruncher.prl_metrics import PRLSessionSummary
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +37,7 @@ def import_medpc_file(
     try:
         raw = MedPCReader().read(path)
         (session,) = PRLNormalizer().normalize(raw, path)
-        summary = calculate_prl_summary(session)
-        phase_summary = calculate_phase_metrics(session, phase)
+        summary, phase_summary = calculate_prl_summaries(session, phase)
     except (ValueError, OSError) as exc:
         logger.warning(str(exc), extra={"path": path, "operation": "import_medpc"})
         return ImportResult(path, raw=raw, error=str(exc), analysis_metadata=annotation)

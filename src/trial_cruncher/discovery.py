@@ -1,6 +1,7 @@
 """Read-only candidate discovery. Extensions do not establish a file's schema."""
 
 import logging
+import os
 import stat
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -70,7 +71,21 @@ def discover_files(
                 if resolved in visited or (not explicit and not recursive):
                     continue
                 visited.add(resolved)
-                pending.extend((child, False) for child in resolved.iterdir())
+                # Directory entries can identify ordinary files without resolving
+                # and stat-ing every unrelated recording, backup or exported table.
+                with os.scandir(resolved) as children:
+                    for entry in children:
+                        child = Path(entry.path)
+                        try:
+                            if (
+                                entry.is_file(follow_symlinks=False)
+                                and child.suffix.lower() not in suffixes
+                            ):
+                                continue
+                        except OSError as exc:
+                            report(child, f"Could not access this selection: {exc}")
+                            continue
+                        pending.append((child, False))
             else:
                 report(path, "Selection is not a regular file or folder.")
         except (OSError, RuntimeError) as exc:

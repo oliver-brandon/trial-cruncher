@@ -331,3 +331,18 @@ def test_export_requires_calculated_summary_before_writing(write_export, tmp_pat
     with pytest.raises(ValueError, match="re-import"):
         export_import_results({path: result}, [path], tmp_path)
     assert not list(tmp_path.glob("trial-cruncher-export-*"))
+
+
+def test_csv_export_without_optional_matlab_packages(write_export, tmp_path, monkeypatch):
+    from importlib.metadata import PackageNotFoundError, version
+
+    def installed_version(name):
+        if name in {"scipy", "h5py"}:
+            raise PackageNotFoundError(name)
+        return version(name)
+
+    monkeypatch.setattr(exporters, "version", installed_version)
+    path = write_export()
+    output = export_import_results({path: import_medpc_file(path)}, [path], tmp_path)
+    manifest = json.loads((output / "manifest.json").read_text())
+    assert set(manifest["dependency_versions"]) == {"pandas", "numpy", "openpyxl", "PySide6"}

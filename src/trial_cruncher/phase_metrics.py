@@ -3,10 +3,11 @@
 import hashlib
 import json
 from dataclasses import asdict, dataclass
+from functools import cached_property
 from pathlib import Path
 
 from trial_cruncher.models import MetricResult, Session
-from trial_cruncher.prl_metrics import calculate_prl_summary
+from trial_cruncher.prl_metrics import PRLSessionSummary, calculate_prl_summary
 
 DEFINITION_SET = "prl-medpc-phase-behavior"
 DEFINITION_VERSION = "2"
@@ -36,7 +37,7 @@ class PhaseConfig:
         "Owner confirmed fixed contingency per file; levers stay out until choice."
     )
 
-    @property
+    @cached_property
     def sha256(self) -> str:
         return hashlib.sha256(json.dumps(asdict(self), sort_keys=True).encode()).hexdigest()
 
@@ -86,7 +87,7 @@ class PhaseSummary:
     definition_version: str = DEFINITION_VERSION
     eligibility_policy: str = POLICY
 
-    @property
+    @cached_property
     def status(self) -> str:
         if any("source_integrity" in codes for codes in self.reason_codes):
             return "withheld"
@@ -104,6 +105,13 @@ class PhaseSummary:
 
 def calculate_phase_metrics(session: Session, phase: str | None = None) -> PhaseSummary:
     """Validate full source integrity, then calculate within this source only."""
+    return calculate_prl_summaries(session, phase)[1]
+
+
+def calculate_prl_summaries(
+    session: Session, phase: str | None = None
+) -> tuple[PRLSessionSummary, PhaseSummary]:
+    """Compute both summaries from one validation of this exact session."""
     base = calculate_prl_summary(session)
     config = phase_config(phase)
     reasons, codes = [], []
@@ -136,12 +144,18 @@ def calculate_phase_metrics(session: Session, phase: str | None = None) -> Phase
         post_count = n - k if k is not None else 0
         perseverative = sum(not c for c in correct[:k]) if k else n - n_correct
         regressive = sum(not c for c in correct[k:]) if k else 0
-        pair_evidence = []
-        for c, reward in ((True, True), (False, True), (True, False), (False, False)):
-            pairs = [i for i in range(max(0, n - 1)) if correct[i] == c and rewarded[i] == reward]
-            numerator = sum((correct[i] == correct[i + 1]) == reward for i in pairs)
-            pair_evidence.append(RatioEvidence(numerator, len(pairs)))
-        strategies = tuple(pair_evidence)
+        # The conditioning choice supplies the lever and reward. Collect all four
+        # denominators and their successes in a single pass over adjacent choices.
+        categories = ((True, True), (False, True), (True, False), (False, False))
+        eligible = dict.fromkeys(categories, 0)
+        successes = dict.fromkeys(categories, 0)
+        for i in range(n - 1):
+            category = (correct[i], rewarded[i])
+            eligible[category] += 1
+            stayed = correct[i] == correct[i + 1]
+            if stayed == rewarded[i]:
+                successes[category] += 1
+        strategies = tuple(RatioEvidence(successes[key], eligible[key]) for key in categories)
         diagnostics = PhaseDiagnostics(
             n,
             n_correct,
@@ -177,24 +191,19 @@ def calculate_phase_metrics(session: Session, phase: str | None = None) -> Phase
             else:
                 metric_reasons[i] = ("No eligible conditioning choices; probability is undefined.",)
                 metric_codes[i] = ("zero_strategy_denominator",)
+    units = ("proportion", "count", "count", "proportion") + ("probability",) * len(STRATEGIES)
     metrics = tuple(
         MetricResult(
             name,
             DEFINITION_VERSION,
             value,
-            "proportion"
-            if i == 0
-            else "count"
-            if i in (1, 2)
-            else "proportion"
-            if i == 3
-            else "probability",
+            units[i],
             session.warnings,
             metric_reasons[i],
         )
         for i, (name, value) in enumerate(zip(METRIC_LABELS, values, strict=True))
     )
-    return PhaseSummary(
+    return base, PhaseSummary(
         session.source_file,
         session.metadata["raw_medpc"]["source_sha256"],
         config,

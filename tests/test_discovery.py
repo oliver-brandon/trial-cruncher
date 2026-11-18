@@ -1,4 +1,4 @@
-from pathlib import Path
+import os
 
 import pytest
 
@@ -44,14 +44,14 @@ def test_directory_access_error_retains_other_files(tmp_path, monkeypatch):
     blocked.mkdir()
     good = tmp_path / "good.mat"
     good.touch()
-    original = Path.iterdir
+    original = os.scandir
 
-    def iterdir(path):
+    def scandir(path):
         if path == blocked:
             raise PermissionError("Synthetic permission failure")
         return original(path)
 
-    monkeypatch.setattr(Path, "iterdir", iterdir)
+    monkeypatch.setattr(os, "scandir", scandir)
     result = discover_files([tmp_path])
     assert result.files == (good,)
     assert len(result.issues) == 1
@@ -78,3 +78,18 @@ def test_invalid_extensions(extensions):
 
 def test_extension_normalization():
     assert normalize_extensions(["MAT", " .txt ", ".mat"]) == {".mat", ".txt"}
+
+
+def test_file_symlinks_are_filtered_by_target_extension(tmp_path):
+    target = tmp_path / "source.med"
+    target.write_text("synthetic")
+    folder = tmp_path / "links"
+    folder.mkdir()
+    link = folder / "different.bin"
+    try:
+        link.symlink_to(target)
+    except OSError:
+        pytest.skip("File symlinks unavailable on this platform")
+    result = discover_files([folder])
+    assert result.files == (target,)
+    assert not result.issues

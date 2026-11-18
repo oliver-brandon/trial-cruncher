@@ -3,21 +3,17 @@
 import csv
 import json
 import math
-import os
-import time
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+import pytest
+from openpyxl import load_workbook
+from PySide6.QtCore import Qt
+from qt_helpers import wait_until
 
-import pytest  # noqa: E402
-from openpyxl import load_workbook  # noqa: E402
-from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtWidgets import QApplication  # noqa: E402
-
-from trial_cruncher.exporters import export_import_results  # noqa: E402
-from trial_cruncher.gui.window import MainWindow  # noqa: E402
-from trial_cruncher.prl_metrics import MEDPC_RATE  # noqa: E402
-from trial_cruncher.processing import import_medpc_file  # noqa: E402
-from trial_cruncher.projects import load_project, save_project  # noqa: E402
+from trial_cruncher.exporters import export_import_results
+from trial_cruncher.gui.window import MainWindow
+from trial_cruncher.prl_metrics import MEDPC_RATE
+from trial_cruncher.processing import import_medpc_file
+from trial_cruncher.projects import load_project, save_project
 
 
 def rate(result):
@@ -152,19 +148,6 @@ def test_previous_project_adds_rate_without_rewriting_setup(phase_input, tmp_pat
     assert loaded.project.sources == saved.project.sources and p.read_bytes() == before
 
 
-@pytest.fixture(scope="module")
-def app():
-    return QApplication.instance() or QApplication([])
-
-
-def wait(app, predicate):
-    deadline = time.monotonic() + 5
-    while not predicate() and time.monotonic() < deadline:
-        app.processEvents()
-        time.sleep(0.01)
-    assert predicate()
-
-
 def test_batch_rate_is_independent_of_phase_and_sorts_numerically(
     app, phase_input, tmp_path, monkeypatch
 ):
@@ -178,9 +161,9 @@ def test_batch_rate_is_independent_of_phase_and_sorts_numerically(
     window.show()
     try:
         window.add_paths([str(p) for p in (fast, slow, zero, missing)])
-        wait(app, lambda: window._worker is None)
+        wait_until(app, lambda: window._worker is None)
         window.import_button.click()
-        wait(app, lambda: window._import_worker is None)
+        wait_until(app, lambda: window._import_worker is None)
         view = window.phase_overview
         window.batch_tabs.setCurrentWidget(view)
         view.column_view.setCurrentText("Session rate")

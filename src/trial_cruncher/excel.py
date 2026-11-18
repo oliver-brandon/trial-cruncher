@@ -47,6 +47,11 @@ def _text_parts(text: str) -> list[str]:
     """Split without changing any character, including supplementary Unicode."""
     if INVALID_XML.search(text):
         raise ValueError("Text contains characters Excel cannot represent; use CSV export.")
+    # Most cells fit as-is. Every Unicode code point uses at most two UTF-16 units.
+    if len(text) <= TEXT_UNITS // 2 and text.count("\n") <= LINE_FEEDS:
+        return [text]
+    if text.isascii() and text.count("\n") <= LINE_FEEDS:
+        return [text[i : i + TEXT_UNITS] for i in range(0, len(text), TEXT_UNITS)] or [""]
     parts = []
     start = units = feeds = 0
     for index, char in enumerate(text):
@@ -81,11 +86,18 @@ def _cell_value(value: Any) -> str | int | float | bool | None:
 def _write_table(sheet: Worksheet, table: pd.DataFrame, overflow: list[tuple] | None) -> None:
     if len(table) + 1 > MAX_ROWS or len(table.columns) > MAX_COLUMNS:
         raise ValueError(f"{sheet.title} exceeds Excel's worksheet limits; use CSV export.")
-    rows = [tuple(table.columns)]
+    headers = tuple(table.columns)
+    float_formats = tuple(
+        "0.0000" if name.endswith("proportion_correct") else "0.###############" for name in headers
+    )
     # Chain the header and body without making another copy of the table.
-    for row_number, row in enumerate(chain(rows, table.itertuples(index=False, name=None)), 1):
+    for row_number, row in enumerate(
+        chain((headers,), table.itertuples(index=False, name=None)), 1
+    ):
         for column, original in enumerate(row, 1):
             value = _cell_value(original)
+            if value is None:
+                continue
             cell = sheet.cell(row_number, column)
             if isinstance(value, str):
                 try:
@@ -110,23 +122,37 @@ def _write_table(sheet: Worksheet, table: pd.DataFrame, overflow: list[tuple] | 
                 if isinstance(value, int) and not isinstance(value, bool):
                     cell.number_format = "0"
                 elif isinstance(value, float):
-                    cell.number_format = (
-                        "0.0000"
-                        if table.columns[column - 1].endswith("proportion_correct")
-                        else "0.###############"
-                    )
+                    cell.number_format = float_formats[column - 1]
+    # Preserve the declared extent even if the final row has only missing values.
+    sheet.cell(len(table) + 1, len(headers))
     sheet.freeze_panes = "C2" if sheet.title in ("Quality", "Provenance") else "A2"
-    sheet.auto_filter.ref = sheet.dimensions
+    sheet.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{len(table) + 1}"
     sheet.row_dimensions[1].height = 48
-    for cell in sheet[1]:
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor="244761")
-        cell.alignment = Alignment(wrap_text=True, vertical="center")
-    for column, label in enumerate(table.columns, 1):
+    font = Font(bold=True, color="FFFFFF")
+    fill = PatternFill("solid", fgColor="244761")
+    alignment = Alignment(wrap_text=True, vertical="center")
+    for column, label in enumerate(headers, 1):
+        cell = sheet.cell(1, column)
+        cell.font, cell.fill, cell.alignment = font, fill, alignment
         width = 48 if label in ("source_file", "text", "error") or label.endswith("_json") else 24
         if label == WHOLE_SESSION_RATE_COLUMN:
             width = 38
         sheet.column_dimensions[get_column_letter(column)].width = width
+
+
+def _quality_rows(common, metrics_json, policy, record_type):
+    for metric in json.loads(metrics_json):
+        yield {
+            **common,
+            "record_type": record_type,
+            "metric": metric["name"],
+            "value": metric["value"],
+            "unit": metric["unit"],
+            "metric_status": metric["status"],
+            "reasons_json": json_text(metric["reasons"]),
+            "definition_version": metric["definition_version"],
+            "policy": policy,
+        }
 
 
 def build_workbook(
@@ -138,7 +164,12 @@ def build_workbook(
 ) -> Workbook:
     """Prepare five sheets before reserving output; add Excel rules to the manifest."""
     quality = []
-    by_source = {row["source_file"]: row for row in sessions.to_dict("records")}
+    by_source = {
+        path: (metrics, policy)
+        for path, metrics, policy in sessions[
+            ["source_file", "metric_results_json", "metric_policy"]
+        ].itertuples(index=False, name=None)
+    }
     for item in manifest["inputs"]:
         common = {
             "source_file": item["source_file"],
@@ -151,39 +182,23 @@ def build_workbook(
         quality.append({**common, "record_type": "input"})
         session = by_source.get(item["source_file"])
         if session is not None:
-            for metric in json.loads(session["metric_results_json"]):
-                quality.append(
-                    {
-                        **common,
-                        "record_type": "metric",
-                        "metric": metric["name"],
-                        "value": metric["value"],
-                        "unit": metric["unit"],
-                        "metric_status": metric["status"],
-                        "reasons_json": json_text(metric["reasons"]),
-                        "definition_version": metric["definition_version"],
-                        "policy": session["metric_policy"],
-                    }
-                )
-    for row in phases.to_dict("records"):
-        for metric in json.loads(row["metric_results_json"]):
-            quality.append(
-                {
-                    "record_type": "phase_metric",
-                    **{key: row[key] for key in ANNOTATION_COLUMNS},
-                    "source_file": row["source_file"],
-                    "input_status": "exported",
-                    "source_sha256": row["source_sha256"],
-                    "warnings_json": row["warnings_json"],
-                    "metric": metric["name"],
-                    "value": metric["value"],
-                    "unit": metric["unit"],
-                    "metric_status": metric["status"],
-                    "reasons_json": json_text(metric["reasons"]),
-                    "definition_version": metric["definition_version"],
-                    "policy": row["phase_policy"],
-                }
-            )
+            metrics_json, policy = session
+            quality.extend(_quality_rows(common, metrics_json, policy, "metric"))
+    for row in phases[
+        [
+            *ANNOTATION_COLUMNS,
+            "source_file",
+            "source_sha256",
+            "warnings_json",
+            "metric_results_json",
+            "phase_policy",
+        ]
+    ].to_dict("records"):
+        metrics_json = row.pop("metric_results_json")
+        policy = row.pop("phase_policy")
+        quality.extend(
+            _quality_rows({**row, "input_status": "exported"}, metrics_json, policy, "phase_metric")
+        )
     quality_table = pd.DataFrame(
         [[row.get(column) for column in QUALITY_COLUMNS] for row in quality],
         columns=QUALITY_COLUMNS,

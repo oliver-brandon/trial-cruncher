@@ -8,7 +8,7 @@ import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from datetime import UTC, datetime
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Literal, Protocol
 
@@ -77,6 +77,16 @@ class CSVExporter:
         return destination
 
 
+def _dependency_versions() -> dict[str, str]:
+    versions = {name: version(name) for name in ("pandas", "numpy", "openpyxl", "PySide6")}
+    for optional in ("scipy", "h5py"):
+        try:
+            versions[optional] = version(optional)
+        except PackageNotFoundError:
+            continue
+    return versions
+
+
 def export_import_results(
     results: Mapping[Path, ImportResult],
     selected_paths: Sequence[Path],
@@ -112,12 +122,12 @@ def export_import_results(
             )
         session = result.session if result and not result.error else None
         if session is not None:
-            validate_reviewed_result(result)
+            if analysis_plan is None:
+                validate_reviewed_result(result)
             sessions.append(session)
             annotations[session.source_file] = annotation
             summaries[session.source_file] = result.summary
-            phase = result.phase_summary
-            phases[session.source_file] = phase
+            phases[session.source_file] = result.phase_summary
         raw = result.raw if result else None
         inputs.append(
             {
@@ -145,22 +155,22 @@ def export_import_results(
     }
     if analysis_plan is None:
         require_current_sources(expected_hashes)
+        derived = {}
+    else:
+        # Analysis checks both review versions and source freshness for the batch.
+        derived = build_analysis(analysis_plan, results, paths, assignments)
     tables = {
         "sessions.csv": build_session_table(sessions, summaries, annotations),
         "choices.csv": build_choice_table(sessions, phases, annotations),
         "phase_metrics.csv": build_phase_table(sessions, phases, summaries, annotations),
     }
-    derived = build_analysis(analysis_plan, results, paths, assignments) if analysis_plan else {}
     tables.update(derived)
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "application_version": __version__,
         "created_at_utc": datetime.now(UTC).isoformat(),
         "python_version": platform.python_version(),
-        "dependency_versions": {
-            name: version(name)
-            for name in ("pandas", "numpy", "scipy", "h5py", "openpyxl", "PySide6")
-        },
+        "dependency_versions": _dependency_versions(),
         "snapshot": (
             "Reviewed import results; source hashes checked before export and before completion."
         ),

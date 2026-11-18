@@ -1,38 +1,27 @@
 """Offscreen user flow from reviewed input through plan selection, preview, export and reload."""
 
 import json
-import os
-import time
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import QFileDialog, QTabWidget
+from qt_helpers import wait_until
 
-from PySide6.QtCore import Qt, QTimer  # noqa: E402
-from PySide6.QtWidgets import QApplication, QFileDialog, QTabWidget  # noqa: E402
-
-from trial_cruncher.analysis_metadata import AnalysisMetadata  # noqa: E402
-from trial_cruncher.gui.animal_analysis import AnalysisReview, PlanDialog  # noqa: E402
-from trial_cruncher.gui.window import MainWindow  # noqa: E402
+from trial_cruncher.analysis_metadata import AnalysisMetadata
+from trial_cruncher.gui.animal_analysis import AnalysisReview, PlanDialog
+from trial_cruncher.gui.window import MainWindow
 
 
-def test_configure_preview_save_load_export_disable(phase_input, tmp_path, monkeypatch):
-    app = QApplication.instance() or QApplication([])
+def test_configure_preview_save_load_export_disable(app, phase_input, tmp_path, monkeypatch):
     w = MainWindow()
-
-    def wait(check):
-        until = time.monotonic() + 8
-        while not check() and time.monotonic() < until:
-            app.processEvents()
-            time.sleep(0.005)
-        assert check()
 
     p = phase_input()
     try:
         w.add_paths([str(p)])
-        wait(lambda: w._worker is None)
+        wait_until(app, lambda: w._worker is None)
         w.phase_assignments = {p: "Reversal"}
         w.metadata_assignments = {p: AnalysisMetadata("A", "C", included=True)}
         w.import_selected_files()
-        wait(lambda: w._import_worker is None)
+        wait_until(app, lambda: w._import_worker is None)
 
         def configure():
             d = app.activeModalWidget()
@@ -51,23 +40,23 @@ def test_configure_preview_save_load_export_disable(phase_input, tmp_path, monke
         monkeypatch.setattr(AnalysisReview, "exec", review)
         QTimer.singleShot(0, configure)
         w.analysis_button.click()
-        wait(lambda: bool(preview))
+        wait_until(app, lambda: bool(preview))
         assert preview == [4] and w.analysis_plan.phases == ("Reversal",)
         target = tmp_path / "example.tcproj.json"
         monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *a, **kw: (str(target), ""))
         w.save_project_button.click()
-        wait(lambda: w._project_worker is None)
+        wait_until(app, lambda: w._project_worker is None)
         w.clear_selection()
         assert w.analysis_plan is None
         monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a, **kw: (str(target), ""))
         w.open_project_button.click()
-        wait(lambda: w._project_worker is None)
+        wait_until(app, lambda: w._project_worker is None)
         assert w.analysis_plan.cohort == "C" and not w.import_results
         w.import_selected_files()
-        wait(lambda: w._import_worker is None)
+        wait_until(app, lambda: w._import_worker is None)
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *a: str(tmp_path))
         w.export_button.click()
-        wait(lambda: w._export_worker is None)
+        wait_until(app, lambda: w._export_worker is None)
         (out,) = tmp_path.glob("trial-cruncher-export-*")
         assert (
             json.loads((out / "manifest.json").read_text())["aggregation"]["plan_sha256"]
@@ -80,13 +69,12 @@ def test_configure_preview_save_load_export_disable(phase_input, tmp_path, monke
         w.close()
 
 
-def test_legacy_project_empty_cohort_opens_metadata_editor(phase_input, tmp_path, monkeypatch):
+def test_legacy_project_empty_cohort_opens_metadata_editor(app, phase_input, tmp_path, monkeypatch):
     from PySide6.QtWidgets import QPushButton
 
     from trial_cruncher.gui.metadata import MetadataDialog
     from trial_cruncher.projects import save_project
 
-    app = QApplication.instance() or QApplication([])
     path = phase_input()
     target = tmp_path / "legacy.tcproj.json"
     save_project(target, [path], {path: "Reversal"}, {}, extensions=[".txt"], recursive=False)
@@ -99,10 +87,7 @@ def test_legacy_project_empty_cohort_opens_metadata_editor(phase_input, tmp_path
     monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a, **kw: (str(target), ""))
     try:
         w.open_project()
-        deadline = time.monotonic() + 5
-        while w._project_worker is not None and time.monotonic() < deadline:
-            app.processEvents()
-            time.sleep(0.005)
+        wait_until(app, lambda: w._project_worker is None)
         assert w.selected_files == {path}
         checks = []
 

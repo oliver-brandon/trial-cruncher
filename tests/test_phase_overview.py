@@ -2,37 +2,21 @@
 
 import csv
 import json
-import os
-import time
 from dataclasses import replace
 from threading import Event
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+import pytest
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QFileDialog
+from qt_helpers import wait_until
 
-import pytest  # noqa: E402
-from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtTest import QTest  # noqa: E402
-from PySide6.QtWidgets import QApplication, QFileDialog  # noqa: E402
-
-from trial_cruncher.gui import import_worker  # noqa: E402
-from trial_cruncher.gui.overview import OverviewModel  # noqa: E402
-from trial_cruncher.gui.phase_overview import HEADERS, VIEWS, BatchPhaseOverview  # noqa: E402
-from trial_cruncher.gui.window import MainWindow  # noqa: E402
-from trial_cruncher.processing import import_medpc_file  # noqa: E402
-from trial_cruncher.projects import save_project  # noqa: E402
-
-
-@pytest.fixture(scope="module")
-def app():
-    return QApplication.instance() or QApplication([])
-
-
-def wait(app, predicate):
-    deadline = time.monotonic() + 5
-    while not predicate() and time.monotonic() < deadline:
-        app.processEvents()
-        time.sleep(0.01)
-    assert predicate()
+from trial_cruncher.gui import import_worker
+from trial_cruncher.gui.overview import OverviewModel
+from trial_cruncher.gui.phase_overview import HEADERS, VIEWS, BatchPhaseOverview
+from trial_cruncher.gui.window import MainWindow
+from trial_cruncher.processing import import_medpc_file
+from trial_cruncher.projects import save_project
 
 
 def shown(view, path, column):
@@ -198,10 +182,10 @@ def test_phase_click_through_tabs_hidden_rows_and_pending_assignments(app, phase
     window.show()
     try:
         window.add_paths([str(first), str(second)])
-        wait(app, lambda: window._worker is None)
+        wait_until(app, lambda: window._worker is None)
         window.phase_assignments = {first: "Acquisition", second: "Reversal"}
         window.import_button.click()
-        wait(app, lambda: window._import_worker is None)
+        wait_until(app, lambda: window._import_worker is None)
         window.batch_tabs.setCurrentWidget(window.phase_overview)
         view = window.phase_overview
         assert view.model.source is window.overview.model
@@ -243,19 +227,19 @@ def test_filtered_phase_batch_exports_and_imports_all_sources(
     window.show()
     try:
         window.add_paths([str(p) for p in (a, b, failed)])
-        wait(app, lambda: window._worker is None)
+        wait_until(app, lambda: window._worker is None)
         window.phase_assignments = {a: "Acq", b: "Rev"}
         window.import_button.click()
-        wait(app, lambda: window._import_worker is None)
+        wait_until(app, lambda: window._import_worker is None)
         window.add_paths([str(later)])
-        wait(app, lambda: window._worker is None)
+        wait_until(app, lambda: window._worker is None)
         view = window.phase_overview
         window.batch_tabs.setCurrentWidget(view)
         view.phase_filter.setCurrentIndex(view.phase_filter.findData("Acq"))
         assert visible(view) == [a] and "Showing 1 of 4" in view.count_label.text()
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(tmp_path))
         (window.excel_button if export_format == "xlsx" else window.export_button).click()
-        wait(app, lambda: window._export_worker is None)
+        wait_until(app, lambda: window._export_worker is None)
         (out,) = tmp_path.glob("trial-cruncher-export-*")
         if export_format == "csv":
             with (out / "phase_metrics.csv").open(newline="") as stream:
@@ -276,7 +260,7 @@ def test_filtered_phase_batch_exports_and_imports_all_sources(
             str(later): "not_imported",
         }
         window.import_button.click()
-        wait(app, lambda: window._import_worker is None)
+        wait_until(app, lambda: window._import_worker is None)
         assert len(window.import_results) == 4 and visible(view) == [a]
     finally:
         window.close()
@@ -292,29 +276,29 @@ def test_live_import_cancel_failure_stale_source_and_project_load(
     window.show()
     try:
         window.add_paths([str(a), str(b)])
-        wait(app, lambda: window._worker is None)
+        wait_until(app, lambda: window._worker is None)
         window.phase_assignments = {a: "Rev", b: "Rev"}
         window.import_button.click()
-        wait(app, lambda: window._import_worker is None)
+        wait_until(app, lambda: window._import_worker is None)
         view = window.phase_overview
         window.batch_tabs.setCurrentWidget(view)
         click(app, view, b)
 
-        def controlled(path, phase=None):
+        def controlled(path, phase=None, metadata=None):
             entered.set()
             assert release.wait(5)
-            return import_medpc_file(path, phase)
+            return import_medpc_file(path, phase, metadata)
 
         monkeypatch.setattr(import_worker, "import_medpc_file", controlled)
         window.import_button.click()
-        wait(app, entered.is_set)
+        wait_until(app, entered.is_set)
         assert shown(view, b, 3) == "Pending" and shown(view, b, 13) == "Pending"
         assert window.review.phase_table.rowCount() == 0
         view.status_filter.setCurrentText("Pending")
         view.table.sortByColumn(4, Qt.SortOrder.DescendingOrder)
         window.cancel_import()
         release.set()
-        wait(app, lambda: window._import_worker is None)
+        wait_until(app, lambda: window._import_worker is None)
         assert not visible(view)
         view.status_filter.setCurrentText("Not imported")
         assert visible(view) == [b] and shown(view, b, 3) == "Not imported (cancelled)"
@@ -322,7 +306,7 @@ def test_live_import_cancel_failure_stale_source_and_project_load(
         b.write_text("malformed")
         view.clear_filters()
         window.import_button.click()
-        wait(app, lambda: window._import_worker is None)
+        wait_until(app, lambda: window._import_worker is None)
         click(app, view, b)
         assert shown(view, b, 3) == "Failed" and window.review.phase_table.rowCount() == 0
         click(app, view, a)
@@ -330,7 +314,7 @@ def test_live_import_cancel_failure_stale_source_and_project_load(
         view.phase_filter.setCurrentIndex(view.phase_filter.findData("Rev"))
         assert visible(view) == [a]
         window.check_sources_button.click()
-        wait(app, lambda: window._project_worker is None)
+        wait_until(app, lambda: window._project_worker is None)
         assert not visible(view) and view.current_path() is None
         assert "No files match" in window.review.summary.text()
         view.clear_filters()
@@ -348,7 +332,7 @@ def test_live_import_cancel_failure_stale_source_and_project_load(
             QFileDialog, "getOpenFileName", lambda *args, **kwargs: (str(project), "")
         )
         window.open_project_button.click()
-        wait(app, lambda: window._project_worker is None)
+        wait_until(app, lambda: window._project_worker is None)
         assert (
             view.status_filter.currentText() == "All statuses"
             and view.phase_filter.currentIndex() == 0
@@ -358,5 +342,35 @@ def test_live_import_cancel_failure_stale_source_and_project_load(
         assert all(shown(view, p, 3) == "Not imported" for p in (a, b))
     finally:
         release.set()
-        wait(app, lambda: window._import_worker is None)
+        wait_until(app, lambda: window._import_worker is None)
         window.close()
+
+
+def test_incremental_filter_menus_preserve_selection_and_drop_obsolete_labels(app, phase_input):
+    from trial_cruncher.analysis_metadata import AnalysisMetadata
+
+    path = phase_input()
+    result = import_medpc_file(path, "Acquisition", AnalysisMetadata("Vehicle", "001"))
+    source = OverviewModel()
+    view = BatchPhaseOverview(source)
+    try:
+        source.set_files([path], {path: result})
+        view.phase_filter.setCurrentIndex(view.phase_filter.findData("Acquisition"))
+        view.select_path(path)
+        updated = replace(result, analysis_metadata=AnalysisMetadata("Drug", "002"))
+        source.set_result(updated)
+        assert view.current_path() == path
+        assert view.phase_filter.currentData() == "Acquisition"
+        for combo, old, new in (
+            (view.condition_filter, "Vehicle", "Drug"),
+            (view.cohort_filter, "001", "002"),
+        ):
+            assert combo.findData(old) == -1
+            assert combo.findData(new) >= 0
+        source.start_import()
+        assert not view.proxy.rowCount()
+        source.set_result(updated)
+        assert view.proxy.rowCount() == 1
+        assert view.current_path() is None
+    finally:
+        view.close()

@@ -106,11 +106,33 @@ discarding observations. Never commit real research files or secrets; ignored
 Dependencies use compatible minimum versions rather than a lockfile in this initial
 foundation. For reproducible research deployments, record the actual resolved
 environment and all analysis configuration. Current CSV and Excel manifests record runtime
-versions, import/export scope, and the PRL definition set/version and strict
+versions (including SciPy and h5py when installed), import/export scope, and the PRL definition set/version and strict
 eligibility policy. Additional metric configuration must be recorded when implemented. Do not describe a passing development build as scientific validation.
 
 No license or author identity has been assigned. Publishing and licensing decisions
 remain with the repository owner.
+
+## Batch performance measurements
+
+These local measurements compare the cleanup with commit `7486825` on the same
+Linux machine and Python environment. Import, model update, project, and export
+times are medians of three runs. Synthetic recordings had 40 choices each. The
+Qt model measurement starts with imported results and uses the offscreen platform.
+The Excel workload includes the animal analysis tables.
+
+| Operation | Before | After |
+| --- | ---: | ---: |
+| Discover 300 matching files among 6,000 directory entries | 80 ms | 18 ms |
+| Import and calculate session and phase metrics for 360 files | 151 ms | 139 ms |
+| Feed 360 results to the two batch views | 188 ms | 71 ms |
+| Save a new 360-file project and load it | 64 ms | 36 ms |
+| Export 32 recordings to Excel | 864 ms | 705 ms |
+| Build the 14,400-row choice table, peak Python allocation | 22.3 MiB | 15.4 MiB |
+
+Separately, all seven supplied partial-session recordings were exported with both
+revisions in the same environment. CSV table bytes, workbook cell values, and
+manifest contents matched after accounting for the export timestamp. Source file
+hashes and modification times matched before and after.
 
 ## Phase metric verification
 

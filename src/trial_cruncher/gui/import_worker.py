@@ -43,17 +43,7 @@ class ImportWorker(QRunnable):
                 if self._cancel.is_set():
                     break
                 try:
-                    phase = self.phases.get(path)
-                    annotation = self.metadata.get(path)
-                    result = (
-                        import_medpc_file(path, phase, annotation)
-                        if annotation is not None
-                        else (
-                            import_medpc_file(path, phase)
-                            if phase is not None
-                            else import_medpc_file(path)
-                        )
-                    )
+                    result = import_medpc_file(path, self.phases.get(path), self.metadata.get(path))
                 except Exception:
                     logger.exception("Unexpected import failure", extra={"path": path})
                     result = ImportResult(

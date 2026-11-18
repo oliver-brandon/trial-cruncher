@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from functools import cached_property
 from html import escape
 from pathlib import Path
 
@@ -58,7 +59,7 @@ class OverviewRow:
     source_issue: str | None = None
     analysis_metadata: AnalysisMetadata | None = None
 
-    @property
+    @cached_property
     def annotation(self) -> AnalysisMetadata:
         return (
             self.analysis_metadata
@@ -178,7 +179,7 @@ class OverviewRow:
         lines += list(self.warnings)
         return "\n".join(lines)
 
-    @property
+    @cached_property
     def search_text(self) -> str:
         fields = [str(self.path), *(self.text(column) for column in range(1, 5)), *self.warnings]
         fields.extend(self.text(column) for column in range(14, 19))
@@ -199,43 +200,44 @@ class OverviewModel(QAbstractTableModel):
         self.rows: list[OverviewRow] = []
         self._row_by_path: dict[Path, int] = {}
 
-    def set_source_issues(self, issues: Mapping[Path, str]) -> None:
-        self.beginResetModel()
-        self.rows = [
-            OverviewRow(
-                row.path,
-                row.result,
-                "Re-import required" if row.path in issues else row.state,
-                issues.get(row.path),
-                row.annotation,
-            )
-            for row in self.rows
-        ]
-        self.endResetModel()
+    def row(self, index: int) -> OverviewRow:
+        return self.rows[index]
+
+    def index_for_path(self, path: Path | None) -> QModelIndex:
+        row = self._row_by_path.get(path)
+        return self.index(row, 0) if row is not None else QModelIndex()
 
     def set_files(
         self,
         paths: Sequence[Path],
         results: Mapping[Path, ImportResult],
         annotations: Mapping[Path, AnalysisMetadata] | None = None,
+        issues: Mapping[Path, str] | None = None,
     ) -> None:
-        old_states = {row.path: row.state for row in self.rows}
-        old_annotations = {row.path: row.annotation for row in self.rows}
-        self.beginResetModel()
-        self.rows = [
-            OverviewRow(
-                path,
-                results.get(path),
-                old_states.get(path, "Not imported"),
-                analysis_metadata=annotations.get(path, AnalysisMetadata())
-                if annotations is not None
-                else results[path].analysis_metadata
-                if path in results
-                else old_annotations.get(path, AnalysisMetadata()),
+        previous = {row.path: row for row in self.rows}
+        unassigned = AnalysisMetadata()
+        rows = []
+        for path in sorted(set(paths), key=str):
+            old = previous.get(path)
+            result = results.get(path)
+            issue = old.source_issue if old else None
+            if issues is not None:
+                issue = issues.get(path)
+            state = old.state if old and not old.source_issue else "Not imported"
+            if annotations is not None:
+                annotation = annotations.get(path, unassigned)
+            elif result is not None:
+                annotation = result.analysis_metadata
+            else:
+                annotation = old.annotation if old else None
+            rows.append(
+                OverviewRow(
+                    path, result, "Re-import required" if issue else state, issue, annotation
+                )
             )
-            for path in sorted(set(paths), key=str)
-        ]
-        self._row_by_path = {row.path: i for i, row in enumerate(self.rows)}
+        self.beginResetModel()
+        self.rows = rows
+        self._row_by_path = {row.path: i for i, row in enumerate(rows)}
         self.endResetModel()
 
     def start_import(self) -> None:
@@ -299,29 +301,11 @@ class OverviewModel(QAbstractTableModel):
         return super().headerData(section, orientation, role)
 
 
-class OverviewProxy(QSortFilterProxyModel):
-    def __init__(self, parent=None) -> None:
-        super().__init__(parent)
-        self.search = ""
-        self.program: str | None = None
-        self.quality = "All statuses"
-        self.setDynamicSortFilter(True)
-
-    def filterAcceptsRow(self, row, parent) -> bool:
-        entry = self.sourceModel().rows[row]
-        quality = entry.quality
-        category = "Not imported" if quality.startswith("Not imported") else quality
-        if self.quality == "Needs attention":
-            if category not in ATTENTION_STATES:
-                return False
-        elif self.quality != "All statuses" and category != self.quality:
-            return False
-        if self.program is not None and (entry.value(3) or "") != self.program:
-            return False
-        return self.search in entry.search_text
+class BatchSortProxy(QSortFilterProxyModel):
+    """Sort typed values, placing missing observations last in either direction."""
 
     def lessThan(self, left, right) -> bool:
-        a, b = self.sourceModel().rows[left.row()], self.sourceModel().rows[right.row()]
+        a, b = self.sourceModel().row(left.row()), self.sourceModel().row(right.row())
         av, bv = a.value(left.column()), b.value(right.column())
         if (av is None) != (bv is None):
             # Qt reverses comparison arguments for descending order. Compensate so
@@ -332,6 +316,29 @@ class OverviewProxy(QSortFilterProxyModel):
         if av == bv:
             return str(a.path) < str(b.path)
         return av < bv
+
+
+class OverviewProxy(BatchSortProxy):
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.search = ""
+        self.program: str | None = None
+        self.quality = "All statuses"
+        self.setDynamicSortFilter(True)
+
+    def filterAcceptsRow(self, row, parent) -> bool:
+        entry = self.sourceModel().rows[row]
+        if self.quality != "All statuses":
+            quality = entry.quality
+            category = "Not imported" if quality.startswith("Not imported") else quality
+            if self.quality == "Needs attention":
+                if category not in ATTENTION_STATES:
+                    return False
+            elif category != self.quality:
+                return False
+        if self.program is not None and (entry.value(3) or "") != self.program:
+            return False
+        return not self.search or self.search in entry.search_text
 
 
 class BatchOverview(QWidget):
@@ -434,10 +441,7 @@ class BatchOverview(QWidget):
 
     def select_path(self, path: Path | None) -> None:
         previous = self.current_path()
-        row = self.model._row_by_path.get(path)
-        index = (
-            self.proxy.mapFromSource(self.model.index(row, 0)) if row is not None else QModelIndex()
-        )
+        index = self.proxy.mapFromSource(self.model.index_for_path(path))
         self.table.setCurrentIndex(index)
         if not index.isValid():
             self.table.clearSelection()
@@ -449,9 +453,10 @@ class BatchOverview(QWidget):
         paths: Sequence[Path],
         results: Mapping[Path, ImportResult],
         annotations: Mapping[Path, AnalysisMetadata] | None = None,
+        issues: Mapping[Path, str] | None = None,
     ) -> None:
         selected = self.current_path()
-        self.model.set_files(paths, results, annotations)
+        self.model.set_files(paths, results, annotations, issues)
         self._update_programs()
         self.select_path(selected)
         if self.current_path() is None and self.proxy.rowCount():
@@ -466,7 +471,8 @@ class BatchOverview(QWidget):
     def set_result(self, result: ImportResult) -> None:
         selected = self.current_path()
         self.model.set_result(result)
-        program = self.model.rows[self.model._row_by_path[result.source_file]].value(3) or ""
+        index = self.model.index_for_path(result.source_file)
+        program = self.model.row(index.row()).value(3) or ""
         if self.program.findData(program) < 0:
             self.program.addItem(program or "Unavailable program", program)
         if self.current_path() != selected:

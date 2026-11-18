@@ -1,17 +1,14 @@
-import os
-import time
 from threading import Event as ThreadEvent
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+import pytest
+from PySide6.QtCore import Qt, QThread
+from PySide6.QtWidgets import QFileDialog, QMessageBox
+from qt_helpers import wait_until
 
-import pytest  # noqa: E402
-from PySide6.QtCore import Qt, QThread  # noqa: E402
-from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox  # noqa: E402
-
-from trial_cruncher.gui import import_worker as worker_module  # noqa: E402
-from trial_cruncher.gui import window as window_module  # noqa: E402
-from trial_cruncher.gui.window import MainWindow  # noqa: E402
-from trial_cruncher.processing import import_medpc_file  # noqa: E402
+from trial_cruncher.gui import import_worker as worker_module
+from trial_cruncher.gui import window as window_module
+from trial_cruncher.gui.window import MainWindow
+from trial_cruncher.processing import import_medpc_file
 
 
 @pytest.mark.parametrize("export_format", ["csv", "xlsx"])
@@ -121,12 +118,12 @@ def test_phase_worker_snapshot_cancel_and_failed_reimport(app, phase_input, monk
     second = phase_input(name="b.txt")
     entered, release = ThreadEvent(), ThreadEvent()
 
-    def controlled(path, phase=None):
+    def controlled(path, phase=None, metadata=None):
         assert QThread.currentThread() != app.thread()
         if path == first:
             entered.set()
             assert release.wait(5)
-        return import_medpc_file(path, phase)
+        return import_medpc_file(path, phase, metadata)
 
     monkeypatch.setattr(worker_module, "import_medpc_file", controlled)
     window = MainWindow()
@@ -165,25 +162,8 @@ def test_phase_worker_snapshot_cancel_and_failed_reimport(app, phase_input, monk
         window.close()
 
 
-@pytest.fixture(scope="module")
-def app():
-    return QApplication.instance() or QApplication([])
-
-
 def wait_for_discovery(app, window):
-    deadline = time.monotonic() + 5
-    while window._worker is not None and time.monotonic() < deadline:
-        app.processEvents()
-        time.sleep(0.01)
-    assert window._worker is None, "Discovery worker did not finish"
-
-
-def wait_until(app, predicate):
-    deadline = time.monotonic() + 5
-    while not predicate() and time.monotonic() < deadline:
-        app.processEvents()
-        time.sleep(0.01)
-    assert predicate(), "Background operation did not finish"
+    wait_until(app, lambda: window._worker is None)
 
 
 def choose_path(window, path):
@@ -311,12 +291,12 @@ def test_import_stays_responsive_and_cancels_between_files(
     entered, release = ThreadEvent(), ThreadEvent()
     calls = []
 
-    def controlled_import(path):
+    def controlled_import(path, phase=None, metadata=None):
         assert QThread.currentThread() != app.thread()
         calls.append(path)
         entered.set()
         assert release.wait(5)
-        return import_medpc_file(path)
+        return import_medpc_file(path, phase, metadata)
 
     monkeypatch.setattr(worker_module, "import_medpc_file", controlled_import)
     window = MainWindow()
@@ -362,10 +342,10 @@ def test_unexpected_import_error_does_not_abort_other_files(app, write_export, m
     broken = path.with_name("a-broken.txt")
     broken.write_bytes(path.read_bytes())
 
-    def fail_one(candidate):
+    def fail_one(candidate, phase=None, metadata=None):
         if candidate == broken:
             raise RuntimeError("Synthetic failure")
-        return import_medpc_file(candidate)
+        return import_medpc_file(candidate, phase, metadata)
 
     monkeypatch.setattr(worker_module, "import_medpc_file", fail_one)
     window = MainWindow()
@@ -486,13 +466,13 @@ def test_export_background_controls_failure_retry_and_close(
     entered, release = ThreadEvent(), ThreadEvent()
     warnings = []
 
-    def controlled_export(*args):
+    def controlled_export(*args, **kwargs):
         assert QThread.currentThread() != app.thread()
         entered.set()
         assert release.wait(5)
         if fail:
             raise OSError("Synthetic export failure")
-        return export_import_results(*args)
+        return export_import_results(*args, **kwargs)
 
     monkeypatch.setattr(export_module, "export_import_results", controlled_export)
     monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(path.parent))
@@ -622,12 +602,12 @@ def test_session_metrics_display_withholding_zero_and_clear(app, write_export, m
 
 
 def test_metric_calculation_is_in_worker_and_failure_isolated(app, write_export, monkeypatch):
-    from trial_cruncher import processing
+    from trial_cruncher import phase_metrics
 
     path = write_export()
     failed = path.with_name("a-failed.txt")
     failed.write_bytes(path.read_bytes())
-    original = processing.calculate_prl_summary
+    original = phase_metrics.calculate_prl_summary
     calls = []
 
     def calculate(session):
@@ -637,7 +617,7 @@ def test_metric_calculation_is_in_worker_and_failure_isolated(app, write_export,
             raise RuntimeError("Synthetic metric calculation failure")
         return original(session)
 
-    monkeypatch.setattr(processing, "calculate_prl_summary", calculate)
+    monkeypatch.setattr(phase_metrics, "calculate_prl_summary", calculate)
     window = MainWindow()
     try:
         window.add_paths([str(path), str(failed)])

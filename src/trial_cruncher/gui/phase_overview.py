@@ -1,10 +1,11 @@
 """Batch phase comparisons projected from the authoritative import overview rows."""
 
+from collections import Counter
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
 
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, QSortFilterProxyModel, Qt, Signal
+from PySide6.QtCore import QAbstractTableModel, Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -17,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from trial_cruncher.gui.overview import OverviewModel, OverviewRow
+from trial_cruncher.gui.overview import BatchSortProxy, OverviewModel, OverviewRow
 from trial_cruncher.models import MetricResult
 from trial_cruncher.phase_metrics import METRIC_LABELS, PhaseSummary, RatioEvidence
 from trial_cruncher.prl_metrics import MEDPC_RATE
@@ -298,7 +299,7 @@ class PhaseRow:
 
 class PhaseModel(QAbstractTableModel):
     about_to_refresh = Signal()
-    refreshed = Signal()
+    refreshed = Signal(int, int)
 
     def __init__(self, source: OverviewModel, parent=None) -> None:
         super().__init__(parent)
@@ -313,12 +314,12 @@ class PhaseModel(QAbstractTableModel):
 
     def _end_reset(self) -> None:
         self.endResetModel()
-        self.refreshed.emit()
+        self.refreshed.emit(-1, -1)
 
     def _data_changed(self, top, bottom, *args) -> None:
         self.about_to_refresh.emit()
         self.dataChanged.emit(self.index(top.row(), 0), self.index(bottom.row(), len(HEADERS) - 1))
-        self.refreshed.emit()
+        self.refreshed.emit(top.row(), bottom.row())
 
     def row(self, index: int) -> PhaseRow:
         return PhaseRow(self.source.rows[index])
@@ -360,7 +361,7 @@ class PhaseModel(QAbstractTableModel):
         return super().headerData(section, orientation, role)
 
 
-class PhaseProxy(QSortFilterProxyModel):
+class PhaseProxy(BatchSortProxy):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.search = ""
@@ -381,27 +382,16 @@ class PhaseProxy(QSortFilterProxyModel):
             return False
         if self.inclusion is not None and annotation.inclusion_status != self.inclusion:
             return False
-        status = row.rate_status if self.rate_view else row.status
-        status = "Not imported" if status.startswith("Not imported") else status
-        if self.status == "Needs attention":
-            if status in ("Available", "Pending"):
+        if self.status != "All statuses":
+            status = row.rate_status if self.rate_view else row.status
+            if self.status == "Needs attention":
+                if status in ("Available", "Pending"):
+                    return False
+            elif ("Not imported" if status.startswith("Not imported") else status) != self.status:
                 return False
-        elif self.status != "All statuses" and status != self.status:
-            return False
         if self.phase is not None and row.phase_key != self.phase:
             return False
-        return self.search in row.search_text
-
-    def lessThan(self, left, right) -> bool:
-        a, b = self.sourceModel().row(left.row()), self.sourceModel().row(right.row())
-        av, bv = a.value(left.column()), b.value(right.column())
-        if (av is None) != (bv is None):
-            return av is not None if self.sortOrder() == Qt.SortOrder.AscendingOrder else av is None
-        if isinstance(av, str):
-            av, bv = av.casefold(), bv.casefold()
-        if av == bv:
-            return str(a.path) < str(b.path)
-        return av < bv
+        return not self.search or self.search in row.search_text
 
 
 class BatchPhaseOverview(QWidget):
@@ -554,10 +544,8 @@ class BatchPhaseOverview(QWidget):
         return self.table.currentIndex().data(Qt.ItemDataRole.UserRole)
 
     def select_path(self, path: Path | None) -> None:
-        row = self.model.source._row_by_path.get(path)
-        index = (
-            self.proxy.mapFromSource(self.model.index(row, 0)) if row is not None else QModelIndex()
-        )
+        source_row = self.model.source.index_for_path(path).row()
+        index = self.proxy.mapFromSource(self.model.index(source_row, 0))
         self.table.setCurrentIndex(index)
         if not index.isValid():
             self.table.clearSelection()
@@ -567,36 +555,58 @@ class BatchPhaseOverview(QWidget):
         self._saved_path = self.current_path()
         self._refreshing = True
 
-    def _refresh(self) -> None:
-        selected = self.phase_filter.currentData()
-        phases = {self.model.row(i).phase_key for i in range(self.model.rowCount())}
-        phases.discard(None)
-        if selected is not None:
-            phases.add(selected)
-        self.phase_filter.blockSignals(True)
-        self.phase_filter.clear()
-        self.phase_filter.addItem("All phases", None)
-        for phase in sorted(phases):
-            self.phase_filter.addItem(phase or "Unassigned phase", phase)
-        self.phase_filter.setCurrentIndex(max(0, self.phase_filter.findData(selected)))
-        self.phase_filter.blockSignals(False)
-        for combo, field, all_label in (
-            (self.condition_filter, "condition", "All conditions"),
-            (self.cohort_filter, "cohort", "All cohorts"),
-        ):
-            selected_value = combo.currentData()
-            values = {getattr(row.annotation, field) or "" for row in self.model.source.rows}
-            if selected_value is not None:
-                values.add(selected_value)
+    def _filter_keys(self, index: int) -> tuple[str | None, str, str]:
+        row = self.model.row(index)
+        annotation = row.source.annotation
+        return row.phase_key, annotation.condition or "", annotation.cohort or ""
+
+    def _refresh(self, first: int = -1, last: int = -1) -> None:
+        # Resets replace the entire batch. During import only the signaled rows
+        # can change which labels exist in the three filter menus.
+        menus = (
+            (self.phase_filter, "All phases", "Unassigned phase"),
+            (self.condition_filter, "All conditions", "Unassigned"),
+            (self.cohort_filter, "All cohorts", "Unassigned"),
+        )
+        if first < 0:
+            self._row_keys = [self._filter_keys(i) for i in range(self.model.rowCount())]
+            self._key_counts = [Counter(keys[j] for keys in self._row_keys) for j in range(3)]
+            changed_menus = set(range(3))
+        else:
+            changed_menus = set()
+            for i in range(first, last + 1):
+                old = self._row_keys[i]
+                new = self._filter_keys(i)
+                self._row_keys[i] = new
+                for j, (before, after) in enumerate(zip(old, new, strict=True)):
+                    if before == after:
+                        continue
+                    counts = self._key_counts[j]
+                    counts[before] -= 1
+                    if not counts[before]:
+                        del counts[before]
+                        changed_menus.add(j)
+                    if after not in counts:
+                        changed_menus.add(j)
+                    counts[after] += 1
+        for j in changed_menus:
+            combo, title, empty_label = menus[j]
+            selected = combo.currentData()
+            values = set(self._key_counts[j])
+            values.discard(None)
+            if selected is not None:
+                values.add(selected)
             combo.blockSignals(True)
             combo.clear()
-            combo.addItem(all_label, None)
+            combo.addItem(title, None)
             for value in sorted(values):
-                combo.addItem(value or "Unassigned", value)
-            combo.setCurrentIndex(max(0, combo.findData(selected_value)))
+                combo.addItem(value or empty_label, value)
+            combo.setCurrentIndex(max(0, combo.findData(selected)))
             combo.blockSignals(False)
         self._refreshing = False
-        self.select_path(self._saved_path)
+        selected_row = self.model.source.index_for_path(self._saved_path).row()
+        if first < 0 or self.current_path() != self._saved_path or (first <= selected_row <= last):
+            self.select_path(self._saved_path)
         self._view_changed()
 
     def clear_filters(self) -> None:

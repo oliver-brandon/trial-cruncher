@@ -1,32 +1,20 @@
 """Exercise the main-window workflow and pane sizing on a laptop-sized window."""
 
-import os
-import time
-
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QFileDialog
+from PySide6.QtWidgets import QFileDialog
+from qt_helpers import wait_until
 
 from trial_cruncher.gui.window import MainWindow
 
 
-def test_import_review_export_and_full_height_views(phase_input, tmp_path, monkeypatch):
-    app = QApplication.instance() or QApplication([])
+def test_import_review_export_and_full_height_views(app, phase_input, tmp_path, monkeypatch):
     path = phase_input()
     monkeypatch.setattr(QFileDialog, "getOpenFileNames", lambda *a: ([str(path)], ""))
     monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *a: str(tmp_path))
     w = MainWindow()
     w.resize(1180, 720)
     w.show()
-
-    def wait_for(predicate):
-        deadline = time.monotonic() + 5
-        while not predicate() and time.monotonic() < deadline:
-            app.processEvents()
-            time.sleep(0.005)
-        assert predicate()
 
     def click(widget):
         assert widget.isVisible() and widget.isEnabled()
@@ -39,9 +27,9 @@ def test_import_review_export_and_full_height_views(phase_input, tmp_path, monke
         assert w.extensions.isVisible() and w.clear_button.isVisible()
         click(w.options_button)
         click(w.add_files_button)
-        wait_for(lambda: w._worker is None)
+        wait_until(app, lambda: w._worker is None)
         click(w.import_button)
-        wait_for(lambda: w._import_worker is None)
+        wait_until(app, lambda: w._import_worker is None)
         assert w.workflow.currentWidget() is w.review_page
         assert not w.progress.isVisible() and not w.cancel_button.isVisible()
         w.overview.select_path(path)
@@ -62,7 +50,7 @@ def test_import_review_export_and_full_height_views(phase_input, tmp_path, monke
         assert w.overview.current_path() == path and w.review.metric_table.rowCount() == 7
         click(w.go_to_export)
         click(w.export_button)
-        wait_for(lambda: w._export_worker is None)
+        wait_until(app, lambda: w._export_worker is None)
         assert "Saved" in w.export_status.text() and list(tmp_path.glob("*/sessions.csv"))
         w.issue_list.addItem("Example file message")
         assert w.messages_button.text() == "Messages (1)"

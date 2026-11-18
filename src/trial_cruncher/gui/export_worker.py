@@ -5,8 +5,8 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot
 
-from trial_cruncher.aggregation import AnalysisPlan
 from trial_cruncher.analysis_metadata import AnalysisMetadata
+from trial_cruncher.analysis_plan import AnalysisPlan
 from trial_cruncher.exporters import ExportFormat, export_import_results
 from trial_cruncher.processing import ImportResult
 from trial_cruncher.source_tracking import SourcesChangedError
@@ -42,17 +42,14 @@ class ExportWorker(QRunnable):
     @Slot()
     def run(self) -> None:
         try:
-            args = (self.results, self.paths, self.parent, self.export_format)
-            if self.analysis_plan:
-                destination = export_import_results(
-                    *args, assignments=self.metadata, analysis_plan=self.analysis_plan
-                )
-            else:
-                destination = (
-                    export_import_results(*args, assignments=self.metadata)
-                    if self.metadata
-                    else export_import_results(*args)
-                )
+            destination = export_import_results(
+                self.results,
+                self.paths,
+                self.parent,
+                self.export_format,
+                assignments=self.metadata,
+                analysis_plan=self.analysis_plan,
+            )
         except Exception as exc:
             if isinstance(exc, SourcesChangedError):
                 self.signals.sources_changed.emit(exc.checks)

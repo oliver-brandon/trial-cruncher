@@ -3,6 +3,7 @@
 import hashlib
 import json
 from dataclasses import asdict, dataclass
+from functools import cached_property
 from typing import Any
 
 METADATA_VERSION = "1"
@@ -65,7 +66,7 @@ class AnalysisMetadata:
             else "Not reviewed"
         )
 
-    @property
+    @cached_property
     def sha256(self) -> str:
         return hashlib.sha256(json.dumps(asdict(self), sort_keys=True).encode()).hexdigest()
 

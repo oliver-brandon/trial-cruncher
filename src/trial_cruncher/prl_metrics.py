@@ -4,10 +4,15 @@ import math
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
-from decimal import Decimal
 
 from trial_cruncher.models import MetricResult, Session
-from trial_cruncher.prl import NORMALIZER_VERSION, SUPPORTED_PROGRAMS, choice_storage_info
+from trial_cruncher.prl import (
+    CHOICE_OUTCOMES,
+    CHOICE_TERMINATOR,
+    NORMALIZER_VERSION,
+    SUPPORTED_PROGRAMS,
+    choice_storage_info,
+)
 
 DEFINITION_SET = "prl-session-summary"
 DEFINITION_VERSION = "4"
@@ -30,8 +35,6 @@ METRIC_UNITS = {
     else "count"
     for name in METRIC_LABELS
 }
-_TERMINATOR = Decimal("-987.987")
-_OUTCOMES = {1: (True, True), 2: (True, False), 6: (False, True), 7: (False, False)}
 
 
 @dataclass(frozen=True)
@@ -105,7 +108,7 @@ def calculate_prl_summary(session: Session) -> PRLSessionSummary:
                 continue
             if terminated:
                 after_count += 1
-            elif choices[index] == _TERMINATOR:
+            elif choices[index] == CHOICE_TERMINATOR:
                 terminated = True
             else:
                 before_terminator.append(index)
@@ -122,10 +125,10 @@ def calculate_prl_summary(session: Session) -> PRLSessionSummary:
         for event in session.events:
             code = event.attributes.get("outcome_code")
             if (
-                code not in _OUTCOMES
+                code not in CHOICE_OUTCOMES
                 or event.timestamp_s is None
-                or event.attributes.get("correct") is not _OUTCOMES[code][0]
-                or event.attributes.get("rewarded") is not _OUTCOMES[code][1]
+                or event.attributes.get("correct") is not CHOICE_OUTCOMES[code][0]
+                or event.attributes.get("rewarded") is not CHOICE_OUTCOMES[code][1]
             ):
                 invalid_count += 1
             else:

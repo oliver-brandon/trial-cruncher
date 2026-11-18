@@ -1,11 +1,9 @@
 """Descriptive within-cohort analyses of reviewed, explicitly included recordings."""
 
-import hashlib
 import json
 import math
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
-from dataclasses import asdict, dataclass
 from itertools import product
 from pathlib import Path
 
@@ -13,11 +11,12 @@ import pandas as pd
 
 from trial_cruncher import phase_metrics, prl_metrics
 from trial_cruncher.analysis_metadata import AnalysisMetadata
+from trial_cruncher.analysis_plan import VERSION as VERSION
+from trial_cruncher.analysis_plan import AnalysisPlan
 from trial_cruncher.processing import ImportResult, validate_reviewed_result
 from trial_cruncher.source_tracking import require_current_sources
 from trial_cruncher.tables import json_text
 
-VERSION = "1"
 SHEETS = {
     "analysis_audit.csv": "Analysis audit",
     "animal_metrics.csv": "Animal metrics",
@@ -34,65 +33,6 @@ POOL_UNITS = {
     **{name: ("successes", "eligible pairs", "probability") for name in phase_metrics.STRATEGIES},
     prl_metrics.MEDPC_RATE: ("choices", "seconds", "choices/min"),
 }
-
-
-@dataclass(frozen=True)
-class AnalysisPlan:
-    cohort: str
-    design: str
-    conditions: tuple[str, ...]
-    phases: tuple[str, ...]
-
-    def __post_init__(self) -> None:
-        if self.design not in ("within-subjects", "between-subjects"):
-            raise ValueError("Choose a within-subjects or between-subjects design.")
-        if (
-            not isinstance(self.cohort, str)
-            or not self.cohort.strip()
-            or self.cohort.strip() != self.cohort
-        ):
-            raise ValueError("Choose one assigned cohort.")
-        for values in (self.conditions, self.phases):
-            if (
-                not isinstance(values, tuple)
-                or not values
-                or not all(isinstance(x, str) and x and x.strip() == x for x in values)
-                or len(set(values)) != len(values)
-            ):
-                raise ValueError("Select distinct, nonempty condition and phase labels.")
-
-    def record(self) -> dict:
-        return {
-            **asdict(self),
-            "definition_version": VERSION,
-            "identity": "global exact Subject",
-            "selection": "one Included recording per animal/condition/phase",
-            "pool": "ratio of eligible sums across animals within condition and phase",
-        }
-
-    @property
-    def sha256(self) -> str:
-        return hashlib.sha256(json_text(self.record()).encode()).hexdigest()
-
-    @classmethod
-    def restore(cls, obj: object) -> "AnalysisPlan":
-        if not isinstance(obj, dict) or set(obj) != {
-            "definition_version",
-            "cohort",
-            "design",
-            "conditions",
-            "phases",
-            "identity",
-            "selection",
-            "pool",
-        }:
-            raise ValueError("Invalid analysis plan fields.")
-        if not all(isinstance(obj[k], list) for k in ("conditions", "phases")):
-            raise ValueError("Invalid analysis plan selections.")
-        plan = cls(obj["cohort"], obj["design"], tuple(obj["conditions"]), tuple(obj["phases"]))
-        if json.loads(json_text(plan.record())) != obj:
-            raise ValueError("Unsupported aggregation plan rules.")
-        return plan
 
 
 def _individual_rows(result):
@@ -257,9 +197,12 @@ def _select_metrics(plan, results, cells, cohorts, groups, hashes):
 
 
 def _pool(plan, cells, observed, blocked):
+    animals_by_cell = defaultdict(list)
+    for subject, condition, phase in cells:
+        animals_by_cell[condition, phase].append(subject)
     pooled = []
     for condition, phase in product(plan.conditions, plan.phases):
-        animals = sorted(subject for subject, c, p in cells if (c, p) == (condition, phase))
+        animals = sorted(animals_by_cell[condition, phase])
         n_files = sum(len(cells[a, condition, phase]) for a in animals)
         for metric, (num_unit, den_unit, unit) in POOL_UNITS.items():
             rows = [
@@ -339,6 +282,13 @@ def _compare(plan, audit, groups, observed, blocked):
         expected = [
             key for key in keys if plan.design == "within-subjects" or key[0] in groups[subject]
         ]
+        required_cells = json_text(expected)
+        axes = [[key for key in expected if key[0] == c] for c in plan.conditions]
+        if plan.design == "within-subjects":
+            axes.extend([key for key in expected if key[1] == p] for p in plan.phases)
+        subsets = [
+            (json_text(axis), [labels[key] for key in axis]) for axis in axes if len(axis) > 1
+        ]
         for metric in ALL_METRICS:
             row = {
                 "cohort": plan.cohort,
@@ -370,21 +320,12 @@ def _compare(plan, audit, groups, observed, blocked):
                         else issues or ["Missing selected recording"]
                     ),
                 }
-            row["required_cells_json"] = json_text(expected)
+            row["required_cells_json"] = required_cells
             row["complete"] = all(row[labels[key]] is not None for key in expected)
             row["cell_evidence_json"] = json_text(details)
-            # Also report each pairing axis when an analysis includes both phases.
-            subsets = {}
-            for c in plan.conditions:
-                subset = [k for k in expected if k[0] == c]
-                if len(subset) > 1:
-                    subsets[json_text(subset)] = all(row[labels[k]] is not None for k in subset)
-            if plan.design == "within-subjects":
-                for p in plan.phases:
-                    subset = [k for k in expected if k[1] == p]
-                    if len(subset) > 1:
-                        subsets[json_text(subset)] = all(row[labels[k]] is not None for k in subset)
-            row["pair_sets"] = subsets
+            row["pair_sets"] = {
+                key: all(row[label] is not None for label in columns) for key, columns in subsets
+            }
             comparison.append(row)
     complete_n = Counter(
         (r["metric"], r["required_cells_json"]) for r in comparison if r["complete"]

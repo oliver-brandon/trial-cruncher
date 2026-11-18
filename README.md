@@ -82,6 +82,11 @@ supports the same CLI options. Some Linux systems name Python `python3` and requ
 their `python3-venv` package to create virtual environments. A graphical desktop and
 Qt's platform libraries are needed for interactive GUI use.
 
+The standard installation covers Med-PC import, analysis, projects, and both export
+formats. If your own scripts use SciPy or h5py, install the optional libraries with
+`python -m pip install -e '.[matlab]'`. Trial Cruncher currently supports discovery
+of MATLAB files and requires Med-PC text for import.
+
 The top tabs group controls by task. Start in **Import** to add recordings, assign
 phases and metadata, and run **Import Med-PC**. **File options…** opens the extension
 filter, subfolder setting, and Clear selection. After an import with usable results,

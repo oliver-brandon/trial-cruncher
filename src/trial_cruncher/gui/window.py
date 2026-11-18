@@ -26,8 +26,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from trial_cruncher.aggregation import AnalysisPlan
 from trial_cruncher.analysis_metadata import AnalysisMetadata
+from trial_cruncher.analysis_plan import AnalysisPlan
 from trial_cruncher.discovery import (
     DEFAULT_EXTENSIONS,
     DiscoveryResult,
@@ -105,6 +105,15 @@ class MainWindow(QMainWindow):
 
         container = QWidget()
         layout = QVBoxLayout(container)
+        self._build_workflow(layout)
+        self._build_data_panes(layout)
+        self._build_status_controls(layout)
+        self.setCentralWidget(container)
+        self.statusBar().showMessage("0 candidate files selected")
+        self._connect_controls()
+        self._set_busy(False)
+
+    def _build_workflow(self, layout: QVBoxLayout) -> None:
         self.workflow = QTabWidget()
         self.workflow.setAccessibleName("Workflow controls")
         self.workflow.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
@@ -211,6 +220,8 @@ class MainWindow(QMainWindow):
         self.export_status.setTextFormat(Qt.TextFormat.PlainText)
         self.export_status.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         export_bar.addWidget(self.export_status, 1)
+
+    def _build_data_panes(self, layout: QVBoxLayout) -> None:
         self.overview = BatchOverview()
         self.phase_overview = BatchPhaseOverview(self.overview.model)
         self.batch_tabs = QTabWidget()
@@ -227,6 +238,8 @@ class MainWindow(QMainWindow):
         self.data_splitter.setSizes([400, 390])
         layout.addWidget(self.data_splitter, 1)
         self.view_mode.currentIndexChanged.connect(self._set_data_layout)
+
+    def _build_status_controls(self, layout: QVBoxLayout) -> None:
         self.progress = QProgressBar()
         self.progress.setMaximumWidth(180)
         self.progress.hide()
@@ -248,8 +261,8 @@ class MainWindow(QMainWindow):
             self.issue_list.model().rowsRemoved,
         ):
             signal.connect(self._update_message_count)
-        self.setCentralWidget(container)
-        self.statusBar().showMessage("0 candidate files selected")
+
+    def _connect_controls(self) -> None:
         self.add_files_button.clicked.connect(self.choose_files)
         self.add_folder_button.clicked.connect(self.choose_folder)
         self.clear_button.clicked.connect(self.clear_selection)
@@ -272,7 +285,6 @@ class MainWindow(QMainWindow):
         self.check_sources_button.clicked.connect(self.check_source_files)
         self.extensions.textChanged.connect(self._mark_project_dirty)
         self.recursive.toggled.connect(self._mark_project_dirty)
-        self._set_busy(False)
 
     def _action_page(self, title: str) -> tuple[QWidget, QHBoxLayout]:
         page = QWidget()
@@ -326,7 +338,10 @@ class MainWindow(QMainWindow):
         if result.files:
             self._mark_project_dirty()
         self.overview.set_files(
-            tuple(self.selected_files), self.import_results, self.metadata_assignments
+            tuple(self.selected_files),
+            self.import_results,
+            self.metadata_assignments,
+            self._source_issues,
         )
         self.issue_list.addItems(f"{issue.path}: {issue.message}" for issue in result.issues)
         if not result.files and not result.issues:
@@ -415,7 +430,9 @@ class MainWindow(QMainWindow):
         dialog = PhaseDialog(
             tuple(sorted(self.selected_files, key=str)), self.phase_assignments, self
         )
-        if dialog.exec() == QDialog.DialogCode.Accepted:
+        action = dialog.exec()
+        dialog.deleteLater()
+        if action == QDialog.DialogCode.Accepted:
             self.phase_assignments = dialog.assignments()
             self._mark_project_dirty()
             self.statusBar().showMessage(
@@ -430,7 +447,9 @@ class MainWindow(QMainWindow):
         dialog = MetadataDialog(
             tuple(sorted(self.selected_files, key=str)), self.metadata_assignments, self
         )
-        if dialog.exec() == QDialog.DialogCode.Accepted:
+        action = dialog.exec()
+        dialog.deleteLater()
+        if action == QDialog.DialogCode.Accepted:
             selected = self._active_batch().current_path()
             self.metadata_assignments = dialog.assignments()
             self.import_results = {
@@ -441,9 +460,11 @@ class MainWindow(QMainWindow):
                 for path, result in self.import_results.items()
             }
             self.overview.set_files(
-                tuple(self.selected_files), self.import_results, self.metadata_assignments
+                tuple(self.selected_files),
+                self.import_results,
+                self.metadata_assignments,
+                self._source_issues,
             )
-            self.overview.model.set_source_issues(self._source_issues)
             self._active_batch().select_path(selected)
             self._mark_project_dirty()
             self.statusBar().showMessage(
@@ -617,6 +638,7 @@ class MainWindow(QMainWindow):
             self,
         )
         action = dialog.exec()
+        dialog.deleteLater()
         if action == PlanDialog.EDIT_METADATA:
             self.assign_metadata()
             return
@@ -754,9 +776,11 @@ class MainWindow(QMainWindow):
             else:
                 self._source_issues.pop(check.path, None)
         self.overview.set_files(
-            tuple(self.selected_files), self.import_results, self.metadata_assignments
+            tuple(self.selected_files),
+            self.import_results,
+            self.metadata_assignments,
+            self._source_issues,
         )
-        self.overview.model.set_source_issues(self._source_issues)
         if current is not None:
             self._active_batch().select_path(current)
         self.review_path(self._active_batch().current_path())

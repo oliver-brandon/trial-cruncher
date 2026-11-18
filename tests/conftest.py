@@ -1,8 +1,11 @@
 """Shared synthetic exports; no research recordings are bundled."""
 
+import os
 from collections import Counter
 
 import pytest
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 @pytest.fixture
@@ -59,3 +62,10 @@ def phase_input(tmp_path):
         return path
 
     return make
+
+
+@pytest.fixture(scope="module")
+def app():
+    from PySide6.QtWidgets import QApplication
+
+    return QApplication.instance() or QApplication([])

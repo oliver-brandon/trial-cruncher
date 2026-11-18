@@ -2,27 +2,20 @@
 
 import csv
 import json
-import os
-import time
 from dataclasses import replace
 from threading import Event
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+import pytest
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QFileDialog
+from qt_helpers import wait_until
 
-import pytest  # noqa: E402
-from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtTest import QTest  # noqa: E402
-from PySide6.QtWidgets import QApplication, QFileDialog  # noqa: E402
-
-from trial_cruncher.gui import import_worker  # noqa: E402
-from trial_cruncher.gui.overview import BatchOverview  # noqa: E402
-from trial_cruncher.gui.window import MainWindow  # noqa: E402
-from trial_cruncher.processing import import_medpc_file  # noqa: E402
-
-
-@pytest.fixture(scope="module")
-def app():
-    return QApplication.instance() or QApplication([])
+from trial_cruncher.analysis_metadata import AnalysisMetadata
+from trial_cruncher.gui import import_worker
+from trial_cruncher.gui.overview import BatchOverview
+from trial_cruncher.gui.window import MainWindow
+from trial_cruncher.processing import import_medpc_file
 
 
 @pytest.fixture
@@ -52,14 +45,6 @@ def make_input(tmp_path):
     return make
 
 
-def wait_until(app, predicate):
-    deadline = time.monotonic() + 5
-    while not predicate() and time.monotonic() < deadline:
-        app.processEvents()
-        time.sleep(0.01)
-    assert predicate(), "GUI operation did not finish"
-
-
 def visible_paths(overview):
     return [
         overview.proxy.index(i, 0).data(Qt.ItemDataRole.UserRole)
@@ -84,6 +69,21 @@ def click_row(app, overview, path, column=0):
     )
     app.processEvents()
     assert overview.current_path() == path
+
+
+def test_refresh_honors_explicit_empty_assignments_and_clears_resolved_issue(app, make_input):
+    path = make_input("recording.txt")
+    result = import_medpc_file(path, analysis_metadata=AnalysisMetadata(condition="Original"))
+    overview = BatchOverview()
+    try:
+        overview.set_files([path], {path: result}, annotations={})
+        assert overview.model.row(0).annotation.condition is None
+        overview.set_files([path], {}, issues={path: "Source missing"})
+        assert overview.model.row(0).quality == "Re-import required"
+        overview.set_files([path], {}, issues={})
+        assert overview.model.row(0).quality == "Not imported"
+    finally:
+        overview.close()
 
 
 def test_quality_missing_withheld_zero_and_raw_metadata(app, make_input):
@@ -343,10 +343,10 @@ def test_live_sort_filter_cancellation_and_reimport_clear_stale_values(
         wait_until(app, lambda: window._import_worker is None)
         assert shown(window.overview, second, 6) == "10"
 
-        def controlled(path):
+        def controlled(path, phase=None, metadata=None):
             entered.set()
             assert release.wait(5)
-            return import_medpc_file(path)
+            return import_medpc_file(path, phase, metadata)
 
         monkeypatch.setattr(import_worker, "import_medpc_file", controlled)
         window.import_button.click()
