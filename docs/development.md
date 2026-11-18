@@ -27,6 +27,25 @@ ruff format --check .
 python -m pip check
 ```
 
+To include the actual embedded Chromium renderer in the test run, use:
+
+```sh
+TRIAL_CRUNCHER_WEBENGINE_TESTS=1 pytest
+```
+
+On Windows PowerShell set `$env:TRIAL_CRUNCHER_WEBENGINE_TESTS = "1"` before
+running `pytest`. The tests use a local WebEngine page, native picker test doubles,
+synthetic recordings and the real background workers. Run these tests in an
+environment that permits Chromium subprocesses. The CI matrix enables this suite.
+For interactive desktop testing, launch `trial-cruncher --gui` with the normal
+platform plugin and exercise the system file picker and display scaling.
+
+The migration was also checked locally with the seven supplied partial recordings.
+Exports launched through the embedded interface matched the pre-migration CSV
+tables, Excel sheet values and structured manifests after excluding the export
+timestamp. Source hashes and modification times matched. These checks cover
+presentation and export parity for the supplied files.
+
 Use `ruff format .` to apply formatting. Tests exercise read-only discovery,
 case-insensitive filtering, recursion, deduplication, access failures, symlink cycles,
 missing-versus-zero values, CLI isolation from Qt, JSON logging, and GUI selection
@@ -85,8 +104,8 @@ successful imports remain included. Confirm inputs and the first export remain u
 Repeat with **Export Excel…**: inspect all five sheets, filters/frozen headers, source
 IDs, missing/zero/false values, Quality reasons, and complete Provenance chunks. Open
 `results.xlsx` in Microsoft Excel for native rendering verification when available.
-Current CI uses Ubuntu with Python 3.12 and 3.14;
-macOS and Windows interactive behavior requires separate verification. Linux Qt may
+CI is configured for Ubuntu, macOS and Windows with Python 3.12 and 3.14.
+Native dialog appearance and display scaling need a desktop check on each target. Linux Qt may
 require EGL/OpenGL libraries (`libegl1` and `libopengl0` on Ubuntu). Remote desktops
 may need additional platform-specific Qt/X11 libraries.
 

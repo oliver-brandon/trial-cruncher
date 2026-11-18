@@ -1,0 +1,17 @@
+#animal-dialog { width: min(1100px, 95vw); padding: 20px; max-height: 90vh; overflow: auto; }
+#animal-dialog .animal-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+#animal-dialog .animal-form > label { display: grid; gap: 6px; }
+#animal-dialog fieldset { border: 1px solid var(--border, #435171); border-radius: 6px; padding: 10px; min-height: 72px; }
+#animal-dialog fieldset label { display: inline-flex; align-items: center; margin: 4px 14px 4px 0; gap: 6px; }
+#animal-dialog footer { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
+#animal-dialog footer span { flex: 1; }
+#animal-dialog .animal-preview nav { display: flex; gap: 6px; flex-wrap: wrap; }
+#animal-dialog .animal-preview nav .active { background: #5149b5; }
+#animal-dialog .animal-scroll { overflow: auto; max-height: 38vh; margin-top: 10px; }
+#animal-dialog table { border-collapse: collapse; width: 100%; }
+#animal-dialog th, #animal-dialog td { text-align: left; padding: 6px 10px; border: 1px solid #34415b; white-space: nowrap; }
+#animal-dialog th { position: sticky; top: 0; background: #222d44; }
+
+#animal-dialog h2 { margin: 0 0 8px; font-size: 19px; }
+#animal-dialog > p { color: var(--muted); }
+#animal-dialog > [role=alert] { color: var(--text); }

@@ -14,6 +14,42 @@ implemented with strict withholding. User-assigned phases follow the confirmed
 fixed-contingency/no-omission profile. Further metric families remain future work. The Med-PC reader is exposed through Python, `--inspect-medpc`, and GUI
 import review with per-file results.
 
+## Embedded desktop workspace
+
+Both desktop entry points create `gui/web_shell.py:WebShell`. A PySide6
+`QWebEngineView` loads `gui/web/index.html` from the installed package. The
+renderer uses a private profile, loads application assets and Qt's bundled channel
+script, and sends commands through QWebChannel. The shell restricts navigation
+to its entry document. Native pickers supply the file, folder, project and export
+destinations.
+
+This follows Photon Cruncher Aurora's desktop-shell and shared-Python-service
+design. Trial Cruncher uses the in-process channel for both commands and data.
+Installing the Python wheel supplies the frontend. Running the application requires
+neither a listening network port nor a JavaScript build tool.
+
+`gui/web_bridge.py` exposes desktop actions, UI state, and paged presentation data.
+Controller/model signals notify the renderer when state changes. File actions operate
+on the current batch or open a picker. Assignment transactions check source membership
+and prior values, validate the entire edit, then update the controller. View preferences
+are local application settings. Source paths, recorded values, warnings and raw source
+text reach the page as data, rendered using DOM text nodes.
+
+`gui/window.py:MainWindow` is the internal workflow controller retained from the
+widget interface. The shell owns it as a hidden window. It owns worker lifetimes,
+source hashes, project state, import snapshots and the Qt table models used by
+`gui/web_data.py`. The read-only inspector projects the same formatted values,
+diagnostics and missing-data reasons as the original desktop. The legacy widgets
+also provide a regression harness for the controller. The visible workspace,
+assignment editors and animal analysis use the HTML frontend.
+
+Frontend components live under `gui/web/`. The stylesheet defines the shared navy,
+tangerine and indigo tokens. Workflow navigation, batch/inspector tables, staged
+assignments and animal analysis use separate scripts. Python determines filter and
+sort order before paging. All displayed counts, ratios and denominators come from
+the Python models. Both export buttons call the existing exporters with their source
+verification and overwrite protection.
+
 ## Current components
 
 `discovery.py` accepts files or directories, extensions, and recursion settings and

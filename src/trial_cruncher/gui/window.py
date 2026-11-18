@@ -80,13 +80,23 @@ class DiscoveryWorker(QRunnable):
 
 
 class MainWindow(QMainWindow):
+    """Internal Qt controller and review models used by the embedded desktop."""
+
+    review_changed = Signal()
+
     def __init__(self) -> None:
         super().__init__()
+        self.dialog_parent = self
         self.setWindowTitle("Trial Cruncher")
         self.resize(1300, 900)
         self.selected_files: set[Path] = set()
         self.phase_assignments: dict[Path, str] = {}
         self.metadata_assignments: dict[Path, AnalysisMetadata] = {}
+        self._web_analysis = False
+        self._web_analysis_revision = 0
+        self._web_analysis_started_revision = 0
+        self._web_analysis_tables = None
+        self._web_analysis_error = None
         self.analysis_plan: AnalysisPlan | None = None
         self._analysis_worker: AnalysisWorker | None = None
         self._worker: DiscoveryWorker | None = None
@@ -304,14 +314,14 @@ class MainWindow(QMainWindow):
     @Slot()
     def choose_files(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(
-            self, "Select behavioral files", "", "All files (*)"
+            self.dialog_parent, "Select behavioral files", "", "All files (*)"
         )
         if paths:
             self.add_paths(paths)
 
     @Slot()
     def choose_folder(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, "Select a folder")
+        path = QFileDialog.getExistingDirectory(self.dialog_parent, "Select a folder")
         if path:
             self.add_paths([path])
 
@@ -321,7 +331,7 @@ class MainWindow(QMainWindow):
         try:
             extensions = normalize_extensions(self.extensions.text().split(","))
         except ValueError as exc:
-            QMessageBox.warning(self, "Check file extensions", str(exc))
+            QMessageBox.warning(self.dialog_parent, "Check file extensions", str(exc))
             return
         self._set_busy(True)
         self.progress.setRange(0, 0)
@@ -334,6 +344,8 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _discovery_finished(self, result: DiscoveryResult) -> None:
+        if result.files:
+            self.invalidate_animal_preview()
         self.selected_files.update(result.files)
         if result.files:
             self._mark_project_dirty()
@@ -360,12 +372,13 @@ class MainWindow(QMainWindow):
         self.issue_list.addItem(message)
         self.statusBar().showMessage("Discovery failed; existing selection retained")
         if not self._closing:
-            QMessageBox.warning(self, "File discovery failed", message)
+            QMessageBox.warning(self.dialog_parent, "File discovery failed", message)
         self._finish_close()
 
     @Slot(object)
     def review_path(self, path: Path | None) -> None:
         self._reviewed_path = path
+        self.review_changed.emit()
         if path is None:
             message = (
                 "No files match the current filters. Reset filters to see the batch."
@@ -428,53 +441,65 @@ class MainWindow(QMainWindow):
         if self._closing or self._is_working() or not self.selected_files:
             return
         dialog = PhaseDialog(
-            tuple(sorted(self.selected_files, key=str)), self.phase_assignments, self
+            tuple(sorted(self.selected_files, key=str)), self.phase_assignments, self.dialog_parent
         )
         action = dialog.exec()
         dialog.deleteLater()
         if action == QDialog.DialogCode.Accepted:
-            self.phase_assignments = dialog.assignments()
-            self._mark_project_dirty()
-            self.statusBar().showMessage(
-                "Phase assignments saved. Import Med-PC to apply; "
-                "exports use the last imported snapshot."
-            )
+            self.apply_phase_assignments(dialog.assignments())
+
+    def apply_phase_assignments(self, assignments: dict[Path, str]) -> None:
+        self.invalidate_animal_preview()
+        self.phase_assignments = assignments
+        self.review_changed.emit()
+        self._mark_project_dirty()
+        self.statusBar().showMessage(
+            "Phase assignments saved. Import Med-PC to apply; "
+            "exports use the last imported snapshot."
+        )
 
     @Slot()
     def assign_metadata(self) -> None:
         if self._closing or self._is_working() or not self.selected_files:
             return
         dialog = MetadataDialog(
-            tuple(sorted(self.selected_files, key=str)), self.metadata_assignments, self
+            tuple(sorted(self.selected_files, key=str)),
+            self.metadata_assignments,
+            self.dialog_parent,
         )
         action = dialog.exec()
         dialog.deleteLater()
         if action == QDialog.DialogCode.Accepted:
-            selected = self._active_batch().current_path()
-            self.metadata_assignments = dialog.assignments()
-            self.import_results = {
-                path: replace(
-                    result,
-                    analysis_metadata=self.metadata_assignments.get(path, AnalysisMetadata()),
-                )
-                for path, result in self.import_results.items()
-            }
-            self.overview.set_files(
-                tuple(self.selected_files),
-                self.import_results,
-                self.metadata_assignments,
-                self._source_issues,
+            self.apply_metadata_assignments(dialog.assignments())
+
+    def apply_metadata_assignments(self, assignments: dict[Path, AnalysisMetadata]) -> None:
+        self.invalidate_animal_preview()
+        selected = self._active_batch().current_path()
+        self.metadata_assignments = assignments
+        self.import_results = {
+            path: replace(
+                result,
+                analysis_metadata=self.metadata_assignments.get(path, AnalysisMetadata()),
             )
-            self._active_batch().select_path(selected)
-            self._mark_project_dirty()
-            self.statusBar().showMessage(
-                "Metadata applied. All recordings remain in exports with their inclusion flags."
-            )
+            for path, result in self.import_results.items()
+        }
+        self.overview.set_files(
+            tuple(self.selected_files),
+            self.import_results,
+            self.metadata_assignments,
+            self._source_issues,
+        )
+        self._active_batch().select_path(selected)
+        self._mark_project_dirty()
+        self.statusBar().showMessage(
+            "Metadata applied. All recordings remain in exports with their inclusion flags."
+        )
 
     @Slot()
     def import_selected_files(self) -> None:
         if self._closing or not self.selected_files or self._is_working():
             return
+        self.invalidate_animal_preview()
         paths = tuple(sorted(self.selected_files, key=str))
         self.import_results.clear()
         self._source_issues.clear()
@@ -570,7 +595,8 @@ class MainWindow(QMainWindow):
             return
         self._export_label = "Excel" if export_format == "xlsx" else "CSV"
         parent = QFileDialog.getExistingDirectory(
-            self, f"Choose parent folder — a new {self._export_label} export folder will be created"
+            self.dialog_parent,
+            f"Choose parent folder — a new {self._export_label} export folder will be created",
         )
         if not parent:
             return
@@ -618,7 +644,7 @@ class MainWindow(QMainWindow):
             f"{self._export_label} export failed; check the reported issue"
         )
         if not self._closing:
-            QMessageBox.warning(self, f"{self._export_label} export failed", message)
+            QMessageBox.warning(self.dialog_parent, f"{self._export_label} export failed", message)
         self._finish_close()
 
     @Slot()
@@ -635,7 +661,7 @@ class MainWindow(QMainWindow):
                 if r.phase_summary and r.phase_summary.config.phase
             },
             self.analysis_plan,
-            self,
+            self.dialog_parent,
         )
         action = dialog.exec()
         dialog.deleteLater()
@@ -644,9 +670,22 @@ class MainWindow(QMainWindow):
             return
         if action != QDialog.DialogCode.Accepted:
             return
-        if self.analysis_plan != dialog.plan:
-            self.analysis_plan = dialog.plan
+        self.apply_analysis_plan(dialog.plan)
+
+    def invalidate_animal_preview(self):
+        self._web_analysis_revision += 1
+        self._web_analysis_tables = None
+        self._web_analysis_error = None
+
+    def apply_analysis_plan(self, plan, *, web=False):
+        if self._closing or self._is_working():
+            raise ValueError("Wait for the current operation to finish.")
+        if self.analysis_plan != plan:
+            self.analysis_plan = plan
             self._mark_project_dirty()
+        self._web_analysis = web
+        self.invalidate_animal_preview()
+        self._web_analysis_started_revision = self._web_analysis_revision
         if self.analysis_plan is None:
             return
         worker = AnalysisWorker(
@@ -667,7 +706,11 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             "Animal analysis ready. CSV and Excel exports include the analysis tables."
         )
-        if not self._closing:
+        if self._web_analysis and (
+            self._web_analysis_started_revision == self._web_analysis_revision
+        ):
+            self._web_analysis_tables = tables
+        elif not self._web_analysis and not self._closing:
             review = AnalysisReview(self.analysis_plan, tables, self)
             review.exec()
             review.deleteLater()
@@ -678,8 +721,12 @@ class MainWindow(QMainWindow):
         self._analysis_worker = None
         self._set_busy(False)
         self.statusBar().showMessage("Animal analysis unavailable")
-        if not self._closing:
-            QMessageBox.warning(self, "Animal analysis", message)
+        if self._web_analysis and (
+            self._web_analysis_started_revision == self._web_analysis_revision
+        ):
+            self._web_analysis_error = message
+        elif not self._web_analysis and not self._closing:
+            QMessageBox.warning(self.dialog_parent, "Animal analysis", message)
         self._finish_close()
 
     def closeEvent(self, event: QCloseEvent) -> None:
@@ -728,6 +775,7 @@ class MainWindow(QMainWindow):
     def clear_selection(self) -> None:
         if self._closing or self._is_working():
             return
+        self.invalidate_animal_preview()
         self.analysis_plan = None
         self.workflow.setCurrentWidget(self.import_page)
         self.selected_files.clear()
@@ -765,6 +813,8 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _apply_source_checks(self, checks: tuple[SourceCheck, ...]) -> None:
+        if self._analysis_worker is None:
+            self.invalidate_animal_preview()
         current = self._active_batch().current_path()
         if current not in self.selected_files:
             current = None
@@ -802,7 +852,7 @@ class MainWindow(QMainWindow):
         if self._closing or self._is_working():
             return
         path, _ = QFileDialog.getOpenFileName(
-            self,
+            self.dialog_parent,
             "Open project — replaces the current selection on success",
             "",
             f"Trial Cruncher projects (*{PROJECT_SUFFIX})",
@@ -824,13 +874,13 @@ class MainWindow(QMainWindow):
         try:
             extensions = tuple(sorted(normalize_extensions(self.extensions.text().split(","))))
         except ValueError as exc:
-            QMessageBox.warning(self, "Check file extensions", str(exc))
+            QMessageBox.warning(self.dialog_parent, "Check file extensions", str(exc))
             return
         path = self._project_path
         expected = self._project_sha256
         if save_as or path is None:
             text, _ = QFileDialog.getSaveFileName(
-                self,
+                self.dialog_parent,
                 "Save project as a new file",
                 f"trial-cruncher{PROJECT_SUFFIX}",
                 f"Trial Cruncher projects (*{PROJECT_SUFFIX})",
@@ -922,5 +972,5 @@ class MainWindow(QMainWindow):
         self._set_busy(False)
         self.statusBar().showMessage(message)
         if not self._closing:
-            QMessageBox.warning(self, "Project operation failed", message)
+            QMessageBox.warning(self.dialog_parent, "Project operation failed", message)
         self._finish_close()

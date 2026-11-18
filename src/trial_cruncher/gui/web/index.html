@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' qrc:; script-src 'self' qrc:; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <title>Trial Cruncher</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="assignments.css">
+  <link rel="stylesheet" href="animal.css">
+  <script src="qrc:///qtwebchannel/qwebchannel.js" defer></script>
+  <script src="tables.js" defer></script>
+  <script src="assignments.js" defer></script>
+  <script src="animal.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <strong>Trial Cruncher</strong>
+      <span class="brand-divider"></span>
+      <span class="brand-subtitle">Behavioral Trial Analysis</span>
+    </header>
+    <div class="navigation">
+      <nav class="workflow-nav" aria-label="Workflow">
+        <button type="button" data-workflow="import"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 17v3h16v-3"/></svg> <span>Import</span></button>
+        <button type="button" data-workflow="review"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg> <span>Review</span></button>
+        <button type="button" data-workflow="export"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 17v3h16v-3"/></svg> <span>Export</span></button>
+        <button type="button" data-workflow="project"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h7l2 2h9v11H3z"/></svg> <span>Project</span></button>
+      </nav>
+      <label class="sr-only" for="view-mode">Workspace layout</label>
+      <select id="view-mode"><option>Split view</option><option>Batch only</option><option>Detail only</option></select>
+    </div>
+    <section class="action-bar" data-workflow-panel="import">
+      <button data-action="add-files"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg>Add files…</button>
+      <button data-action="add-folder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h7l2 2h9v11H3z"/></svg>Add folder…</button>
+      <button data-action="file-options">File options…</button>
+      <button data-action="phase">Assign phases…</button>
+      <button data-action="metadata">Session metadata…</button>
+      <button class="primary" data-action="import"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 17v3h16v-3"/></svg>Import Med-PC</button>
+    </section>
+    <section class="file-options" id="file-options" hidden>
+      <label>File extensions <input id="extensions" type="text"></label>
+      <label><input id="recursive" type="checkbox"> Include subfolders</label>
+      <button data-action="clear">Clear selection</button>
+    </section>
+    <section class="action-bar" data-workflow-panel="review" hidden>
+      <button class="primary" data-action="animal-analysis"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="15" r="4"/><circle cx="5" cy="9" r="1.5"/><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="19" cy="9" r="1.5"/></svg>Animal analysis…</button>
+      <button data-action="edit-files"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16zM14 7l3 3"/></svg>Edit files and assignments…</button>
+      <span class="spacer"></span>
+      <button class="primary" data-action="export-results"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 17v3h16v-3"/></svg>Export results…</button>
+    </section>
+    <section class="action-bar" data-workflow-panel="export" hidden>
+      <button class="primary" data-action="export-csv">Export CSV…</button>
+      <button data-action="export-excel">Export Excel…</button><span id="export-status" class="muted"></span>
+    </section>
+    <section class="action-bar" data-workflow-panel="project" hidden>
+      <button data-action="open-project">Open project…</button>
+      <button data-action="save-project">Save project</button>
+      <button data-action="save-project-as">Save project as…</button>
+      <button data-action="check-sources">Check sources</button><span id="project-label" class="muted"></span>
+    </section>
+    <main id="workspace" class="workspace">
+      <section id="batch-panel" class="panel batch-panel" aria-label="Batch explorer">
+        <div id="batch-tabs" class="tabs">
+          <button data-batch="sessions">Sessions</button>
+          <button data-batch="phase">Phase results</button>
+        </div>
+        <div id="batch-filters" class="filters"></div>
+        <div id="batch-count" class="batch-count"></div>
+        <div id="batch-table" class="table-scroll"></div>
+      </section>
+      <div id="splitter" class="splitter" role="separator" aria-label="Resize batch and detail panes" aria-orientation="horizontal" tabindex="0"><span>••••</span></div>
+      <section id="detail-panel" class="panel detail-panel" aria-label="Session inspector">
+        <div id="inspector-summary" class="inspector-summary"></div>
+        <div id="inspector-tabs" class="tabs inspector-tabs"></div>
+        <div id="inspector-content" class="inspector-content">
+          <div class="empty-state">Select a recording to inspect its results.</div>
+        </div>
+      </section>
+    </main>
+    <footer class="status-bar"><span class="status-dot"></span><span id="status" role="status">Ready</span>
+      <span class="spacer"></span>
+      <progress id="progress" hidden></progress>
+      <button data-action="cancel" hidden>Cancel after current file</button>
+      <button id="messages-button" data-action="messages">Messages (0)</button>
+    </footer>
+    <section id="messages-panel" class="messages-panel" hidden><ul id="messages-list"></ul></section>
+  </div>
+</body>
+</html>

@@ -2,7 +2,7 @@
 
 **From raw trials to analysis-ready data.**
 
-Trial Cruncher is a Python desktop application foundation for behavioral neuroscience
+Trial Cruncher is a Python desktop application for behavioral neuroscience
 research. It is intended to turn raw experiment files into traceable subject, session,
 trial, and group datasets for personal research and broader laboratory use. Tasks do
 not need to have trials.
@@ -10,7 +10,7 @@ not need to have trials.
 ## Current functionality
 
 - Installable `src/` package and help/version command line interface.
-- PySide6 window with individual file and folder selection, configurable extensions,
+- Embedded Qt WebEngine workspace with native file and folder selection, configurable extensions,
   optional recursive discovery, duplicate removal, and clear selection. Import Med-PC
   sessions and review details, decoded choices, warnings/checks, and source text.
 - Batch session overview with numeric sorting, text/program/quality filters, explicit
@@ -80,7 +80,9 @@ trial-cruncher --inspect-medpc "data/your-session.txt"
 `trial-cruncher-gui` also launches the desktop window. `python -m trial_cruncher`
 supports the same CLI options. Some Linux systems name Python `python3` and require
 their `python3-venv` package to create virtual environments. A graphical desktop and
-Qt's platform libraries are needed for interactive GUI use.
+Qt's platform libraries are needed for interactive GUI use. The PySide6 distribution
+includes Qt WebEngine and Qt WebChannel. The application loads its bundled HTML, CSS,
+and JavaScript on launch and works offline.
 
 The standard installation covers Med-PC import, analysis, projects, and both export
 formats. If your own scripts use SciPy or h5py, install the optional libraries with
@@ -97,7 +99,10 @@ table to select a recording, then choose **Export results…** for CSV or Excel.
 Use the **Split view** selector at the upper right to choose **Batch only** or
 **Detail only** for full-height tables. Switching back restores both panes and
 keeps the selected recording. In split view, drag the divider to resize either pane.
-Expand **Diagnostics** beneath a metric table for its supporting counts and warnings.
+The layout mode and split ratio are saved locally. Use arrow keys on the divider
+for keyboard resizing. Drag a table header’s right edge to resize its column.
+Large batches and decoded choice tables use page controls. **Diagnostics** beneath
+a metric table opens its supporting counts and warnings.
 **Messages** on the status bar opens the file and project log.
 
 Choose **Add files…** or **Add folder…**. Defaults are `.mat`, `.txt`, `.med`, and `.mpc`;
@@ -114,8 +119,9 @@ changing calculations. Excluded recordings remain in exports with their flags.
 See [manual analysis metadata](docs/analysis-metadata.md).
 
 Click **Assign phases…** to label each file as Acquisition, Reversal, or a custom
-phase (for example, Reversal 2). In either assignment editor, click names in the **Source file** column.
-Shift-click selects a range. Ctrl-click (Command-click on macOS) toggles individual files.
+phase (for example, Reversal 2). In either editor, search by source path, then click
+individual checkboxes or filenames to build a selection. Shift-click extends a range.
+The header checkbox selects all matching recordings across pages.
 Choose the phase or metadata value, then click **Apply to selected**. The button shows
 the number of selected files. **Apply to all files** is also available. Save, then click **Import Med-PC** to read
 the full batch with those assignments. Blank phases leave phase metrics unavailable.
@@ -126,7 +132,7 @@ by clicking column headings; combine search, program, and quality filters to fin
 sessions needing attention. Click a row to review it below:
 
 - **Session details:** identifiers, task duration from `S`, original headers, and provenance.
-- **Session metrics:** five choice/outcome counts, proportion correct, and Med-PC trials
+- **Session metrics:** summary cards above the complete table of five choice/outcome counts, proportion correct, and Med-PC trials
   per minute, with status,
   withholding reasons, and separate recorded-data diagnostics.
 - **Phase metrics:** phase accuracy, perseverative/regressive errors, adjusted error
@@ -209,6 +215,7 @@ ruff check .
 ruff format --check .
 ```
 
+Set `TRIAL_CRUNCHER_WEBENGINE_TESTS=1` to include embedded-renderer workflow tests.
 GUI tests use Qt's offscreen platform automatically. On Linux without Qt runtime
 libraries, install your distribution's EGL/OpenGL packages before running GUI tests
 (Ubuntu CI uses `libegl1` and `libopengl0`). See [development](docs/development.md).
@@ -235,7 +242,8 @@ src/trial_cruncher/
   tables.py                Versioned session/choice table schemas
   exporters.py             Exclusive-create CSV writer and CSV/Excel export bundles
   excel.py                 Literal Excel cells, quality sheet, and provenance chunks
-  gui/                     Batch overview, review panels, tables, background workers
+  gui/                     Desktop shell, WebChannel bridge, Qt models and workers
+  gui/web/                 Bundled HTML, CSS and JavaScript workspace
 tests/                     Synthetic core and offscreen GUI checks
 docs/                      Architecture, metric standards, development
 .github/workflows/ci.yml    Python 3.12/3.14 lint and test jobs

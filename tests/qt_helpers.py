@@ -9,3 +9,10 @@ def wait_until(app, predicate, timeout=5):
         app.processEvents()
         time.sleep(0.01)
     assert predicate(), "Background operation did not finish"
+
+
+def javascript(app, page, expression):
+    result = []
+    page.runJavaScript(expression, result.append)
+    wait_until(app, lambda: bool(result), timeout=10)
+    return result[0]
