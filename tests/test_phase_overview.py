@@ -240,7 +240,7 @@ def test_filtered_phase_batch_exports_and_imports_all_sources(
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(tmp_path))
         (window.excel_button if export_format == "xlsx" else window.export_button).click()
         wait_until(app, lambda: window._export_worker is None)
-        (out,) = tmp_path.glob("trial-cruncher-export-*")
+        (out,) = tmp_path.glob("*-trial-cruncher-export-*")
         if export_format == "csv":
             with (out / "phase_metrics.csv").open(newline="") as stream:
                 rows = list(csv.DictReader(stream))
@@ -350,21 +350,18 @@ def test_incremental_filter_menus_preserve_selection_and_drop_obsolete_labels(ap
     from trial_cruncher.analysis_metadata import AnalysisMetadata
 
     path = phase_input()
-    result = import_medpc_file(path, "Acquisition", AnalysisMetadata("Vehicle", "001"))
+    result = import_medpc_file(path, "Acquisition", AnalysisMetadata("Vehicle"))
     source = OverviewModel()
     view = BatchPhaseOverview(source)
     try:
         source.set_files([path], {path: result})
         view.phase_filter.setCurrentIndex(view.phase_filter.findData("Acquisition"))
         view.select_path(path)
-        updated = replace(result, analysis_metadata=AnalysisMetadata("Drug", "002"))
+        updated = replace(result, analysis_metadata=AnalysisMetadata("Drug"))
         source.set_result(updated)
         assert view.current_path() == path
         assert view.phase_filter.currentData() == "Acquisition"
-        for combo, old, new in (
-            (view.condition_filter, "Vehicle", "Drug"),
-            (view.cohort_filter, "001", "002"),
-        ):
+        for combo, old, new in ((view.condition_filter, "Vehicle", "Drug"),):
             assert combo.findData(old) == -1
             assert combo.findData(new) >= 0
         source.start_import()

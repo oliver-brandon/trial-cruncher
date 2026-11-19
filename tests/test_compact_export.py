@@ -13,7 +13,7 @@ from trial_cruncher.source_tracking import SourcesChangedError
 
 def test_compact_csv_values_metadata_and_changed_source(tmp_path, phase_input):
     source = phase_input((1, 7, 1), name="session.txt")
-    annotation = AnalysisMetadata("Vehicle", "Cohort", included=False, inclusion_reason="Retest")
+    annotation = AnalysisMetadata("Vehicle", included=False, inclusion_reason="Retest")
     result = import_medpc_file(source, "Reversal", annotation)
     parent = tmp_path / "exports"
     parent.mkdir()
@@ -48,7 +48,7 @@ def test_metadata_rows_link_data_for_duplicate_subject_and_failed_file(tmp_path,
     failed = phase_input((1,), name="b.txt", program="UNKNOWN")
     second = phase_input((7,), name="c.txt")
     results = {
-        path: import_medpc_file(path, "Reversal", AnalysisMetadata("A", "C", included=True))
+        path: import_medpc_file(path, "Reversal", AnalysisMetadata("A", included=True))
         for path in (first, failed, second)
     }
     output = export_import_results(results, [first, failed, second], tmp_path, profile="compact")

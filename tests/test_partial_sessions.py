@@ -235,4 +235,4 @@ def test_exports_refuse_stale_interpretations(write_export, tmp_path, export_for
         )
     with pytest.raises(ValueError, match="re-import"):
         export_import_results({path: result}, [path], tmp_path, export_format)
-    assert not list(tmp_path.glob("trial-cruncher-export-*"))
+    assert not list(tmp_path.glob("*-trial-cruncher-export-*"))

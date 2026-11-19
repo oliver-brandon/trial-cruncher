@@ -45,9 +45,9 @@ def test_accuracy_proportions_in_both_export_tables(phase_input, tmp_path, codes
     if format == "xlsx":
         book.close()
     manifest = json.loads((out / "manifest.json").read_text())
-    assert manifest["schema_version"] == "7"
+    assert manifest["schema_version"] == "8"
     if format == "xlsx":
-        assert manifest["workbook_schema_version"] == "6"
+        assert manifest["workbook_schema_version"] == "7"
     assert manifest["configuration"]["metric_definition_version"] == "4"
     assert manifest["configuration"]["phase_definition_version"] == "2"
     assert manifest["configuration"]["metrics"][5]["unit"] == "proportion"
@@ -107,4 +107,4 @@ def test_old_accuracy_snapshots_cannot_be_exported(phase_input, tmp_path, stale)
         )
     with pytest.raises(ValueError, match="re-import"):
         export_import_results({path: r}, [path], tmp_path)
-    assert not list(tmp_path.glob("trial-cruncher-export-*"))
+    assert not list(tmp_path.glob("*-trial-cruncher-export-*"))

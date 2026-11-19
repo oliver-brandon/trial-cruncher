@@ -20,14 +20,8 @@ from trial_cruncher.projects import load_project, save_project
         {"included": False},
         {"included": False, "inclusion_reason": " "},
         {"included": 0},
-        {"session_order": 0},
-        {"session_order": -1},
-        {"session_order": 1.5},
-        {"session_order": True},
-        {"session_order": 2_147_483_648},
         {"condition": 1},
         {"condition": ""},
-        {"cohort": " group "},
         {"version": "future"},
     ],
 )
@@ -43,7 +37,7 @@ def test_missing_fields_not_inferred_from_raw_headers(write_export):
     assert original.analysis_metadata == AnalysisMetadata()
     assert original.analysis_metadata.included is None
     assert original.analysis_metadata.inclusion_status == "Not reviewed"
-    assignment = AnalysisMetadata("Vehicle", "001", 2, False, "Equipment issue")
+    assignment = AnalysisMetadata("Vehicle", False, "Equipment issue")
     result = import_medpc_file(path, "Reversal", assignment)
     assert result.summary == original.summary and result.phase_summary == original.phase_summary
     assert result.session == original.session and result.raw == original.raw
@@ -59,8 +53,8 @@ def test_project_roundtrip_and_legacy_not_reviewed_migration(phase_input, tmp_pa
     a = phase_input(name="a/same.txt")
     b = phase_input(name="b/same.txt")
     metadata = {
-        a: AnalysisMetadata("Vehicle", "A", 1, True),
-        b: AnalysisMetadata("Drug", "B", 1, False, "Technical exclusion"),
+        a: AnalysisMetadata("Vehicle", True),
+        b: AnalysisMetadata("Drug", False, "Technical exclusion"),
     }
     target = tmp_path / "study.tcproj.json"
     saved = save_project(
@@ -76,8 +70,10 @@ def test_project_roundtrip_and_legacy_not_reviewed_migration(phase_input, tmp_pa
     assert loaded.project == saved.project
     assert {s.path: s.analysis_metadata for s in loaded.project.sources} == metadata
     data = json.loads(target.read_text(encoding="utf-8"))
-    assert data["schema_version"] == "2"
+    assert data["schema_version"] == "4"
     data["schema_version"] = "1"
+    data.pop("analysis_plan")
+    data.pop("analysis_sorts")
     for item in data["sources"]:
         item.pop("analysis_metadata")
     target.write_text(json.dumps(data))
@@ -133,10 +129,10 @@ def test_every_record_and_annotation_is_exported_regardless_of_inclusion(
     failed = phase_input(name="failed.txt", program="OTHER")
     pending = tmp_path / "not-imported.txt"
     assignments = {
-        included: AnalysisMetadata("=1+1", "001", 2, True, "Reviewed"),
-        excluded: AnalysisMetadata("Drug", "002", 10, False, 'Equipment, "issue"\nμ'),
-        failed: AnalysisMetadata("Vehicle", None, None, False, "Unsupported recording"),
-        pending: AnalysisMetadata("Vehicle", None, None, False, "Missing recording"),
+        included: AnalysisMetadata("=1+1", True, "Reviewed"),
+        excluded: AnalysisMetadata("Drug", False, 'Equipment, "issue"\nμ'),
+        failed: AnalysisMetadata("Vehicle", False, "Unsupported recording"),
+        pending: AnalysisMetadata("Vehicle", False, "Missing recording"),
     }
     paths = [included, excluded, unknown, failed, pending]
     results = {p: import_medpc_file(p, "Reversal", assignments.get(p)) for p in paths[:-1]}

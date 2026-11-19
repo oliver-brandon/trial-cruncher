@@ -19,7 +19,7 @@ def test_configure_preview_save_load_export_disable(app, phase_input, tmp_path, 
         w.add_paths([str(p)])
         wait_until(app, lambda: w._worker is None)
         w.phase_assignments = {p: "Reversal"}
-        w.metadata_assignments = {p: AnalysisMetadata("A", "C", included=True)}
+        w.metadata_assignments = {p: AnalysisMetadata("A", included=True)}
         w.import_selected_files()
         wait_until(app, lambda: w._import_worker is None)
 
@@ -50,13 +50,13 @@ def test_configure_preview_save_load_export_disable(app, phase_input, tmp_path, 
         monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a, **kw: (str(target), ""))
         w.open_project_button.click()
         wait_until(app, lambda: w._project_worker is None)
-        assert w.analysis_plan.cohort == "C" and not w.import_results
+        assert w.analysis_plan.design == "within-subjects" and not w.import_results
         w.import_selected_files()
         wait_until(app, lambda: w._import_worker is None)
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *a: str(tmp_path))
         w.export_button.click()
         wait_until(app, lambda: w._export_worker is None)
-        (out,) = tmp_path.glob("trial-cruncher-export-*")
+        (out,) = tmp_path.glob("*-trial-cruncher-export-*")
         assert (
             json.loads((out / "manifest.json").read_text())["aggregation"]["plan_sha256"]
             == w.analysis_plan.sha256
@@ -68,7 +68,9 @@ def test_configure_preview_save_load_export_disable(app, phase_input, tmp_path, 
         w.close()
 
 
-def test_legacy_project_empty_cohort_opens_metadata_editor(app, phase_input, tmp_path, monkeypatch):
+def test_legacy_project_empty_condition_opens_metadata_editor(
+    app, phase_input, tmp_path, monkeypatch
+):
     from PySide6.QtWidgets import QPushButton
 
     from trial_cruncher.gui.metadata import MetadataDialog
@@ -79,6 +81,8 @@ def test_legacy_project_empty_cohort_opens_metadata_editor(app, phase_input, tmp
     save_project(target, [path], {path: "Reversal"}, {}, extensions=[".txt"], recursive=False)
     data = json.loads(target.read_text())
     data["schema_version"] = "1"
+    data.pop("analysis_plan", None)
+    data.pop("analysis_sorts", None)
     del data["sources"][0]["analysis_metadata"]
     target.write_text(json.dumps(data))
     before = target.read_bytes()
@@ -91,12 +95,11 @@ def test_legacy_project_empty_cohort_opens_metadata_editor(app, phase_input, tmp
         checks = []
 
         def edit_metadata(editor):
-            editor.editors[0].cohort.setText("Cohort 01")
             editor.editors[0].condition.setText("Control")
             editor.accept()
 
         def open_editor(dialog):
-            checks.append((dialog.cohort.count(), dialog.cohort.placeholderText()))
+            checks.append(dialog.conditions.count())
             next(
                 b for b in dialog.findChildren(QPushButton) if b.text() == "Open session metadata…"
             ).click()
@@ -106,16 +109,16 @@ def test_legacy_project_empty_cohort_opens_metadata_editor(app, phase_input, tmp
             answer_dialog(monkeypatch, MetadataDialog, edit_metadata),
         ):
             w.configure_analysis()
-        assert checks == [(0, "Assign a cohort in Session metadata…")]
-        assert w.metadata_assignments[path].cohort == "Cohort 01"
+        assert checks == [0]
+        assert w.metadata_assignments[path].condition == "Control"
 
         def inspect(dialog):
-            checks.append(dialog.cohort.currentText())
+            checks.append(dialog.conditions.item(0).text())
             dialog.reject()
 
         with answer_dialog(monkeypatch, PlanDialog, inspect):
             w.configure_analysis()
-        assert checks[-1] == "Cohort 01"
+        assert checks[-1] == "Control"
         assert w.analysis_plan is None and target.read_bytes() == before
     finally:
         w.close()

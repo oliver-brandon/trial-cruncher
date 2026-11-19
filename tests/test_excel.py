@@ -87,8 +87,8 @@ def test_excel_round_trip_all_tables_and_source_snapshot(write_export, tmp_path)
     )
     assert json.loads(embedded) == manifest
     assert manifest["tables"]["Choices"]["rows"] == 4
-    assert manifest["workbook_schema_version"] == "6"
-    assert manifest["schema_version"] == "7"
+    assert manifest["workbook_schema_version"] == "7"
+    assert manifest["schema_version"] == "8"
     assert manifest["configuration"]["metric_eligibility_policy"] == "strict-withholding-v2"
     assert all(
         cell.data_type not in ("f", "e") and cell.hyperlink is None
@@ -196,7 +196,7 @@ def test_repeated_exports_and_write_failures_preserve_previous(write_export, tmp
     monkeypatch.setattr(Workbook, "save", broken_save)
     with pytest.raises(OSError, match="disk full"):
         export_import_results(results, [path], tmp_path, "xlsx")
-    assert set(tmp_path.glob("trial-cruncher-export-*")) == {first, second}
+    assert set(tmp_path.glob("*-trial-cruncher-export-*")) == {first, second}
     assert {p.name: p.read_bytes() for p in first.iterdir()} == before
     monkeypatch.setattr(Workbook, "save", real_save)
     real_open = Path.open
@@ -209,7 +209,7 @@ def test_repeated_exports_and_write_failures_preserve_previous(write_export, tmp
     monkeypatch.setattr(Path, "open", broken_manifest)
     with pytest.raises(OSError, match="manifest failure"):
         export_import_results(results, [path], tmp_path, "xlsx")
-    assert set(tmp_path.glob("trial-cruncher-export-*")) == {first, second}
+    assert set(tmp_path.glob("*-trial-cruncher-export-*")) == {first, second}
 
 
 def test_save_refuses_sources_existing_files_and_links(tmp_path):
@@ -254,7 +254,7 @@ def test_validation_fails_without_creating_output(write_export, tmp_path, monkey
         result = replace(result, summary=None)
     with pytest.raises(ValueError):
         export_import_results({path: result}, [path], tmp_path, "xlsx")
-    assert not list(tmp_path.glob("trial-cruncher-export-*"))
+    assert not list(tmp_path.glob("*-trial-cruncher-export-*"))
 
 
 def test_large_integer_and_decimal_precision(tmp_path):

@@ -85,7 +85,7 @@ def test_rate_copy_matches_session_result_in_all_availability_states(
     copy = manifest["configuration"]["medpc_trials_per_minute"]["phase_table_copy"]
     assert copy["value_column"] == WHOLE_SESSION_RATE_COLUMN
     assert copy["count_column"] == "session_total_choices"
-    assert manifest["schema_version"] == "7"
+    assert manifest["schema_version"] == "8"
     if format == "xlsx":
-        assert manifest["workbook_schema_version"] == "6"
+        assert manifest["workbook_schema_version"] == "7"
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before

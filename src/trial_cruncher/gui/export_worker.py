@@ -30,6 +30,7 @@ class ExportWorker(QRunnable):
         metadata: dict[Path, AnalysisMetadata] | None = None,
         analysis_plan: AnalysisPlan | None = None,
         profile: ExportProfile = "detailed",
+        folder_name: str | None = None,
     ) -> None:
         super().__init__()
         self.results = dict(results)
@@ -37,6 +38,7 @@ class ExportWorker(QRunnable):
         self.parent = parent
         self.export_format = export_format
         self.profile = profile
+        self.folder_name = folder_name
         self.analysis_plan = analysis_plan
         self.metadata = dict(metadata or {})
         self.signals = ExportSignals()
@@ -50,6 +52,7 @@ class ExportWorker(QRunnable):
                 self.parent,
                 self.export_format,
                 profile=self.profile,
+                folder_name=self.folder_name,
                 assignments=self.metadata,
                 analysis_plan=self.analysis_plan,
             )

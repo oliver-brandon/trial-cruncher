@@ -52,6 +52,7 @@
       <button class="primary" data-action="export-results"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 17v3h16v-3"/></svg>Export results…</button>
     </section>
     <section class="action-bar" data-workflow-panel="export" hidden>
+      <label>Folder name <input id="export-folder-name" type="text" aria-label="Export folder name"></label>
       <button class="primary" data-action="export-excel">Save Excel workbook…</button>
       <button data-action="export-csv">Save CSV tables…</button>
       <details id="advanced-export">
@@ -73,9 +74,9 @@
     <main id="workspace" class="workspace">
       <section id="batch-panel" class="panel batch-panel" aria-label="Batch explorer">
         <div id="batch-tabs" class="tabs">
-          <button data-batch="data">Data</button>
+          <button data-batch="data">Sessions</button>
           <details class="more-views"><summary>More views</summary>
-            <button data-batch="sessions">Sessions</button>
+            <button data-batch="sessions">Session diagnostics</button>
             <button data-batch="phase">Phase results</button>
           </details>
           <button id="inspect-recording" disabled>Inspect recording</button>

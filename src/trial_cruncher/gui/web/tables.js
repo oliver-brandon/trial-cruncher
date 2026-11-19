@@ -19,7 +19,7 @@
     const table = node("table"), head = node("thead"), hr = node("tr");
     table.classList.add("resizable-table");
     const colgroup = node("colgroup");
-    const dataWidths = [112, 82, 94, 100, 94, 90, 110, 90, 90, 90, 90, 100, 90];
+    const dataWidths = [180, 100, 90, 82, 94, 100, 94, 90, 110, 90, 90, 90, 90, 100, 90];
     const columnWidths = headers.map((label, column) =>
       widths.get(`${scope}:${columns[column]}`) ||
         (scope === "batch:data" ? dataWidths[column] : /file|metric/i.test(label) ? 210 : /reason|detail/i.test(label) ? 330 :
@@ -92,11 +92,6 @@
         td.title = row.tooltips?.[i] || (value == null ? "" : String(value));
         if (view === "data" && row.path && i === 0) {
           td.title = [row.path, row.state_detail].filter(Boolean).join("\n");
-          if (row.row_state) {
-            const badge = node("span", row.row_state, "data-row-state");
-            badge.title = row.state_detail || row.row_state;
-            td.append(document.createElement("br"), badge);
-          }
         }
         if (numeric[i]) td.classList.add("numeric");
         if (/status|quality/i.test(headers[i])) {
@@ -259,7 +254,7 @@
       timer = setTimeout(() => { applyFilters(); pendingSearch = null; }, 180);
     };
     box.append(input);
-    const fields = view !== "phase" ? ["program", "quality"] : ["phase", "status", "condition", "cohort", "inclusion", "layout"];
+    const fields = view !== "phase" ? ["program", "quality"] : ["phase", "status", "condition", "inclusion", "layout"];
     for (const field of fields) {
       const select = node("select"); select.id = `batch-${field}`; select.dataset.filter = field;
       select.setAttribute("aria-label", field === "layout" ? "Phase results column layout" : "Filter by " + field);

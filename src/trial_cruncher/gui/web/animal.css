@@ -24,3 +24,16 @@
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+
+#animal-dialog .animal-sorting { margin: 10px 0; }
+#animal-dialog .animal-sorting > div > div { display: flex; gap: 6px; margin: 5px 0; align-items: center; flex-wrap: wrap; }
+#animal-dialog .animal-sorting button { min-height: 30px; padding: 4px 9px; }
+#animal-dialog th button { border: 0; background: transparent; padding: 2px; font-weight: 600; }
+
+.animal-sorting > summary { cursor: pointer; padding: 5px 0; }
+.animal-preview th button[data-rank]::after {
+  content: attr(data-rank);
+  color: var(--indigo);
+  font-size: .82em;
+  padding-left: .35em;
+}

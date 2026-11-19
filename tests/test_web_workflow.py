@@ -1,5 +1,6 @@
 """Exercise the embedded frontend with synthetic files and the real background workers."""
 
+import csv
 import os
 
 import pytest
@@ -51,7 +52,7 @@ def test_web_import_review_filter_and_export(app, phase_input, tmp_path, monkeyp
         click_action("add-files")
         wait_until(app, lambda: len(shell.controller.selected_files) == 2)
         shell.controller.phase_assignments.update({first: "Acquisition", second: "Acquisition"})
-        annotation = AnalysisMetadata(condition="Control", cohort="Cohort A", included=True)
+        annotation = AnalysisMetadata(condition="Control", included=True)
         shell.controller.metadata_assignments.update({first: annotation, second: annotation})
         wait_until(
             app,
@@ -148,8 +149,7 @@ def test_web_import_review_filter_and_export(app, phase_input, tmp_path, monkeyp
         javascript(
             app,
             shell.page,
-            "document.querySelectorAll('#animal-dialog select')[0].value='Cohort A';"
-            "document.querySelectorAll('#animal-dialog select')[1].value='between-subjects';"
+            "document.querySelectorAll('#animal-dialog select')[0].value='between-subjects';"
             "document.querySelectorAll('#animal-dialog input').forEach(x => x.checked=true);"
             "document.querySelector('#animal-dialog .primary').click()",
         )
@@ -164,6 +164,39 @@ def test_web_import_review_filter_and_export(app, phase_input, tmp_path, monkeyp
             ),
             timeout=15,
         )
+        javascript(
+            app,
+            shell.page,
+            "document.querySelector('.animal-sorting summary').click();"
+            "Array.from(document.querySelectorAll('.animal-sorting button')).find("
+            "b => b.textContent === 'Add sort rule').click()",
+        )
+        wait_until(
+            app, lambda: len(shell.controller.analysis_sorts.get("pooled_metrics.csv", [])) >= 3
+        )
+        wait_until(
+            app,
+            lambda: javascript(
+                app,
+                shell.page,
+                "!document.querySelector('.animal-preview').inert && "
+                "document.querySelectorAll('.animal-sorting select"
+                '[aria-label="Sort direction"]\').length === 4',
+            ),
+        )
+        javascript(
+            app,
+            shell.page,
+            "const direction=document.querySelectorAll("
+            "'.animal-sorting select[aria-label=\"Sort direction\"]')[0];"
+            "direction.value='desc'; direction.dispatchEvent(new Event('change'))",
+        )
+        wait_until(
+            app,
+            lambda: shell.controller.analysis_sorts["pooled_metrics.csv"][0]["descending"],
+        )
+        rules = [dict(item) for item in shell.controller.analysis_sorts["pooled_metrics.csv"]]
+        assert len({item["column"] for item in rules}) == len(rules)
         javascript(app, shell.page, "document.querySelector('#animal-dialog').close()")
         javascript(app, shell.page, "document.querySelector('[data-workflow=export]').click()")
         javascript(app, shell.page, "document.querySelector('#advanced-export').open=true")
@@ -172,6 +205,10 @@ def test_web_import_review_filter_and_export(app, phase_input, tmp_path, monkeyp
         wait_until(app, lambda: not shell.controller._is_working(), timeout=15)
         assert "Saved" in shell.controller.export_status.text()
         assert list(tmp_path.glob("*/pooled_metrics.csv"))
+        with next(tmp_path.glob("*/sessions.csv")).open(newline="", encoding="utf-8") as f:
+            headers = next(csv.reader(f))
+        assert "analysis_cohort" not in headers
+        assert "analysis_session_order" not in headers
         wait_until(
             app,
             lambda: javascript(
@@ -198,6 +235,17 @@ def test_web_import_review_filter_and_export(app, phase_input, tmp_path, monkeyp
         assert not shell.controller.import_results
         assert shell.controller.metadata_assignments[first] == annotation
         assert shell.controller.phase_assignments[first] == "Acquisition"
+        assert shell.controller.analysis_sorts["pooled_metrics.csv"] == rules
+        javascript(app, shell.page, "document.querySelector('[data-workflow=export]').click()")
+        wait_until(
+            app,
+            lambda: (
+                "project"
+                in javascript(
+                    app, shell.page, "document.querySelector('#export-folder-name').value"
+                )
+            ),
+        )
     finally:
         shell.close()
         app.processEvents()

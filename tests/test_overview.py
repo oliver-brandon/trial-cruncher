@@ -294,7 +294,7 @@ def test_filters_do_not_limit_export_or_import_and_clear_resets_view(
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(first.parent))
         (window.excel_button if export_format == "xlsx" else window.export_button).click()
         wait_until(app, lambda: window._export_worker is None)
-        (destination,) = first.parent.glob("trial-cruncher-export-*")
+        (destination,) = first.parent.glob("*-trial-cruncher-export-*")
         if export_format == "xlsx":
             from openpyxl import load_workbook
 

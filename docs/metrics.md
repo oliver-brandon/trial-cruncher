@@ -35,7 +35,7 @@ paradigm-specific definition and reviewed source observations before implementat
 
 [Animal aggregation and pairing](aggregation-pairing-spec.md) implements the confirmed
 single-recording selection and pooling rules. It uses globally unique Subject IDs,
-one cohort per analysis, metric-specific valid animal counts, and the individual
+one project per analysis, metric-specific valid animal counts, and the individual
 values for condition and phase comparisons.
 
 ## Required metric specification template

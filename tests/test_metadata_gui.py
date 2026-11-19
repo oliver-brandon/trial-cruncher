@@ -52,14 +52,8 @@ def test_manual_editor_validation_immediate_updates_filters_and_project(
             assert d.table.item(0, 0).text() == str(a)
             d.bulk_text.setText("Vehicle")
             d.apply_all.click()
-            d.bulk_field.setCurrentText("Cohort")
-            d.bulk_text.setText("001")
-            d.apply_all.click()
-            d.editors[0].order.setValue(2)
             d.editors[0].inclusion.setCurrentIndex(1)
             d.editors[1].condition.setText("Drug")
-            d.editors[1].cohort.setText("002")
-            d.editors[1].order.setValue(10)
             d.editors[1].inclusion.setCurrentIndex(2)
             d.editors[1].reason.setPlainText("Technical exclusion")
             d.accept()
@@ -78,14 +72,9 @@ def test_manual_editor_validation_immediate_updates_filters_and_project(
             assert window.import_results[path].session is before[path].session
         monkeypatch.setattr(phase_metrics, "calculate_prl_summary", original_calc)
         assert window.metadata_assignments[b].included is False
-        assert window.metadata_assignments[a].session_order == 2
         view = window.phase_overview
         window.batch_tabs.setCurrentWidget(view)
         view.column_view.setCurrentText("Experiment metadata")
-        view.table.sortByColumn(33, Qt.SortOrder.AscendingOrder)
-        assert [view.proxy.index(i, 0).data(Qt.ItemDataRole.UserRole) for i in range(2)] == [a, b]
-        view.table.sortByColumn(33, Qt.SortOrder.DescendingOrder)
-        assert [view.proxy.index(i, 0).data(Qt.ItemDataRole.UserRole) for i in range(2)] == [b, a]
         view.inclusion_filter.setCurrentText("Excluded")
         assert (
             view.proxy.rowCount() == 1
@@ -102,8 +91,6 @@ def test_manual_editor_validation_immediate_updates_filters_and_project(
             view.proxy.rowCount() == 1
             and view.proxy.index(0, 0).data(Qt.ItemDataRole.UserRole) == a
         )
-        view.cohort_filter.setCurrentIndex(view.cohort_filter.findData("002"))
-        assert view.proxy.rowCount() == 0
         view.clear_filters()
         view.inclusion_filter.setCurrentText("Included")
         view.select_path(a)
@@ -132,14 +119,9 @@ def test_manual_editor_validation_immediate_updates_filters_and_project(
         window.open_project_button.click()
         wait_until(app, lambda: window._project_worker is None)
         assert window.metadata_assignments == expected and not window.import_results
-        assert (
-            view.inclusion_filter.currentIndex()
-            == view.condition_filter.currentIndex()
-            == view.cohort_filter.currentIndex()
-            == 0
-        )
+        assert view.inclusion_filter.currentIndex() == view.condition_filter.currentIndex() == 0
         # Manual flags remain visible before re-import; they are not measurements.
-        assert all(view.model.row(i).value(34) == "Excluded" for i in range(2))
+        assert all(view.model.row(i).value(32) == "Excluded" for i in range(2))
         window.import_button.click()
         wait_until(app, lambda: window._import_worker is None)
         assert {p: r.analysis_metadata for p, r in window.import_results.items()} == expected
@@ -162,8 +144,8 @@ def test_filtered_inclusion_does_not_drop_export_rows_and_preserves_pending_meta
         window.add_paths([str(a), str(b)])
         wait_until(app, lambda: window._worker is None)
         window.metadata_assignments = {
-            a: AnalysisMetadata("Vehicle", "001", 2, True),
-            b: AnalysisMetadata("Drug", "001", 10, False, "Excluded for review"),
+            a: AnalysisMetadata("Vehicle", True),
+            b: AnalysisMetadata("Drug", False, "Excluded for review"),
         }
         window.import_button.click()
         wait_until(app, lambda: window._import_worker is None)
@@ -179,7 +161,7 @@ def test_filtered_inclusion_does_not_drop_export_rows_and_preserves_pending_meta
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(tmp_path))
         (window.excel_button if format == "xlsx" else window.export_button).click()
         wait_until(app, lambda: window._export_worker is None)
-        (dest,) = tmp_path.glob("trial-cruncher-export-*")
+        (dest,) = tmp_path.glob("*-trial-cruncher-export-*")
         if format == "csv":
             with (dest / "phase_metrics.csv").open(newline="") as f:
                 rows = list(csv.DictReader(f))
@@ -222,7 +204,7 @@ def test_worker_freezes_metadata_and_retains_it_for_failures_and_stale_sources(
     try:
         window.add_paths([str(a), str(b)])
         wait_until(app, lambda: window._worker is None)
-        assignment = AnalysisMetadata("A", None, 1, False, "Technical")
+        assignment = AnalysisMetadata("A", False, "Technical")
         window.metadata_assignments = {a: assignment, b: assignment}
         window.import_button.click()
         wait_until(app, entered.is_set)
@@ -242,7 +224,7 @@ def test_worker_freezes_metadata_and_retains_it_for_failures_and_stale_sources(
         window.check_sources_button.click()
         wait_until(app, lambda: window._project_worker is None)
         row = window.phase_overview.model.row(window.overview.model._row_by_path[a])
-        assert row.value(34) == "Excluded" and row.status == "Re-import required"
+        assert row.value(32) == "Excluded" and row.status == "Re-import required"
         assert a not in window.import_results
     finally:
         release.set()

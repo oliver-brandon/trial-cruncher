@@ -15,14 +15,13 @@ def test_analysis_preview_and_disable(app, phase_input):
         window.add_paths([str(path)])
         wait_until(app, lambda: window._worker is None)
         window.phase_assignments = {path: "Reversal"}
-        window.metadata_assignments = {path: AnalysisMetadata("A", "C", included=True)}
+        window.metadata_assignments = {path: AnalysisMetadata("A", included=True)}
         window.import_selected_files()
         wait_until(app, lambda: window._import_worker is None)
-        assert configuration(window)["cohorts"] == ["C"]
+        assert configuration(window)["conditions"] == ["A"]
         apply(
             window,
             {
-                "cohort": "C",
                 "design": "within-subjects",
                 "conditions": ["A"],
                 "phases": ["Reversal"],
@@ -34,7 +33,7 @@ def test_analysis_preview_and_disable(app, phase_input):
         assert result["rows"] and result["total"] >= len(result["rows"])
         with pytest.raises(ValueError):
             page(window, "other.csv", 0, 10)
-        window.apply_metadata_assignments({path: AnalysisMetadata("B", "C", included=True)})
+        window.apply_metadata_assignments({path: AnalysisMetadata("B", included=True)})
         assert not configuration(window)["ready"]
         with pytest.raises(ValueError, match="unavailable"):
             page(window, "animal_metrics.csv", 0, 10)
@@ -51,13 +50,12 @@ def test_changed_source_invalidates_preview(app, phase_input):
         window.add_paths([str(path)])
         wait_until(app, lambda: window._worker is None)
         window.phase_assignments = {path: "Reversal"}
-        window.metadata_assignments = {path: AnalysisMetadata("A", "C", included=True)}
+        window.metadata_assignments = {path: AnalysisMetadata("A", included=True)}
         window.import_selected_files()
         wait_until(app, lambda: window._import_worker is None)
         apply(
             window,
             {
-                "cohort": "C",
                 "design": "within-subjects",
                 "conditions": ["A"],
                 "phases": ["Reversal"],
@@ -69,7 +67,6 @@ def test_changed_source_invalidates_preview(app, phase_input):
         apply(
             window,
             {
-                "cohort": "C",
                 "design": "within-subjects",
                 "conditions": ["A"],
                 "phases": ["Reversal"],
@@ -94,7 +91,7 @@ def test_comparison_displays_assigned_conditions_values_and_reasons(app, phase_i
         path = phase_input(codes, name=f"file-{len(results)}.txt")
         path.write_text(path.read_text().replace("Subject: 0007", f"Subject: {subject}"))
         annotation = AnalysisMetadata(
-            condition, "C", included=not excluded, inclusion_reason="Retest" if excluded else None
+            condition, included=not excluded, inclusion_reason="Retest" if excluded else None
         )
         results[path] = import_medpc_file(path, "Reversal", annotation)
 
@@ -104,7 +101,7 @@ def test_comparison_displays_assigned_conditions_values_and_reasons(app, phase_i
     add("002", "Vehicle_control", (1,))
     add("002", "Drug_A", (7,), excluded=True)
     add("003", "Vehicle_control", (1, 7))
-    plan = AnalysisPlan("C", "within-subjects", ("Vehicle_control", "Drug_A"), ("Reversal",))
+    plan = AnalysisPlan("within-subjects", ("Vehicle_control", "Drug_A"), ("Reversal",))
     window = MainWindow()
     try:
         window.analysis_plan = plan
@@ -139,9 +136,7 @@ def test_comparison_displays_assigned_conditions_values_and_reasons(app, phase_i
                 assert shown["cell_details"][row_number][vehicle]
                 checked.add("unavailable")
         assert checked == {"zero", "ambiguous", "missing", "unavailable"}
-        between = AnalysisPlan(
-            "C", "between-subjects", ("Vehicle_control", "Drug_A"), ("Reversal",)
-        )
+        between = AnalysisPlan("between-subjects", ("Vehicle_control", "Drug_A"), ("Reversal",))
         window._web_analysis_tables = build_analysis(between, results, list(results))
         comparison = page(window, "condition_comparison.csv", 0, 100)
         row = next(
@@ -158,5 +153,56 @@ def test_comparison_displays_assigned_conditions_values_and_reasons(app, phase_i
             "recording_proportion_correct",
             "disposition",
         ]
+    finally:
+        window.close()
+
+
+def test_animal_sort_uses_raw_values_before_pagination_and_missing_last(app):
+    import json
+
+    import pandas as pd
+
+    from trial_cruncher.gui.web_bridge import WebBridge
+
+    window = MainWindow()
+    window._web_analysis_tables = {
+        "animal_metrics.csv": pd.DataFrame(
+            [
+                {"subject_id": f"{i:03}", "metric": "rate", "value": value, "condition": cond}
+                for i, (value, cond) in enumerate(
+                    [(None, "A"), (10.000001, "B"), (2.0, "B"), (2.0, "A")] * 30
+                )
+            ],
+            dtype=object,
+        )
+    }
+    bridge = WebBridge(window)
+    try:
+        rules = [
+            {"column": "value", "descending": True},
+            {"column": "condition", "descending": False},
+        ]
+        assert json.loads(bridge.animalSort("animal_metrics.csv", json.dumps(rules)))["ok"]
+        first = page(window, "animal_metrics.csv", 0, 50)
+        second = page(window, "animal_metrics.csv", 50, 50)
+        last = page(window, "animal_metrics.csv", 100, 50)
+        col = first["headers"].index("value")
+        assert float(first["rows"][0][col]) == pytest.approx(10.000001, abs=0.00001)
+        assert all(row[col] == "" for row in last["rows"][-20:])
+        assert first["sort_rules"] == second["sort_rules"] == rules
+        combined = first["rows"] + second["rows"] + last["rows"]
+        condition = first["headers"].index("condition")
+        # 30 larger numbers sort first. Tied numeric values span both pages,
+        # so the secondary treatment ordering exercises the full table.
+        assert [(float(r[col]), r[condition]) for r in combined[30:90]] == (
+            [(2.0, "A")] * 30 + [(2.0, "B")] * 30
+        )
+        subject = first["headers"].index("subject_id")
+        assert [r[subject] for r in combined[30:60]] == [f"{i:03}" for i in range(3, 120, 4)]
+        assert json.loads(bridge.animalSort("animal_metrics.csv", json.dumps(rules * 2))).get(
+            "error"
+        )
+        assert json.loads(bridge.animalResetSort("animal_metrics.csv"))["ok"]
+        assert "animal_metrics.csv" not in window.analysis_sorts
     finally:
         window.close()

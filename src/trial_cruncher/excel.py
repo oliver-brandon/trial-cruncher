@@ -212,7 +212,7 @@ def build_workbook(
     }
     tables.update({SHEETS[name]: table for name, table in (derived or {}).items()})
     manifest["format"] = "xlsx"
-    manifest["workbook_schema_version"] = "6"
+    manifest["workbook_schema_version"] = "7"
     manifest["workbook"] = "results.xlsx"
     manifest["sheets"] = [*tables, "Provenance"]
     manifest["tables"] = {

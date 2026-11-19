@@ -16,7 +16,7 @@ from trial_cruncher.phase_metrics import METRIC_LABELS as PHASE_METRIC_LABELS
 from trial_cruncher.phase_metrics import STRATEGIES, PhaseSummary
 from trial_cruncher.prl_metrics import MEDPC_RATE, METRIC_LABELS, PRLSessionSummary
 
-SCHEMA_VERSION = "7"
+SCHEMA_VERSION = "8"
 WHOLE_SESSION_RATE_COLUMN = "whole_session_medpc_trials_per_minute"
 PROVENANCE_COLUMNS = (
     "schema_version",

@@ -340,5 +340,124 @@ def test_export_detects_change_during_writing_and_cleans_attempt(
         monkeypatch.setattr(excel, "save_workbook", modified)
     with pytest.raises(SourcesChangedError):
         export_import_results({p: r}, [p], tmp_path, format)
-    assert list(tmp_path.glob("trial-cruncher-export-*")) == [previous]
+    assert list(tmp_path.glob("*-trial-cruncher-export-*")) == [previous]
     assert {f.name: f.read_bytes() for f in previous.iterdir()} == before
+
+
+def test_project_sort_rules_round_trip_and_reject_invalid(tmp_path, write_export):
+    source = write_export()
+    target = tmp_path / "sorting.tcproj.json"
+    sorts = {
+        "animal_metrics.csv": [
+            {"column": "metric", "descending": False},
+            {"column": "value", "descending": True},
+        ]
+    }
+    saved = save_project(
+        target, [source], {}, {}, extensions=[".txt"], recursive=False, analysis_sorts=sorts
+    )
+    assert saved.project.analysis_sorts == sorts
+    assert load_project(target).project.analysis_sorts == sorts
+    with pytest.raises(ValueError, match="sorting"):
+        save_project(
+            tmp_path / "bad.tcproj.json",
+            [source],
+            {},
+            {},
+            extensions=[".txt"],
+            recursive=False,
+            analysis_sorts={"animal_metrics.csv": [{"column": "value", "descending": "yes"}]},
+        )
+
+
+def test_legacy_plan_requiring_cohort_does_not_broaden(tmp_path, write_export):
+    source = write_export()
+    destination = tmp_path / "old.tcproj.json"
+    save_project(
+        destination, [source], {source: "Reversal"}, {}, extensions=[".txt"], recursive=False
+    )
+    obj = json.loads(destination.read_text())
+    obj["schema_version"] = "3"
+    obj.pop("analysis_sorts")
+    obj["analysis_plan"] = {
+        "cohort": "A",
+        "definition_version": "1",
+        "design": "within-subjects",
+        "conditions": ["Drug"],
+        "phases": ["Reversal"],
+        "identity": "global exact Subject",
+        "selection": "one Included recording per animal/condition/phase",
+        "pool": "ratio of eligible sums across animals within condition and phase",
+    }
+    obj["sources"][0]["analysis_metadata"] = {
+        "version": "1",
+        "condition": "Drug",
+        "cohort": None,
+        "session_order": 1,
+        "included": True,
+        "inclusion_reason": None,
+    }
+    destination.write_text(json.dumps(obj))
+    loaded = load_project(destination).project
+    assert loaded.analysis_plan is None
+    assert loaded.sources[0].analysis_metadata.condition == "Drug"
+    assert "broaden" in loaded.configuration_update_message
+    obj["sources"][0]["analysis_metadata"]["cohort"] = "A"
+    destination.write_text(json.dumps(obj))
+    assert load_project(destination).project.analysis_plan.conditions == ("Drug",)
+    # V3 could use even an excluded file to detect conflicting cohort assignments
+    # for the same subject. Subject IDs are not part of the saved setup.
+    other = dict(obj["sources"][0], path=str(tmp_path / "other.txt"))
+    other["analysis_metadata"] = dict(other["analysis_metadata"], cohort="B", included=None)
+    obj["sources"].append(other)
+    destination.write_text(json.dumps(obj))
+    assert load_project(destination).project.analysis_plan is None
+
+
+@pytest.mark.parametrize(
+    "damage",
+    ["old_metadata", "new_metadata_in_old", "old_plan", "new_plan_in_old", "missing_cohort"],
+)
+def test_project_version_requires_matching_metadata_and_plan(tmp_path, write_export, damage):
+    source = write_export()
+    target = tmp_path / "test.tcproj.json"
+    save_project(target, [source], {source: "Reversal"}, {}, extensions=[".txt"], recursive=False)
+    obj = json.loads(target.read_text())
+    old_metadata = {
+        "version": "1",
+        "condition": "Drug",
+        "cohort": "A",
+        "session_order": 1,
+        "included": True,
+        "inclusion_reason": None,
+    }
+    old_plan = {
+        "cohort": "A",
+        "definition_version": "1",
+        "design": "within-subjects",
+        "conditions": ["Drug"],
+        "phases": ["Reversal"],
+        "identity": "global exact Subject",
+        "selection": "one Included recording per animal/condition/phase",
+        "pool": "ratio of eligible sums across animals within condition and phase",
+    }
+    if damage in ("new_metadata_in_old", "new_plan_in_old", "missing_cohort"):
+        obj["schema_version"] = "3"
+        obj.pop("analysis_sorts")
+        obj["analysis_plan"] = old_plan
+        if damage != "new_metadata_in_old":
+            obj["sources"][0]["analysis_metadata"] = old_metadata
+        if damage == "new_plan_in_old":
+            obj["analysis_plan"] = {
+                key: value for key, value in old_plan.items() if key != "cohort"
+            }
+            obj["analysis_plan"]["definition_version"] = "2"
+        elif damage == "missing_cohort":
+            obj["analysis_plan"].pop("cohort")
+    elif damage == "old_metadata":
+        obj["sources"][0]["analysis_metadata"] = old_metadata
+    else:
+        obj["analysis_plan"] = old_plan
+    target.write_text(json.dumps(obj))
+    with pytest.raises(ValueError):
+        load_project(target)

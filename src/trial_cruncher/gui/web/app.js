@@ -14,6 +14,7 @@
   const mode = $("#view-mode");
   const workspace = $("#workspace");
   let bridge;
+  let lastDefaultExportName;
   let hydrated = false;
   let splitTimer;
   let currentPage = "import";
@@ -96,6 +97,12 @@
     else if (/complete|saved/.test(status)) dot.classList.add("success");
     $("#project-label").textContent = next.project || "Project: unsaved";
     $("#export-status").textContent = next.export_status || "";
+    const folderName = $("#export-folder-name");
+    if (next.default_export_folder !== lastDefaultExportName) {
+      folderName.value = next.default_export_folder;
+    }
+    lastDefaultExportName = next.default_export_folder;
+    folderName.disabled = !!next.busy;
     const progress = $("#progress");
     progress.hidden = !next.progress?.visible;
     if (next.progress?.maximum > 0) {
@@ -159,6 +166,9 @@
       else if (action === "export-results") { page("export"); await call("set_workflow", {workflow: "export"}); }
       else if (action === "phase" || action === "metadata") await window.TrialAssignments.open(action, bridge);
       else if (action === "animal-analysis") await window.animal.open();
+      else if (["export-excel", "export-csv", "detailed-excel", "detailed-csv"].includes(action)) {
+        await call(actions[action], {folder_name: $("#export-folder-name").value});
+      }
       else if (actions[action]) await call(actions[action]);
       refresh();
     } catch (error) { report(error.message); }

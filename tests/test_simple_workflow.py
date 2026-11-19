@@ -45,7 +45,7 @@ def test_data_view_and_compact_exports(app, phase_input, tmp_path, monkeypatch):
         wait_until(app, lambda: not ctrl._is_working())
         ctrl.phase_assignments = dict.fromkeys([good, zero, bad], "Reversal")
         ctrl.metadata_assignments = dict.fromkeys(
-            [good, zero, bad], AnalysisMetadata("Vehicle", "Cohort", included=True)
+            [good, zero, bad], AnalysisMetadata("Vehicle", included=True)
         )
         click("[data-action=import]")
         wait_until(
@@ -56,7 +56,7 @@ def test_data_view_and_compact_exports(app, phase_input, tmp_path, monkeypatch):
             "JSON.stringify(Array.from(document.querySelectorAll('#batch-table th'), "
             "x => x.childNodes[0].textContent.trim()))"
         )
-        assert json.loads(headers) == list(DATA_COLUMNS)
+        assert json.loads(headers) == ["File", "Quality", *DATA_COLUMNS]
         rendered = json.loads(
             js(
                 "JSON.stringify(Array.from(document.querySelectorAll('#batch-table tbody tr'), "
@@ -64,9 +64,9 @@ def test_data_view_and_compact_exports(app, phase_input, tmp_path, monkeypatch):
             )
         )
         rows_by_path = {row["path"]: row["cells"] for row in rendered}
-        assert float(rows_by_path[str(good)][3]) == 0.75
-        assert float(rows_by_path[str(zero)][3]) == 0
-        assert rows_by_path[str(bad)][3] == "Withheld"
+        assert float(rows_by_path[str(good)][5]) == 0.75
+        assert float(rows_by_path[str(zero)][5]) == 0
+        assert rows_by_path[str(bad)][5] == "Withheld"
         js(
             f"Array.from(document.querySelectorAll('#batch-table tbody tr')).find("
             f"r => r.dataset.path === {json.dumps(str(good))}).click()"
@@ -81,7 +81,7 @@ def test_data_view_and_compact_exports(app, phase_input, tmp_path, monkeypatch):
         )
         for path, result in ctrl.import_results.items():
             for i, (cell, value) in enumerate(
-                zip(rendered[str(path)], data_values(result), strict=True)
+                zip(rendered[str(path)][2:], data_values(result), strict=True)
             ):
                 if value is None:
                     assert cell in {"Withheld", "Unavailable"}
@@ -92,13 +92,15 @@ def test_data_view_and_compact_exports(app, phase_input, tmp_path, monkeypatch):
         assert data_values(ctrl.import_results[zero])[3] == 0
         assert data_values(ctrl.import_results[bad])[3] is None
         click("[data-workflow=export]")
+        js("document.querySelector('#export-folder-name').value='student-results'")
         click("[data-action=export-csv]")
         wait_until(
             app,
             lambda: bool(list(tmp_path.glob("*/data.csv"))) and not ctrl._is_working(),
             timeout=20,
         )
-        csv_path = next(tmp_path.glob("*/data.csv"))
+        csv_path = tmp_path / "student-results" / "data.csv"
+        assert csv_path.exists()
         with csv_path.open(newline="", encoding="utf-8") as f:
             csv_rows = list(csv.DictReader(f))
         assert list(csv_rows[0]) == list(DATA_COLUMNS)
@@ -123,6 +125,7 @@ def test_data_view_and_compact_exports(app, phase_input, tmp_path, monkeypatch):
         assert book["Data"].max_row == 4
         metadata = book["Metadata"].values
         names = next(metadata)
+        assert "Cohort" not in names and "Session order" not in names
         data_rows = list(book["Data"].values)
         for row in list(metadata)[:3]:
             linked = dict(zip(names, row, strict=True))

@@ -1,7 +1,7 @@
 # Batch phase-results comparison
 
 Choose **Phase results** in the upper batch area to compare imported behavioral
-metrics across files. **Sessions** retains the original session overview. Both views
+metrics across files. **Sessions** uses the recording export column order. Both views
 use the same imported snapshots and lifecycle state. This adds no calculation,
 aggregation, phase assignment, or export schema.
 
@@ -13,7 +13,7 @@ aggregation, phase assignment, or export schema.
 | Win-stay | File, subject, phase/status, eligible pair count, and correct/incorrect-conditioned probabilities with separate numerators and denominators |
 | Lose-shift | File, subject, phase/status, eligible pair count, and correct/incorrect-conditioned probabilities with separate numerators and denominators |
 | Session rate | Whole-session choices, duration S, Med-PC trials/min, and rate status; independent of phase assignment |
-| Experiment metadata | Manual condition/treatment, cohort, session order, inclusion and reason beside source identity |
+| Experiment metadata | Manual condition/treatment, inclusion and reason beside source identity |
 | All metrics | Every metric and ratio count, plus one-based criterion choice ordinal, program, and original date text |
 
 Ratios use 0–1 and display four decimals; sorting uses full stored precision.
@@ -39,7 +39,7 @@ resets the status filter because it changes from phase status to rate status. If
   warnings, unavailable metrics, unassigned phases, withheld results, failures, stale
   sources, and unimported files. It excludes pending work.
 
-Condition, cohort, and inclusion filters use current manual annotations and combine
+Condition and inclusion filters use current manual annotations and combine
 with phase/status/search. They affect display only and never select analysis inclusion
 or export scope. Filters combine and the visible/total count stays explicit. Reset filters clears
 search, phase, and status while retaining the layout and sort. A chosen phase filter
@@ -135,3 +135,9 @@ metadata** opens the read-only Analysis metadata detail tab on row selection.
 Include/Exclude/Not reviewed is distinct from phase/rate availability, and Include
 never overrides strict withholding. Reset filters and project loading also clear the
 metadata view filters. See [manual metadata](analysis-metadata.md).
+
+Phase results begins with File and Phase status, then the same recording fields and
+metrics as the concise export. Select a layout to inspect its supporting evidence
+and denominator columns after those fields.
+
+The accuracy column in this view is **Phase proportion correct**. An unassigned phase leaves this value unavailable even when whole-session accuracy is available in Sessions.

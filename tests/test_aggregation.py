@@ -1,4 +1,4 @@
-"""Invented PRL examples for within-cohort selection, pooling, pairing and persistence."""
+"""Invented PRL examples for project-wide selection, pooling, pairing and persistence."""
 
 import csv
 import json
@@ -21,7 +21,7 @@ from trial_cruncher.source_tracking import SourcesChangedError
 def batch(phase_input):
     results = {}
 
-    def add(subject, condition, codes, phase="Reversal", cohort="C1", included=True, duration=60):
+    def add(subject, condition, codes, phase="Reversal", included=True, duration=60):
         path = phase_input(codes, name=f"source-{len(results)}.txt")
         text = (
             path.read_text()
@@ -29,9 +29,7 @@ def batch(phase_input):
             .replace(f"S: {len(codes) + 1}", f"S: {duration}")
         )
         path.write_text(text)
-        a = AnalysisMetadata(
-            condition, cohort, None, included, "Retest" if included is False else None
-        )
+        a = AnalysisMetadata(condition, included, "Retest" if included is False else None)
         results[path] = import_medpc_file(path, phase, a)
         return path
 
@@ -39,7 +37,7 @@ def batch(phase_input):
 
 
 def plan(design="within-subjects", conditions=("A", "B"), phases=("Reversal",)):
-    return AnalysisPlan("C1", design, conditions, phases)
+    return AnalysisPlan(design, conditions, phases)
 
 
 def pool(t, metric, condition="A"):
@@ -104,7 +102,7 @@ def test_audit_duplicate_selection_isolated_and_exclusions_preserved(batch, tmp_
     )
     results[a] = replace(
         results[a],
-        analysis_metadata=AnalysisMetadata("A", "C1", included=False, inclusion_reason="Retest"),
+        analysis_metadata=AnalysisMetadata("A", included=False, inclusion_reason="Retest"),
     )
     assert pool(build_analysis(plan(), results, paths), ACCURACY)["valid_animal_n"] == 2
 
@@ -117,7 +115,7 @@ def test_between_design_pairs_phases_and_flags_conflicts(batch):
     add("003", "A", (1, 7))
     add("003", "B", (7, 1))
     add("004", "A", (1, 1))
-    add("004", "B", (1,), cohort="C2")
+    add("004", "B", (1,))
     t = build_analysis(
         plan("between-subjects", phases=("Acquisition", "Reversal")), results, list(results)
     )
@@ -126,7 +124,7 @@ def test_between_design_pairs_phases_and_flags_conflicts(batch):
     assert len(json.loads(a["required_cells_json"])) == 2
     assert not comparison(t, "002", ACCURACY)["complete"]
     assert "multiple between-subjects" in comparison(t, "003", ACCURACY)["cell_evidence_json"]
-    assert "Conflicting cohort" in comparison(t, "004", ACCURACY)["cell_evidence_json"]
+    assert "multiple between-subjects" in comparison(t, "004", ACCURACY)["cell_evidence_json"]
 
 
 def test_metric_specific_missingness_and_strict_counts(batch):
@@ -229,7 +227,7 @@ def test_duplicate_hash_and_missing_keys(batch):
         zip(t["analysis_audit.csv"].source_file, t["analysis_audit.csv"].disposition, strict=True)
     )
     assert dispositions[str(a)] == dispositions[str(b)] == "Duplicate Included source content"
-    assert "Missing subject, cohort, condition, or imported phase" in dispositions.values()
+    assert "Missing subject, condition, or imported phase" in dispositions.values()
     assert t["animal_metrics.csv"].empty
 
 

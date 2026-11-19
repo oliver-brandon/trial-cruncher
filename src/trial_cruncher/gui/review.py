@@ -290,7 +290,6 @@ class ReviewPanel(QWidget):
         )
 
     def show_analysis_metadata(self, path: Path, a: AnalysisMetadata) -> None:
-        order = a.session_order if a.session_order is not None else "Unassigned"
         self.analysis_details.setPlainText(
             "\n".join(
                 (
@@ -299,8 +298,6 @@ class ReviewPanel(QWidget):
                     "Included, Excluded, and Not reviewed records all remain in exports.",
                     "",
                     f"Condition / treatment: {a.condition or 'Unassigned'}",
-                    f"Cohort: {a.cohort or 'Unassigned'}",
-                    f"Session order: {order}",
                     f"Analysis inclusion: {a.inclusion_status}",
                     f"Reason: {a.inclusion_reason or 'Not assigned'}",
                     "",
@@ -381,8 +378,6 @@ class ReviewPanel(QWidget):
             "",
             "Manual analysis metadata (separate from original headers):",
             f"Condition / treatment: {a.condition or 'Unassigned'}",
-            f"Cohort: {a.cohort or 'Unassigned'}",
-            f"Session order: {a.session_order if a.session_order is not None else 'Unassigned'}",
             f"Analysis inclusion: {a.inclusion_status}",
             f"Reason: {a.inclusion_reason or 'Not assigned'}",
             f"Analysis metadata version: {a.version}",

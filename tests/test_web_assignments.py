@@ -25,7 +25,7 @@ def test_assignment_pages_and_atomic_failure(app, phase_input):
                 {
                     "id": row["id"],
                     "before": row["metadata"],
-                    "value": {**row["metadata"], "cohort": "A"},
+                    "value": {**row["metadata"], "condition": "A"},
                 }
                 for row in rows
             ],

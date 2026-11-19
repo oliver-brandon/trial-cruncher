@@ -40,8 +40,6 @@ HEADERS = (
     "Warnings",
     "Trials/min\n(Med-PC)",
     "Condition / treatment",
-    "Cohort",
-    "Session order",
     "Analysis inclusion",
     "Inclusion reason",
 )
@@ -113,11 +111,9 @@ class OverviewRow:
         return None
 
     def value(self, column: int) -> str | int | float | None:
-        if 14 <= column <= 18:
+        if 14 <= column <= 16:
             a = self.annotation
-            return (a.condition, a.cohort, a.session_order, a.inclusion_status, a.inclusion_reason)[
-                column - 14
-            ]
+            return (a.condition, a.inclusion_status, a.inclusion_reason)[column - 14]
         result = self.result
         session = result.session if result else None
         headers = result.raw["headers"] if result and result.raw else {}
@@ -146,7 +142,7 @@ class OverviewRow:
             if column in (11, 13):
                 return f"{value:.4f}"
             return str(value)
-        if 14 <= column <= 18:
+        if 14 <= column <= 16:
             return "Unassigned"
         if (6 <= column <= 11 or column == 13) and self.withheld:
             return "Withheld"
@@ -161,8 +157,6 @@ class OverviewRow:
             lines += [
                 "Manual analysis metadata; independent of metric validity.",
                 f"Condition / treatment: {a.condition or 'Unassigned'}",
-                f"Cohort: {a.cohort or 'Unassigned'}",
-                f"Session order: {a.session_order}",
                 f"Analysis inclusion: {a.inclusion_status}",
                 f"Reason: {a.inclusion_reason or 'Not assigned'}",
             ]
@@ -188,7 +182,7 @@ class OverviewRow:
     @cached_property
     def search_text(self) -> str:
         fields = [str(self.path), *(self.text(column) for column in range(1, 5)), *self.warnings]
-        fields.extend(self.text(column) for column in range(14, 19))
+        fields.extend(self.text(column) for column in range(14, 17))
         if self.source_issue:
             fields.append(self.source_issue)
         if self.result and self.result.error:
@@ -286,9 +280,7 @@ class OverviewModel(QAbstractTableModel):
             return "<qt>" + escape(row.tooltip(index.column())).replace("\n", "<br>") + "</qt>"
         if role == Qt.ItemDataRole.UserRole:
             return row.path
-        if role == Qt.ItemDataRole.TextAlignmentRole and (
-            5 <= index.column() <= 13 or index.column() == 16
-        ):
+        if role == Qt.ItemDataRole.TextAlignmentRole and (5 <= index.column() <= 13):
             return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         return None
 

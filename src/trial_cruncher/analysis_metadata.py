@@ -6,11 +6,9 @@ from dataclasses import asdict, dataclass
 from functools import cached_property
 from typing import Any
 
-METADATA_VERSION = "1"
+METADATA_VERSION = "2"
 ANNOTATION_COLUMNS = (
     "analysis_condition",
-    "analysis_cohort",
-    "analysis_session_order",
     "analysis_included",
     "analysis_inclusion_status",
     "analysis_inclusion_reason",
@@ -23,8 +21,6 @@ ANNOTATION_COLUMNS = (
 @dataclass(frozen=True)
 class AnalysisMetadata:
     condition: str | None = None
-    cohort: str | None = None
-    session_order: int | None = None
     included: bool | None = None
     inclusion_reason: str | None = None
     version: str = METADATA_VERSION
@@ -32,18 +28,12 @@ class AnalysisMetadata:
     def __post_init__(self) -> None:
         if self.version != METADATA_VERSION:
             raise ValueError("Unsupported analysis metadata version.")
-        for name in ("condition", "cohort", "inclusion_reason"):
+        for name in ("condition", "inclusion_reason"):
             value = getattr(self, name)
             if value is not None and (
                 not isinstance(value, str) or not value.strip() or value != value.strip()
             ):
                 raise ValueError(f"{name} must be normalized text or null.")
-        if self.session_order is not None and (
-            type(self.session_order) is not int or not 1 <= self.session_order <= 2_147_483_647
-        ):
-            raise ValueError(
-                "Session order must be an integer from 1 to 2147483647, or unassigned."
-            )
         if self.included is not None and type(self.included) is not bool:
             raise ValueError("Inclusion must be true, false, or null (not reviewed).")
         if self.included is False and self.inclusion_reason is None:
@@ -53,7 +43,7 @@ class AnalysisMetadata:
     def is_assigned(self) -> bool:
         return any(
             getattr(self, name) is not None
-            for name in ("condition", "cohort", "session_order", "included", "inclusion_reason")
+            for name in ("condition", "included", "inclusion_reason")
         )
 
     @property
@@ -76,8 +66,6 @@ class AnalysisMetadata:
                 ANNOTATION_COLUMNS,
                 (
                     self.condition,
-                    self.cohort,
-                    self.session_order,
                     self.included,
                     self.inclusion_status,
                     self.inclusion_reason,
@@ -91,7 +79,20 @@ class AnalysisMetadata:
 
 
 def analysis_metadata_from_dict(value: Any) -> AnalysisMetadata:
-    expected = {"condition", "cohort", "session_order", "included", "inclusion_reason", "version"}
-    if not isinstance(value, dict) or set(value) != expected:
+    expected = {"condition", "included", "inclusion_reason", "version"}
+    legacy = expected | {"cohort", "session_order"}
+    if not isinstance(value, dict):
+        raise ValueError("Invalid analysis metadata fields.")
+    if set(value) == legacy and value["version"] == "1":
+        cohort = value["cohort"]
+        order = value["session_order"]
+        if cohort is not None and (
+            not isinstance(cohort, str) or not cohort.strip() or cohort != cohort.strip()
+        ):
+            raise ValueError("Invalid legacy cohort.")
+        if order is not None and (type(order) is not int or not 1 <= order <= 2_147_483_647):
+            raise ValueError("Invalid legacy session order.")
+        return AnalysisMetadata(value["condition"], value["included"], value["inclusion_reason"])
+    if set(value) != expected:
         raise ValueError("Invalid analysis metadata fields.")
     return AnalysisMetadata(**value)

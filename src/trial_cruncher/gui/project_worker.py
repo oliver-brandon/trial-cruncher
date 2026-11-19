@@ -33,11 +33,15 @@ class ProjectWorker(QRunnable):
         expected_project_sha256: str | None = None,
         metadata: dict[Path, AnalysisMetadata] | None = None,
         analysis_plan: AnalysisPlan | None = None,
+        analysis_sorts: dict[str, list[dict[str, object]]] | None = None,
     ) -> None:
         super().__init__()
         self.mode, self.path, self.paths = mode, path, paths
         self.phases, self.hashes = dict(phases or {}), dict(hashes or {})
         self.analysis_plan = analysis_plan
+        self.analysis_sorts = {
+            k: [dict(r) for r in rules] for k, rules in (analysis_sorts or {}).items()
+        }
         self.metadata = dict(metadata or {})
         self.extensions, self.recursive = extensions, recursive
         self.expected_project_sha256 = expected_project_sha256
@@ -59,6 +63,7 @@ class ProjectWorker(QRunnable):
                     expected_project_sha256=self.expected_project_sha256,
                     analysis_metadata=self.metadata,
                     analysis_plan=self.analysis_plan,
+                    analysis_sorts=self.analysis_sorts,
                 )
             else:
                 result = check_sources(self.hashes)

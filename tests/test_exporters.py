@@ -65,7 +65,7 @@ def test_export_round_trip_provenance_missing_and_raw_fields(write_export, tmp_p
         METRIC_LABELS
     )
     assert manifest["configuration"]["metric_eligibility_policy"] == "strict-withholding-v2"
-    assert manifest["schema_version"] == row["schema_version"] == "7"
+    assert manifest["schema_version"] == row["schema_version"] == "8"
     assert row["metric_definition_version"] == "4"
     assert row["metric_policy"] == "strict-withholding-v2"
     assert all(row[name] == "" for name in METRIC_LABELS)
@@ -133,7 +133,7 @@ def test_failed_unimported_and_warning_inputs_are_accounted_for(write_export, tm
     assert len(read_csv(destination / "sessions.csv")) == 1
     with pytest.raises(ValueError, match="at least one"):
         export_import_results({bad: results[bad]}, [bad], tmp_path)
-    assert len(list(tmp_path.glob("trial-cruncher-export-*"))) == 1
+    assert len(list(tmp_path.glob("*-trial-cruncher-export-*"))) == 1
 
 
 def test_export_twice_creates_separate_complete_bundles(write_export, tmp_path):
@@ -188,7 +188,7 @@ def test_write_failure_removes_attempt_only(write_export, tmp_path, monkeypatch,
     monkeypatch.setattr(type(path), "open", failing_open)
     with pytest.raises(OSError, match="Synthetic disk failure"):
         export_import_results({path: result}, [path], tmp_path)
-    assert list(tmp_path.glob("trial-cruncher-export-*")) == [previous]
+    assert list(tmp_path.glob("*-trial-cruncher-export-*")) == [previous]
     assert {file.name: file.read_bytes() for file in previous.iterdir()} == before
     assert import_medpc_file(path).session == result.session
 
@@ -202,15 +202,15 @@ def test_bad_metadata_and_unwritable_parent_leave_no_export(write_export, tmp_pa
     )
     with pytest.raises(TypeError, match="Cannot export"):
         export_import_results({path: invalid}, [path], tmp_path)
-    assert not list(tmp_path.glob("trial-cruncher-export-*"))
+    assert not list(tmp_path.glob("*-trial-cruncher-export-*"))
 
     def deny(*args, **kwargs):
         raise PermissionError("Synthetic permission denial")
 
-    monkeypatch.setattr(exporters.tempfile, "mkdtemp", deny)
+    monkeypatch.setattr(exporters.Path, "mkdir", deny)
     with pytest.raises(PermissionError):
         export_import_results({path: result}, [path], tmp_path)
-    assert not list(tmp_path.glob("trial-cruncher-export-*"))
+    assert not list(tmp_path.glob("*-trial-cruncher-export-*"))
 
 
 def test_generic_missing_session_does_not_invent_provenance(tmp_path):
@@ -274,7 +274,7 @@ def test_export_requires_reimport_after_source_changes(write_export, tmp_path, e
     changed = path.read_bytes(), path.stat().st_mtime_ns
     with pytest.raises(SourcesChangedError, match="re-import"):
         export_import_results({path: result}, [path], tmp_path, export_format)
-    assert not list(tmp_path.glob("trial-cruncher-export-*"))
+    assert not list(tmp_path.glob("*-trial-cruncher-export-*"))
     assert (path.read_bytes(), path.stat().st_mtime_ns) == changed
     refreshed = import_medpc_file(path)
     destination = export_import_results({path: refreshed}, [path], tmp_path, export_format)
@@ -330,7 +330,7 @@ def test_export_requires_calculated_summary_before_writing(write_export, tmp_pat
     result = replace(import_medpc_file(path), summary=None)
     with pytest.raises(ValueError, match="re-import"):
         export_import_results({path: result}, [path], tmp_path)
-    assert not list(tmp_path.glob("trial-cruncher-export-*"))
+    assert not list(tmp_path.glob("*-trial-cruncher-export-*"))
 
 
 def test_csv_export_without_optional_matlab_packages(write_export, tmp_path, monkeypatch):

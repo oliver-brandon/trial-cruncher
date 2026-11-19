@@ -5,12 +5,11 @@ import json
 from dataclasses import asdict, dataclass
 from functools import cached_property
 
-VERSION = "1"
+VERSION = "2"
 
 
 @dataclass(frozen=True)
 class AnalysisPlan:
-    cohort: str
     design: str
     conditions: tuple[str, ...]
     phases: tuple[str, ...]
@@ -18,12 +17,6 @@ class AnalysisPlan:
     def __post_init__(self) -> None:
         if self.design not in ("within-subjects", "between-subjects"):
             raise ValueError("Choose a within-subjects or between-subjects design.")
-        if (
-            not isinstance(self.cohort, str)
-            or not self.cohort.strip()
-            or self.cohort.strip() != self.cohort
-        ):
-            raise ValueError("Choose one assigned cohort.")
         for values in (self.conditions, self.phases):
             if (
                 not isinstance(values, tuple)
@@ -50,9 +43,19 @@ class AnalysisPlan:
 
     @classmethod
     def restore(cls, obj: object) -> "AnalysisPlan":
+        if isinstance(obj, dict) and obj.get("definition_version") == "1":
+            old = dict(obj)
+            if (
+                not isinstance(old.get("cohort"), str)
+                or not old["cohort"].strip()
+                or old["cohort"] != old["cohort"].strip()
+            ):
+                raise ValueError("Invalid legacy cohort.")
+            old.pop("cohort")
+            old["definition_version"] = VERSION
+            obj = old
         if not isinstance(obj, dict) or set(obj) != {
             "definition_version",
-            "cohort",
             "design",
             "conditions",
             "phases",
@@ -63,7 +66,7 @@ class AnalysisPlan:
             raise ValueError("Invalid analysis plan fields.")
         if not all(isinstance(obj[k], list) for k in ("conditions", "phases")):
             raise ValueError("Invalid analysis plan selections.")
-        plan = cls(obj["cohort"], obj["design"], tuple(obj["conditions"]), tuple(obj["phases"]))
+        plan = cls(obj["design"], tuple(obj["conditions"]), tuple(obj["phases"]))
         if plan.record() != {**obj, "conditions": plan.conditions, "phases": plan.phases}:
             raise ValueError("Unsupported aggregation plan rules.")
         return plan

@@ -199,7 +199,7 @@ def test_phase_exports_literal_labels_evidence_and_versions(phase_input, tmp_pat
     assert int(row["omission_count"]) == 0
     assert row["omission_count_basis"] == "owner-confirmed no-omission protocol"
     manifest = json.loads((out / "manifest.json").read_text())
-    assert manifest["schema_version"] == "7"
+    assert manifest["schema_version"] == "8"
     assert manifest["configuration"]["phase_definition_version"] == "2"
     assert manifest["configuration"]["phase_configurations"][0]["configuration"] == asdict(
         result.phase_summary.config
@@ -222,7 +222,7 @@ def test_export_refuses_stale_phase_snapshot(phase_input, tmp_path, stale):
         phase = replace(phase, source_sha256="wrong")
     with pytest.raises(ValueError, match="re-import"):
         export_import_results({path: replace(result, phase_summary=phase)}, [path], tmp_path)
-    assert not list(tmp_path.glob("trial-cruncher-export-*"))
+    assert not list(tmp_path.glob("*-trial-cruncher-export-*"))
 
 
 def test_stale_events_and_unknown_program_fail(phase_input):

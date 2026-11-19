@@ -34,7 +34,12 @@ from trial_cruncher.discovery import (
     discover_files,
     normalize_extensions,
 )
-from trial_cruncher.exporters import ExportFormat, ExportProfile
+from trial_cruncher.exporters import (
+    ExportFormat,
+    ExportProfile,
+    default_export_folder_name,
+    validate_export_folder_name,
+)
 from trial_cruncher.gui.animal_analysis import AnalysisReview, AnalysisWorker, PlanDialog
 from trial_cruncher.gui.export_worker import ExportWorker
 from trial_cruncher.gui.import_worker import ImportWorker
@@ -95,10 +100,12 @@ class MainWindow(QMainWindow):
         self.phase_assignments: dict[Path, str] = {}
         self.metadata_assignments: dict[Path, AnalysisMetadata] = {}
         self._web_analysis = False
+        self._web_sort_cache = {}
         self._web_analysis_revision = 0
         self._web_analysis_started_revision = 0
         self._web_analysis_tables = None
         self._web_analysis_error = None
+        self.analysis_sorts: dict[str, list[dict[str, object]]] = {}
         self.analysis_plan: AnalysisPlan | None = None
         self._analysis_worker: AnalysisWorker | None = None
         self._worker: DiscoveryWorker | None = None
@@ -579,21 +586,30 @@ class MainWindow(QMainWindow):
         )
 
     @Slot()
-    def export_csv(self) -> None:
-        self._start_export("csv")
+    def export_csv(self, *, folder_name: str | None = None) -> None:
+        self._start_export("csv", "detailed", folder_name)
 
     @Slot()
-    def export_excel(self) -> None:
-        self._start_export("xlsx")
+    def export_excel(self, *, folder_name: str | None = None) -> None:
+        self._start_export("xlsx", "detailed", folder_name)
 
-    def export_data_csv(self) -> None:
-        self._start_export("csv", "compact")
+    def export_data_csv(self, *, folder_name: str | None = None) -> None:
+        self._start_export("csv", "compact", folder_name)
 
-    def export_data_excel(self) -> None:
-        self._start_export("xlsx", "compact")
+    def export_data_excel(self, *, folder_name: str | None = None) -> None:
+        self._start_export("xlsx", "compact", folder_name)
+
+    def default_export_folder_name(self) -> str:
+        name = self._project_path.name if self._project_path else ""
+        if name.lower().endswith(PROJECT_SUFFIX):
+            name = name[: -len(PROJECT_SUFFIX)]
+        return default_export_folder_name(name)
 
     def _start_export(
-        self, export_format: ExportFormat, profile: ExportProfile = "detailed"
+        self,
+        export_format: ExportFormat,
+        profile: ExportProfile = "detailed",
+        folder_name: str | None = None,
     ) -> None:
         if self._closing or self._is_working():
             return
@@ -603,6 +619,9 @@ class MainWindow(QMainWindow):
         )
         if not count:
             return
+        if folder_name is None:
+            folder_name = self.default_export_folder_name()
+        validate_export_folder_name(folder_name)
         self._export_label = "Excel" if export_format == "xlsx" else "CSV"
         parent = QFileDialog.getExistingDirectory(
             self.dialog_parent,
@@ -618,6 +637,7 @@ class MainWindow(QMainWindow):
             self.metadata_assignments,
             self.analysis_plan,
             profile=profile,
+            folder_name=folder_name,
         )
         self._export_worker.signals.finished.connect(self._export_finished)
         self._export_worker.signals.failed.connect(self._export_failed)
@@ -664,7 +684,6 @@ class MainWindow(QMainWindow):
             return
         labels = self.metadata_assignments.values()
         dialog = PlanDialog(
-            {a.cohort for a in labels if a.cohort},
             {a.condition for a in labels if a.condition},
             {
                 r.phase_summary.config.phase
@@ -684,6 +703,7 @@ class MainWindow(QMainWindow):
         self.apply_analysis_plan(dialog.plan)
 
     def invalidate_animal_preview(self):
+        self._web_sort_cache = {}
         self._web_analysis_revision += 1
         self._web_analysis_tables = None
         self._web_analysis_error = None
@@ -809,11 +829,7 @@ class MainWindow(QMainWindow):
         name = str(self._project_path) if self._project_path else "unsaved"
         dirty = " · unsaved changes" if self._project_dirty else ""
         issues = f" · {len(self._source_issues)} source issue(s)" if self._source_issues else ""
-        analysis = (
-            f" · Animal analysis: {self.analysis_plan.cohort} ({self.analysis_plan.design})"
-            if self.analysis_plan
-            else ""
-        )
+        analysis = f" · Animal analysis: {self.analysis_plan.design}" if self.analysis_plan else ""
         self.project_label.setText(f"Project: {name}{dirty}{issues}{analysis}")
         project_name = f" · {self._project_path.name}" if self._project_path else ""
         self.setWindowTitle(f"Trial Cruncher{project_name}{dirty}")
@@ -913,6 +929,7 @@ class MainWindow(QMainWindow):
                 expected_project_sha256=expected,
                 metadata=self.metadata_assignments,
                 analysis_plan=self.analysis_plan,
+                analysis_sorts=self.analysis_sorts,
             )
         )
 
@@ -942,6 +959,7 @@ class MainWindow(QMainWindow):
             if mode == "load":
                 self.workflow.setCurrentWidget(self.import_page)
                 self.analysis_plan = project.analysis_plan
+                self.analysis_sorts = project.analysis_sorts
                 self.selected_files = {s.path for s in project.sources}
                 self.phase_assignments = {s.path: s.phase for s in project.sources if s.phase}
                 self.metadata_assignments = {

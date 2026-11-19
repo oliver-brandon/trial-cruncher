@@ -1,4 +1,4 @@
-# Session, choice, and phase CSV export (schema 7)
+# Session, choice, and phase CSV export (schema 8)
 
 ## Concise CSV
 
@@ -13,14 +13,19 @@ warnings, errors, metric unavailability reasons, and the original row number in 
 records configuration and software versions. Failed and unimported inputs appear in
 metadata and the manifest. Filters and inclusion flags do not limit the export.
 
-## Detailed CSV (schema 7)
+Enter a folder name on the Export tab before choosing the parent folder. The default
+uses the local date and saved project name in `YYYYMMDD-trial-cruncher-export-projectname`
+form, with `unsaved` for a project that has not been saved. If that name exists,
+the app adds `-2`, `-3`, and so on to create a new folder without overwriting it.
+
+## Detailed CSV (schema 8)
 
 The following sections describe the detailed export.
 
 ## GUI workflow
 
 Import files, review the results, then choose **Export → Detailed exports → Detailed CSV…** and choose a parent
-folder. The application creates a fresh `trial-cruncher-export-<unique suffix>`
+folder. The application creates a fresh named
 subfolder containing `sessions.csv`, `choices.csv`, `phase_metrics.csv`, and `manifest.json`. The saved
 folder path is displayed as selectable text on the **Export** tab. Export always
 includes **all successfully imported sessions in the list**, including those with
@@ -227,7 +232,7 @@ record the formula, whole-session scope, source, unit, availability, and reasons
 Invalid duration or a choice beyond S makes the rate blank without withholding
 otherwise eligible choice/phase metrics. See [rate definition](medpc-trials-per-minute.md).
 
-## Whole-session rate alongside phase metrics (schema 7)
+## Whole-session rate alongside phase metrics (schema 8)
 
 `phase_metrics.csv` now includes the same reviewed session rate for convenience:
 
@@ -251,10 +256,9 @@ not a calculation during export. The manifest describes this column mapping.
 Session/phase scientific definitions and saved-project configurations are unchanged;
 only the export layout advances. Create a new export to obtain the additional columns.
 
-## Manual metadata in schema 7
+## Manual metadata in schema 8
 
-Sessions, Choices, and Phase metrics now include `analysis_condition`, `analysis_cohort`,
-`analysis_session_order`, nullable boolean `analysis_included`, readable
+Sessions, Choices, and Phase metrics include `analysis_condition`, nullable boolean `analysis_included`, readable
 `analysis_inclusion_status`, `analysis_inclusion_reason`, and annotation version/source/hash.
 All successful recordings remain, including excluded and not-reviewed recordings.
 The manifest includes the same assignments for failed/unimported inputs. Display
@@ -262,4 +266,4 @@ filters do not select the exported analysis set. An inclusion flag is independen
 of metric validity; no calculations or raw headers are changed. See
 [the complete metadata contract](analysis-metadata.md).
 
-An optional [animal analysis plan](aggregation-pairing-spec.md) adds analysis-audit, individual-animal, condition-comparison, and pooled-metric tables to CSV and Excel exports. Save the plan, Included recording selections, and phase assignments together in project format 3.
+An optional [animal analysis plan](aggregation-pairing-spec.md) adds analysis-audit, individual-animal, condition-comparison, and pooled-metric tables to CSV and Excel exports. Save the plan, Included recording selections, and phase assignments together in project format 4.

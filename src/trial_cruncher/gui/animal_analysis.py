@@ -47,21 +47,16 @@ def _checked(widget):
 class PlanDialog(QDialog):
     EDIT_METADATA = 2
 
-    def __init__(self, cohorts, conditions, phases, plan, parent=None):
+    def __init__(self, conditions, phases, plan, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Animal analysis")
         self.plan = plan
         layout = QFormLayout(self)
-        self.cohort = QComboBox()
-        self.cohort.addItems(sorted(cohorts | ({plan.cohort} if plan else set())))
-        if not self.cohort.count():
-            self.cohort.setPlaceholderText("Assign a cohort in Session metadata…")
         self.design = QComboBox()
         self.design.addItems(["between-subjects", "within-subjects"])
         self.design.setPlaceholderText("Choose comparison design")
         self.design.setCurrentIndex(-1)
         if plan:
-            self.cohort.setCurrentText(plan.cohort)
             self.design.setCurrentText(plan.design)
         self.conditions = _choices(
             sorted(conditions | (set(plan.conditions) if plan else set())),
@@ -79,19 +74,13 @@ class PlanDialog(QDialog):
             QLabel("Use Session metadata to Include one recording per animal, condition and phase.")
         )
         for label, control in (
-            ("Cohort", self.cohort),
             ("Design", self.design),
             ("Conditions", self.conditions),
             ("Phases", self.phases),
         ):
             layout.addRow(label, control)
-        if not cohorts or not conditions:
-            missing = " and ".join(
-                label
-                for label, values in (("cohort", cohorts), ("condition", conditions))
-                if not values
-            )
-            layout.addRow(QLabel(f"Assign a {missing} to the recordings in Session metadata."))
+        if not conditions:
+            layout.addRow(QLabel("Assign a condition to the recordings in Session metadata."))
             edit = QPushButton("Open session metadata…")
             edit.clicked.connect(lambda: self.done(self.EDIT_METADATA))
             layout.addRow(edit)
@@ -112,7 +101,6 @@ class PlanDialog(QDialog):
     def accept(self):
         try:
             self.plan = AnalysisPlan(
-                self.cohort.currentText(),
                 self.design.currentText(),
                 _checked(self.conditions),
                 _checked(self.phases),
@@ -199,11 +187,7 @@ class AnalysisReview(QDialog):
         layout = QVBoxLayout(self)
         label = QLabel()
         label.setTextFormat(Qt.TextFormat.PlainText)
-        label.setText(
-            " · ".join(
-                (plan.cohort, plan.design, ", ".join(plan.conditions), ", ".join(plan.phases))
-            )
-        )
+        label.setText(" · ".join((plan.design, ", ".join(plan.conditions), ", ".join(plan.phases))))
         layout.addWidget(label)
         tabs = QTabWidget()
         for filename in (

@@ -29,12 +29,12 @@ def test_saved_project_review_and_analysis_parity(app, phase_input, tmp_path, mo
         path.write_text(path.read_text().replace("Subject: 0007", "Subject: 0008"))
     paths = [a, b, duplicate1, duplicate2]
     metadata = {
-        a: AnalysisMetadata("Control", "Cohort", included=True),
-        b: AnalysisMetadata("Drug", "Cohort", included=True),
-        duplicate1: AnalysisMetadata("Control", "Cohort", included=True),
-        duplicate2: AnalysisMetadata("Control", "Cohort", included=True),
+        a: AnalysisMetadata("Control", included=True),
+        b: AnalysisMetadata("Drug", included=True),
+        duplicate1: AnalysisMetadata("Control", included=True),
+        duplicate2: AnalysisMetadata("Control", included=True),
     }
-    plan = AnalysisPlan("Cohort", "within-subjects", ("Control", "Drug"), ("Reversal",))
+    plan = AnalysisPlan("within-subjects", ("Control", "Drug"), ("Reversal",))
     project = tmp_path / "saved.tcproj.json"
     save_project(
         project,

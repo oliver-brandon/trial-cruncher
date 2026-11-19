@@ -56,19 +56,17 @@ HEADERS = (
     "Trials/min\n(Med-PC)",
     "Rate status",
     "Condition /\ntreatment",
-    "Cohort",
-    "Session\norder",
     "Analysis\ninclusion",
     "Inclusion reason",
 )
 METRIC_COLUMNS = {5: 0, 6: 1, 7: 2, 8: 3, 13: 4, 16: 5, 19: 6, 22: 7}
 RATIO_COLUMNS = {c: i for i, start in enumerate((13, 16, 19, 22)) for c in range(start, start + 3)}
 VIEWS = {
-    "Errors and criterion": (*range(11), 34),
-    "Win-stay": (*range(4), 12, *range(13, 19), 34),
-    "Lose-shift": (*range(4), 12, *range(19, 25), 34),
-    "Session rate": (0, 1, 2, 27, 28, 29, 30, 34),
-    "Experiment metadata": (0, 1, 2, 31, 32, 33, 34, 35),
+    "Errors and criterion": (*range(11), 32),
+    "Win-stay": (*range(4), 12, *range(13, 19), 32),
+    "Lose-shift": (*range(4), 12, *range(19, 25), 32),
+    "Session rate": (0, 1, 2, 27, 28, 29, 30, 32),
+    "Experiment metadata": (0, 1, 2, 31, 32, 33),
     "All metrics": tuple(range(len(HEADERS))),
 }
 PHASE_STATES = {
@@ -153,7 +151,7 @@ class PhaseRow:
         return self.phase.diagnostics.adjusted_regressive if column in (8, 9) else None
 
     def value(self, column: int) -> str | int | float | bool | None:
-        if 31 <= column <= 35:
+        if 31 <= column <= 33:
             return self.source.value(column - 17)
         if column == 0:
             return self.path.name
@@ -199,7 +197,7 @@ class PhaseRow:
             if isinstance(value, bool):
                 return "Yes" if value else "No"
             return f"{value:.4f}" if isinstance(value, float) else str(value)
-        if 31 <= column <= 35:
+        if 31 <= column <= 33:
             return "Unassigned"
         if column == 2 and self.phase:
             return "Unassigned"
@@ -212,7 +210,7 @@ class PhaseRow:
         return "Unavailable"
 
     def tooltip(self, column: int) -> str:
-        if 31 <= column <= 35:
+        if 31 <= column <= 33:
             return self.source.tooltip(column - 17)
         lines = [str(self.path), f"Phase status: {self.status}"]
         if column >= 27:
@@ -292,7 +290,7 @@ class PhaseRow:
                 self.text(25),
                 self.text(26),
                 self.tooltip(3),
-                *(self.source.text(c) for c in range(14, 19)),
+                *(self.source.text(c) for c in range(14, 17)),
             )
         ).casefold()
 
@@ -341,7 +339,7 @@ class PhaseModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.UserRole:
             return row.path
         if role == Qt.ItemDataRole.TextAlignmentRole and (
-            4 <= index.column() <= 24 or 27 <= index.column() <= 29 or index.column() == 33
+            4 <= index.column() <= 24 or 27 <= index.column() <= 29 or False
         ):
             return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         return None
@@ -369,7 +367,6 @@ class PhaseProxy(BatchSortProxy):
         self.status = "All statuses"
         self.rate_view = False
         self.condition: str | None = None
-        self.cohort: str | None = None
         self.inclusion: str | None = None
         self.setDynamicSortFilter(True)
 
@@ -377,8 +374,6 @@ class PhaseProxy(BatchSortProxy):
         row = self.sourceModel().row(index)
         annotation = row.source.annotation
         if self.condition is not None and (annotation.condition or "") != self.condition:
-            return False
-        if self.cohort is not None and (annotation.cohort or "") != self.cohort:
             return False
         if self.inclusion is not None and annotation.inclusion_status != self.inclusion:
             return False
@@ -446,15 +441,12 @@ class BatchPhaseOverview(QWidget):
         self.condition_filter = QComboBox()
         self.condition_filter.addItem("All conditions", None)
         self.condition_filter.setAccessibleName("Filter analysis condition")
-        self.cohort_filter = QComboBox()
-        self.cohort_filter.addItem("All cohorts", None)
-        self.cohort_filter.setAccessibleName("Filter analysis cohort")
         self.inclusion_filter = QComboBox()
         self.inclusion_filter.addItem("All inclusion states", None)
         for state in ("Included", "Excluded", "Not reviewed"):
             self.inclusion_filter.addItem(state, state)
         self.inclusion_filter.setAccessibleName("Filter analysis inclusion")
-        for widget in (self.condition_filter, self.cohort_filter, self.inclusion_filter):
+        for widget in (self.condition_filter, self.inclusion_filter):
             metadata_filters.addWidget(widget)
         metadata_filters.addWidget(
             QLabel("Display filters only — excluded records remain in exports."), 1
@@ -477,7 +469,7 @@ class BatchPhaseOverview(QWidget):
         self.table.verticalHeader().hide()
         self.table.setAlternatingRowColors(True)
         self.table.horizontalHeader().setMinimumHeight(48)
-        self.table.horizontalHeader().moveSection(34, 3)
+        self.table.horizontalHeader().moveSection(32, 3)
         widths = (
             155,
             70,
@@ -524,7 +516,6 @@ class BatchPhaseOverview(QWidget):
         self.phase_filter.currentIndexChanged.connect(self._filter_changed)
         self.status_filter.currentIndexChanged.connect(self._filter_changed)
         self.condition_filter.currentIndexChanged.connect(self._filter_changed)
-        self.cohort_filter.currentIndexChanged.connect(self._filter_changed)
         self.inclusion_filter.currentIndexChanged.connect(self._filter_changed)
         self.column_view.currentTextChanged.connect(self._columns_changed)
         self.reset_filters.clicked.connect(self.clear_filters)
@@ -555,10 +546,10 @@ class BatchPhaseOverview(QWidget):
         self._saved_path = self.current_path()
         self._refreshing = True
 
-    def _filter_keys(self, index: int) -> tuple[str | None, str, str]:
+    def _filter_keys(self, index: int) -> tuple[str | None, str]:
         row = self.model.row(index)
         annotation = row.source.annotation
-        return row.phase_key, annotation.condition or "", annotation.cohort or ""
+        return row.phase_key, annotation.condition or ""
 
     def _refresh(self, first: int = -1, last: int = -1) -> None:
         # Resets replace the entire batch. During import only the signaled rows
@@ -566,12 +557,11 @@ class BatchPhaseOverview(QWidget):
         menus = (
             (self.phase_filter, "All phases", "Unassigned phase"),
             (self.condition_filter, "All conditions", "Unassigned"),
-            (self.cohort_filter, "All cohorts", "Unassigned"),
         )
         if first < 0:
             self._row_keys = [self._filter_keys(i) for i in range(self.model.rowCount())]
-            self._key_counts = [Counter(keys[j] for keys in self._row_keys) for j in range(3)]
-            changed_menus = set(range(3))
+            self._key_counts = [Counter(keys[j] for keys in self._row_keys) for j in range(2)]
+            changed_menus = set(range(2))
         else:
             changed_menus = set()
             for i in range(first, last + 1):
@@ -614,7 +604,6 @@ class BatchPhaseOverview(QWidget):
         self.phase_filter.setCurrentIndex(0)
         self.status_filter.setCurrentIndex(0)
         self.condition_filter.setCurrentIndex(0)
-        self.cohort_filter.setCurrentIndex(0)
         self.inclusion_filter.setCurrentIndex(0)
 
     def _filter_changed(self, *args) -> None:
@@ -624,7 +613,6 @@ class BatchPhaseOverview(QWidget):
         self.proxy.phase = self.phase_filter.currentData()
         self.proxy.status = self.status_filter.currentText()
         self.proxy.condition = self.condition_filter.currentData()
-        self.proxy.cohort = self.cohort_filter.currentData()
         self.proxy.inclusion = self.inclusion_filter.currentData()
         self.proxy.invalidate()
         self._refreshing = False

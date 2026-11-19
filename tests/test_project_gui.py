@@ -147,13 +147,13 @@ def test_export_stale_file_clears_review_then_reimport_recovers(
         assert p not in window.import_results
         assert window.review.phase_table.rowCount() == window.review.metric_table.rowCount() == 0
         assert not button.isEnabled()
-        assert not list(tmp_path.glob("trial-cruncher-export-*"))
+        assert not list(tmp_path.glob("*-trial-cruncher-export-*"))
         assert window.overview.model.rows[0].quality == "Re-import required"
         window.import_button.click()
         wait_until(app, lambda: window._import_worker is None)
         button.click()
         wait_until(app, lambda: window._export_worker is None)
-        assert len(list(tmp_path.glob("trial-cruncher-export-*"))) == 1
+        assert len(list(tmp_path.glob("*-trial-cruncher-export-*"))) == 1
         assert window.import_results[p].session.subject_id == "0008"
     finally:
         window.close()

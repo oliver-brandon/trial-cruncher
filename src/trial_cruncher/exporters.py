@@ -3,12 +3,13 @@
 import csv
 import logging
 import platform
+import re
 import shutil
-import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
+from itertools import count
 from pathlib import Path
 from typing import Literal, Protocol
 
@@ -39,6 +40,50 @@ from trial_cruncher.tables import (
 logger = logging.getLogger(__name__)
 ExportFormat = Literal["csv", "xlsx"]
 ExportProfile = Literal["compact", "detailed"]
+
+
+_INVALID_NAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+_RESERVED_NAME = re.compile(r"(?:con|prn|aux|nul|conin\$|conout\$|(?:com|lpt)[1-9¹²³])", re.I)
+
+
+def _fit_name(name: str, byte_limit: int = 255) -> str:
+    # UTF-8 bounds also fit Windows' limit of 255 UTF-16 units.
+    return name.encode("utf-8")[:byte_limit].decode("utf-8", errors="ignore").rstrip(" .")
+
+
+def default_export_folder_name(project_name: str = "") -> str:
+    project = _INVALID_NAME.sub("-", project_name).strip(" .") or "unsaved"
+    return _fit_name(f"{datetime.now():%Y%m%d}-trial-cruncher-export-{project}")
+
+
+def validate_export_folder_name(name: str) -> str:
+    """Accept a portable directory component, before opening the native picker."""
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("Enter a name for the export folder.")
+    if len(name.encode("utf-8")) > 255:
+        raise ValueError("The folder name exceeds 255 UTF-8 bytes. Choose a shorter name.")
+    if (
+        name != name.strip()
+        or name.endswith(".")
+        or _INVALID_NAME.search(name)
+        or _RESERVED_NAME.fullmatch(name.partition(".")[0].rstrip(" "))
+    ):
+        raise ValueError(
+            "Choose a folder name without reserved characters, device names, "
+            "or trailing spaces or periods."
+        )
+    return name
+
+
+def _create_export_folder(parent: Path, name: str) -> Path:
+    for number in count(1):
+        suffix = "" if number == 1 else f"-{number}"
+        destination = parent / (_fit_name(name, 255 - len(suffix)) + suffix)
+        try:
+            destination.mkdir()
+        except FileExistsError:
+            continue
+        return destination
 
 
 class Exporter(Protocol):
@@ -97,6 +142,7 @@ def export_import_results(
     assignments: Mapping[Path, AnalysisMetadata] | None = None,
     analysis_plan: AnalysisPlan | None = None,
     profile: ExportProfile = "detailed",
+    folder_name: str | None = None,
 ) -> Path:
     """Export the reviewed snapshot into a fresh folder; record excluded inputs.
 
@@ -107,6 +153,9 @@ def export_import_results(
         raise ValueError("Export format must be csv or xlsx.")
     if profile not in ("compact", "detailed"):
         raise ValueError("Export profile must be compact or detailed.")
+    folder_name = validate_export_folder_name(
+        default_export_folder_name() if folder_name is None else folder_name
+    )
     paths = tuple(sorted(set(selected_paths), key=str))
     sessions = []
     summaries = {}
@@ -254,7 +303,7 @@ def export_import_results(
                 "aggregation": {
                     **analysis_plan.record(),
                     "plan_sha256": analysis_plan.sha256,
-                    "analysis_table_version": "1",
+                    "analysis_table_version": "2",
                     "tables": list(derived),
                 }
             }
@@ -269,7 +318,7 @@ def export_import_results(
         if export_format == "csv":
             tables = compact_tables(results, paths, assignments, manifest)
         manifest["profile"] = "compact"
-        manifest["compact_profile_version"] = "1"
+        manifest["compact_profile_version"] = "2"
         manifest["configuration"]["task_configuration"] = "User-assigned phase per source"
         manifest["format"] = export_format
         manifest["configuration"]["row_levels"] = ["recording", "choice"]
@@ -302,7 +351,7 @@ def export_import_results(
             derived,
         )
     manifest_text = json_text(manifest)
-    destination = Path(tempfile.mkdtemp(prefix="trial-cruncher-export-", dir=parent.resolve()))
+    destination = _create_export_folder(parent.resolve(), folder_name)
     try:
         source_paths = (*paths, *(session.source_file for session in sessions))
         if workbook is not None:

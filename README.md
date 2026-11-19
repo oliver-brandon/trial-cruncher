@@ -10,8 +10,8 @@ not need to have trials.
 ## Quick start for a recording batch
 
 1. In **Import**, add the files or folder, assign phases and treatments, and choose **Import Med-PC**.
-2. In **Review → Data**, read one row per recording. Hover over a column for its meaning or an unavailable metric for its reason. Select a row and choose **Inspect recording** to see its choices, counts, or source text.
-3. In **Export**, choose **Save Excel workbook…**. Start with **Data**, click an animal ID for its trials, and use **Metadata** to look up a recording or a blank result.
+2. In **Review → Sessions**, read one row per recording. Hover over a column for its meaning or an unavailable metric for its reason. Select a row and choose **Inspect recording** to see its choices, counts, or source text.
+3. In **Export**, edit **Folder name** if desired, then choose **Save Excel workbook…**. Start with **Data**, click an animal ID for its trials, and use **Metadata** to look up a recording or a blank result.
 
 ## Current functionality
 
@@ -32,7 +32,7 @@ not need to have trials.
   consistency checks. Use the GUI, `--inspect-medpc FILE`, or the Python API.
 - Background imports with progress, per-file failure isolation, and cancellation
   after the current file. Completed results remain available for review.
-- Manual condition/treatment, cohort, session order, and Include/Exclude/Not reviewed
+- Manual condition/treatment and Include/Exclude/Not reviewed
   assignments with exclusion reasons, saved in projects and retained in all exports.
 - Save/load `.tcproj.json` projects with per-file phases, fixed analysis configuration,
   source hashes, and discovery settings; changed sources require re-import.
@@ -98,7 +98,7 @@ of MATLAB files and requires Med-PC text for import.
 The top tabs group controls by task. Start in **Import** to add recordings, assign
 phases and metadata, and run **Import Med-PC**. **File options…** opens the extension
 filter, subfolder setting, and Clear selection. After an import with usable results,
-the window advances from Import to **Review**. The **Data** table brings the main metrics together for each recording. Select a row
+the window advances from Import to **Review**. The **Sessions** table shows File and Quality, followed by the same recording columns as the exported Data sheet. Select a row
 for details, then choose **Export results…** for CSV or Excel.
 **Project** holds open, save, and source-check controls.
 
@@ -118,8 +118,7 @@ re-add to filter an existing selection. Folder traversal ignores files with othe
 extensions. Explicit mismatches, inaccessible paths, and skipped directory symlinks
 appear under **Messages**. Symlinked folders must be selected explicitly.
 
-Use **Session metadata…** to assign condition/treatment, cohort, session order, and
-study inclusion. Exclusions require a reason; the default is Not reviewed. Save
+Use **Session metadata…** to assign condition/treatment and study inclusion. Exclusions require a reason; the default is Not reviewed. Save
 applies these annotations immediately, including to already reviewed results, without
 changing calculations. Excluded recordings remain in exports with their flags.
 See [manual analysis metadata](docs/analysis-metadata.md).
@@ -132,7 +131,7 @@ Choose the phase or metadata value, then click **Apply to selected**. The button
 the number of selected files. **Apply to all files** is also available. Save, then click **Import Med-PC** to read
 the full batch with those assignments. Blank phases leave phase metrics unavailable.
 Each file has one fixed contingency under the confirmed no-omission protocol.
-Pending phase edits apply only on re-import; exports use the reviewed snapshot. Under **More views → Sessions**, the overview shows one row per file
+Pending phase edits apply only on re-import; exports use the reviewed snapshot. Under **More views → Session diagnostics**, the overview shows one row per file
 with subject, program, recorded date, duration, seven metrics, and quality status. Sort
 by clicking column headings; combine search, program, and quality filters to find
 sessions needing attention. Click a row to review it below:
@@ -170,7 +169,10 @@ phase/status; click a row for details. Zero denominators remain zero while undef
 ratios say **Unavailable**. See [batch phase results](docs/batch-phase-results.md).
 
 Use **Export results…** to choose CSV or Excel and a parent folder. The application
-creates a new folder for each export. The concise Data table contains one row per
+suggests `YYYYMMDD-trial-cruncher-export-projectname` using the local date and saved
+project filename. Unsaved projects use `unsaved`. You can replace the suggestion.
+If the name already exists, the app creates a new folder ending in `-2`, `-3`, etc.
+The concise Data table contains one row per
 successfully imported recording, including rows hidden by filters and recordings
 marked Excluded or Not reviewed. Failed and unimported paths appear in the metadata.
 
@@ -202,12 +204,15 @@ stays blank. A Metadata sheet carries the source and calculation details. See
 
 ## Pool animals and compare conditions
 
-Assign a cohort, condition, phase, and **Include** to the intended recording for each
+Assign a condition, phase, and **Include** to the intended recording for each
 animal × condition × phase. Open **Animal analysis…**, choose within- or between-subjects,
-and select the cohort, conditions, and phases. **Apply and preview** shows the pooled
+and select the conditions and phases. **Apply and preview** shows the pooled
 evidence, individual animal values, side-by-side comparisons, and a source audit.
-A detailed export with a plan enabled includes those four tables. Save the project
-to retain the analysis. See [aggregation and pairing](docs/aggregation-pairing-spec.md).
+The metric tables group rows by metric by default. Click a column heading for a quick sort,
+or open **Sort rules** to set the first sort column and add tie-breakers, each ascending
+or descending. Each results table remembers its own rules. Choose **Save project** to
+keep the plan and these display preferences between launches. A detailed export with
+an enabled plan includes all four analysis tables in their reproducible export order. See [aggregation and pairing](docs/aggregation-pairing-spec.md).
 
 ## Save and reopen an analysis
 

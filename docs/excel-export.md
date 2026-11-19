@@ -12,12 +12,17 @@ unrewarded. Missing values stay blank.
 unavailability reasons and a column guide. Its Data row and choices location refer to the original exported layout. The companion manifest records configurations and versions. Filters and inclusion
 flags do not limit the export.
 
+Enter a folder name on the Export tab before choosing the parent folder. The default
+uses the local date and saved project name in `YYYYMMDD-trial-cruncher-export-projectname`
+form, with `unsaved` for a project that has not been saved. If that name exists,
+the app adds `-2`, `-3`, and so on to create a new folder without overwriting it.
+
 ## Detailed workbook
 
 The following sections describe the detailed export.
 
 After importing, open **Export → Detailed exports → Detailed Excel…** and choose a parent folder. A new uniquely
-named `trial-cruncher-export-*` folder contains `results.xlsx` and `manifest.json`.
+named export folder contains `results.xlsx` and `manifest.json`.
 Export runs in the background, and the saved location appears on the **Export** tab.
 The workbook has five sheets, frozen headers, filters, and formatted numeric cells.
 
@@ -30,7 +35,7 @@ errors retain imported results for retry. Cancelling the folder picker writes no
 ## Sheets and versions
 
 - **Sessions:** one row per successful session, with the same columns and values as
-  CSV schema 7: identifiers, duration, seven PRL session metrics, versions, checks, warnings,
+  CSV schema 8: identifiers, duration, seven PRL session metrics, versions, checks, warnings,
   metric statuses/reasons, diagnostics, and original source metadata/text.
 - **Choices:** all normalized choice records in source/index order, including invalid
   decoded choices. Source array index, line, exact raw value, time in seconds,
@@ -52,8 +57,8 @@ errors retain imported results for retry. Cancelling the folder picker writes no
   that exceeds the workbook's per-cell storage budget. It uses the columns `kind`,
   `sheet`, `cell`, `part`, `parts`, and `text`.
 
-The workbook layout is version **6** (`workbook_schema_version`), and the shared
-session/choice/phase table schema is version **7** (`schema_version`). `manifest.json` records runtime
+The workbook layout is version **7** (`workbook_schema_version`), and the shared
+session/choice/phase table schema is version **8** (`schema_version`). `manifest.json` records runtime
 versions, metric definitions/policy, UTC export time, input outcomes, table columns
 and row counts, ordering, and Excel serialization rules. The same manifest is embedded
 in Provenance so the workbook can be interpreted independently of the companion file.
@@ -147,7 +152,7 @@ and adjusted regressive errors remain 0–1 values; proportion correct is also 0
 Blank values, zero numerators/denominators, and undefined flags preserve distinct
 meaning. Source strings and custom phase labels are literal text. Choices gains
 phase, error-classification, and criterion-completed annotations; see
-[CSV schema 7](csv-export.md) and [phase definitions](medpc-behavioral-metrics-spec.md).
+[CSV schema 8](csv-export.md) and [phase definitions](medpc-behavioral-metrics-spec.md).
 
 Saved projects restore file/phase setup and compatible analysis configuration. They
 require a new import before export and retain reference hashes for detecting changed
@@ -163,18 +168,16 @@ rate (not a proportion); recorded choices and duration_s provide its inputs. Mis
 or invalid rate values stay blank with reasons. Layout 5 also copies it into Phase metrics, explicitly labeled as whole-session data.
 See [Med-PC trials per minute](medpc-trials-per-minute.md).
 
-In workbook layout 6/table schema 7, the numeric copy is column **AY** on **Phase
-metrics**, headed `whole_session_medpc_trials_per_minute`. Its width is expanded for
+In workbook layout 7/table schema 8, the numeric copy in **Phase metrics** is headed `whole_session_medpc_trials_per_minute`. Its width is expanded for
 the explicit label, and it remains a plain numeric choices/min value. Sessions
 continues to contain `prl.medpc_trials_per_minute`; Quality records the session rate
 once, not as a ninth phase metric. See [the copied field contract](csv-export.md).
 
-Workbook layout 6 adds manual analysis metadata to Sessions, Choices, Phase metrics,
+Workbook layout 7 includes manual analysis metadata to Sessions, Choices, Phase metrics,
 and Quality. Inclusion is a native boolean (false is Excluded) with blank for Not
-reviewed and a separate readable status; session order is an integer, not an inferred
-date or session ID. Text labels/reasons remain literal, and long reasons use the
+reviewed and a separate readable status. Text labels/reasons remain literal, and long reasons use the
 existing provenance overflow mechanism. Every successful recording is retained
 regardless of inclusion; no metrics are rewritten or suppressed by the manual flag.
 See [manual metadata](analysis-metadata.md).
 
-An optional [animal analysis plan](aggregation-pairing-spec.md) adds analysis-audit, individual-animal, condition-comparison, and pooled-metric tables to CSV and Excel exports. Save the plan, Included recording selections, and phase assignments together in project format 3.
+An optional [animal analysis plan](aggregation-pairing-spec.md) adds analysis-audit, individual-animal, condition-comparison, and pooled-metric tables to CSV and Excel exports. Save the plan, Included recording selections, and phase assignments together in project format 4.

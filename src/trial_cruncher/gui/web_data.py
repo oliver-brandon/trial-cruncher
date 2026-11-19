@@ -15,6 +15,26 @@ from trial_cruncher.gui.window import MainWindow
 MAX_PAGE_SIZE = 500
 
 
+# Logical columns of PhaseModel keyed by the recording export's display labels.
+# The model supplies phase-specific status and accuracy for this view.
+_PHASE_COLUMNS = {
+    "ID": 1,
+    "Phase": 2,
+    "Treatment": 31,
+    "Proportion correct": 5,
+    "Perseverative errors": 6,
+    "Regressive errors": 7,
+    "Adjusted regressive proportion": 8,
+    "Win-stay correct": 13,
+    "Lose-shift correct": 19,
+    "Win-stay incorrect": 16,
+    "Lose-shift incorrect": 22,
+    "Trials to criterion": 11,
+    "Trials/min": 29,
+}
+_PHASE_LEADING = (0, 3, *(_PHASE_COLUMNS[key] for key in DATA_COLUMNS))
+
+
 def _bounds(offset: int, limit: int) -> tuple[int, int]:
     if type(offset) is not int or type(limit) is not int:
         raise ValueError("Page offset and limit must be integers.")
@@ -43,12 +63,21 @@ def batch(window: MainWindow, view: str, offset: int = 0, limit: int = 100) -> d
         for i in range(proxy.columnCount())
         if not overview.table.isColumnHidden(header.logicalIndex(i))
     ]
+    if view == "phases":
+        # Core results stay together in the same order as the recording export.
+        columns = [*_PHASE_LEADING, *(col for col in columns if col not in _PHASE_LEADING)]
     headers = [str(proxy.headerData(i, Qt.Orientation.Horizontal) or "") for i in columns]
+    if view == "phases":
+        headers[: len(_PHASE_LEADING)] = [
+            "File",
+            "Phase status",
+            *(
+                "Phase proportion correct" if key == "Proportion correct" else key
+                for key in DATA_COLUMNS
+            ),
+        ]
     numeric = [
-        (5 <= i <= 13 or i == 16)
-        if view == "sessions"
-        else (4 <= i <= 24 or 27 <= i <= 29 or i == 33)
-        for i in columns
+        (5 <= i <= 13) if view == "sessions" else (4 <= i <= 24 or 27 <= i <= 29) for i in columns
     ]
     rows = []
     for position in range(offset, min(offset + limit, proxy.rowCount())):
@@ -102,6 +131,7 @@ def compact_batch(window: MainWindow, offset: int, limit: int) -> dict:
             subject = result.raw["headers"].get("Subject") if result and result.raw else None
             values = (subject, window.phase_assignments.get(entry.path), entry.annotation.condition)
             values += (None,) * (len(DATA_COLUMNS) - len(values))
+        values = (entry.path.name, entry.quality, *values)
         records.append((entry, values, usable))
     column, descending = getattr(window, "_compact_sort", (0, False))
 
@@ -117,19 +147,12 @@ def compact_batch(window: MainWindow, offset: int, limit: int) -> dict:
     rows = []
     for entry, values, usable in records[offset : offset + limit]:
         reasons = data_reasons(entry.result) if usable else {}
-        state = (
-            "Re-import required"
-            if entry.source_issue
-            else "Failed"
-            if entry.result and entry.result.error
-            else entry.state
-        )
         cells = []
         for i, value in enumerate(values):
             if value is None:
-                if i == 0:
-                    cells.append(f"File: {entry.path.name}")
-                elif i in (1, 2):
+                if i == 2:
+                    cells.append("Unavailable")
+                elif i in (3, 4):
                     cells.append("Unassigned")
                 else:
                     cells.append("Withheld" if entry.withheld else "Unavailable" if usable else "—")
@@ -141,11 +164,14 @@ def compact_batch(window: MainWindow, offset: int, limit: int) -> dict:
             {
                 "path": str(entry.path),
                 "cells": cells,
-                "row_state": "Withheld" if entry.withheld else state if not usable else "",
                 "state_detail": entry.source_issue or (entry.result.error if entry.result else ""),
                 "tooltips": [
-                    reasons.get(name, "") or (str(value) if value is not None else "")
-                    for name, value in zip(DATA_COLUMNS, values, strict=True)
+                    str(entry.path),
+                    entry.tooltip(1),
+                    *(
+                        reasons.get(name) or (str(value) if value is not None else "")
+                        for name, value in zip(DATA_COLUMNS, values[2:], strict=True)
+                    ),
                 ],
                 "pending_phase": bool(
                     entry.result
@@ -161,10 +187,10 @@ def compact_batch(window: MainWindow, offset: int, limit: int) -> dict:
         )
     selected = window.overview.current_path()
     return {
-        "headers": DATA_COLUMNS,
-        "descriptions": tuple(COLUMN_GUIDE.values()),
-        "columns": list(range(len(DATA_COLUMNS))),
-        "numeric": [i >= 3 for i in range(len(DATA_COLUMNS))],
+        "headers": ("File", "Quality", *DATA_COLUMNS),
+        "descriptions": ("Source file name.", "Import and metric quality.", *COLUMN_GUIDE.values()),
+        "columns": list(range(len(DATA_COLUMNS) + 2)),
+        "numeric": [i >= 5 for i in range(len(DATA_COLUMNS) + 2)],
         "rows": rows,
         "total": len(records),
         "batch_total": proxy.sourceModel().rowCount(),

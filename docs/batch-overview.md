@@ -132,8 +132,10 @@ reasons in tooltips. Missing/zero duration can make this rate unavailable while 
 choice counts and accuracy remain available. For a focused count/duration/rate
 comparison, choose **Session rate** in the upper Phase results tab.
 
-Manual condition/treatment, cohort, positive session order, inclusion status, and
-reason are also available as columns in Sessions. They are separate from Quality.
+Manual condition/treatment, inclusion status, and reason are available under Session diagnostics. They are separate from Quality.
 Unassigned metadata is not inferred from raw headers and remains visible while
-recordings are unimported or stale. Metadata text is included in literal search;
-session order sorts numerically. See [manual metadata](analysis-metadata.md).
+recordings are unimported or stale. Metadata text is included in literal search. See [manual metadata](analysis-metadata.md).
+
+The default **Sessions** table begins with File and Quality, then the recording
+export columns in order. Sort a column by its heading and select a row for details.
+The earlier technical layout remains under **More views → Session diagnostics**.

@@ -10,11 +10,11 @@ from trial_cruncher.gui.metadata import MetadataDialog
 from trial_cruncher.gui.phases import PhaseDialog
 
 
-@pytest.mark.parametrize("field", ["Phase", "Cohort", "Condition / treatment"])
+@pytest.mark.parametrize("field", ["Phase", "Condition / treatment"])
 def test_apply_to_selected_files(tmp_path, field):
     app = QApplication.instance() or QApplication([])
     paths = [tmp_path / str(i) / "same.txt" for i in range(5)]
-    original = AnalysisMetadata(condition="Vehicle", cohort="First", session_order=3)
+    original = AnalysisMetadata(condition="Vehicle")
     if field == "Phase":
         dialog = PhaseDialog(paths, dict.fromkeys(paths, "Acquisition"))
         dialog.bulk_phase.setCurrentText("Reversal 2")
@@ -45,11 +45,7 @@ def test_apply_to_selected_files(tmp_path, field):
             if field == "Phase":
                 assert value == ("Reversal 2" if selected else "Acquisition")
             else:
-                assert value.condition == (
-                    "Second" if selected and field != "Cohort" else "Vehicle"
-                )
-                assert value.cohort == ("Second" if selected and field == "Cohort" else "First")
-                assert value.session_order == 3
+                assert value.condition == ("Second" if selected else "Vehicle")
         table.clearSelection()
         assert not table.apply_selected.isEnabled()
     finally:

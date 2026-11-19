@@ -80,7 +80,7 @@ def test_phase_assignment_dialog_import_snapshot_and_full_export(
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(root))
         (window.excel_button if export_format == "xlsx" else window.export_button).click()
         wait_until(app, lambda: window._export_worker is None)
-        (out,) = root.glob("trial-cruncher-export-*")
+        (out,) = root.glob("*-trial-cruncher-export-*")
         if export_format == "csv":
             with (out / "phase_metrics.csv").open(newline="") as stream:
                 rows = list(csv.DictReader(stream))
@@ -423,12 +423,12 @@ def test_gui_export_all_results_and_dialog_cancel(app, write_export, monkeypatch
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: "")
         button.click()
         assert window._export_worker is None
-        assert not list(path.parent.glob("trial-cruncher-export-*"))
+        assert not list(path.parent.glob("*-trial-cruncher-export-*"))
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(path.parent))
         choose_path(window, bad)  # Export scope is all successes, not the highlighted file.
         button.click()
         wait_until(app, lambda: window._export_worker is None)
-        (destination,) = path.parent.glob("trial-cruncher-export-*")
+        (destination,) = path.parent.glob("*-trial-cruncher-export-*")
         if export_format == "xlsx":
             from openpyxl import load_workbook
 
@@ -509,14 +509,14 @@ def test_export_background_controls_failure_retry_and_close(
             assert warnings and "Synthetic export failure" in warnings[0]
             assert button.isEnabled()
             assert window.review.choice_model.rowCount() == 4
-            assert not list(path.parent.glob("trial-cruncher-export-*"))
+            assert not list(path.parent.glob("*-trial-cruncher-export-*"))
             monkeypatch.setattr(export_module, "export_import_results", export_import_results)
             button.click()
             wait_until(app, lambda: window._export_worker is None)
             assert window.statusBar().currentMessage() == f"{label} export complete"
         else:
             wait_until(app, lambda: not window.isVisible())
-            (destination,) = path.parent.glob("trial-cruncher-export-*")
+            (destination,) = path.parent.glob("*-trial-cruncher-export-*")
             assert (destination / "manifest.json").exists()
     finally:
         release.set()
@@ -574,7 +574,7 @@ def test_session_metrics_display_withholding_zero_and_clear(app, write_export, m
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(path.parent))
         window.export_button.click()
         wait_until(app, lambda: window._export_worker is None)
-        (destination,) = path.parent.glob("trial-cruncher-export-*")
+        (destination,) = path.parent.glob("*-trial-cruncher-export-*")
         with (destination / "sessions.csv").open(newline="") as stream:
             exported = {row["source_file"]: row for row in csv.DictReader(stream)}
         assert len(exported) == 3

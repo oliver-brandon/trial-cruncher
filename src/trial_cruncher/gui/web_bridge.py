@@ -5,6 +5,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QSettings, Qt, QTimer, Signal, Slot
 
+from trial_cruncher.analysis_sort import SHEETS, validate_analysis_sorts
 from trial_cruncher.gui import web_animal, web_assignments, web_data
 from trial_cruncher.gui.window import MainWindow
 
@@ -113,6 +114,7 @@ class WebBridge(QObject):
                 "enabled": {name: widget.isEnabled() for name, widget in self._buttons().items()},
                 "status": w.statusBar().currentMessage(),
                 "export_status": w.export_status.text(),
+                "default_export_folder": w.default_export_folder_name(),
                 "project": w.project_label.text(),
                 "progress": {
                     "visible": not w.progress.isHidden(),
@@ -144,7 +146,6 @@ class WebBridge(QObject):
                         "phase": w.phase_overview.phase_filter.currentData(),
                         "status": w.phase_overview.status_filter.currentText(),
                         "condition": w.phase_overview.condition_filter.currentData(),
-                        "cohort": w.phase_overview.cohort_filter.currentData(),
                         "inclusion": w.phase_overview.inclusion_filter.currentData(),
                         "layout": w.phase_overview.column_view.currentText(),
                     },
@@ -155,7 +156,6 @@ class WebBridge(QObject):
                     "phase": options(w.phase_overview.phase_filter),
                     "status": options(w.phase_overview.status_filter, False),
                     "condition": options(w.phase_overview.condition_filter),
-                    "cohort": options(w.phase_overview.cohort_filter),
                     "inclusion": options(w.phase_overview.inclusion_filter),
                     "layout": options(w.phase_overview.column_view, False),
                 },
@@ -220,6 +220,36 @@ class WebBridge(QObject):
         self.window.invalidate_animal_preview()
         return json.dumps({"ok": True})
 
+    @Slot(str, str, result=str)
+    def animalSort(self, table: str, payload: str) -> str:
+        try:
+            rules = validate_analysis_sorts({table: json.loads(payload)})[table]
+            tables = self.window._web_analysis_tables
+            if self.window._is_working() or not tables or table not in tables:
+                raise ValueError("Analysis results are unavailable.")
+            allowed = set(tables[table].columns)
+            if table == "analysis_audit.csv":
+                allowed.add("recording_proportion_correct")
+            # A saved condition/phase column can temporarily leave the scope.
+            allowed.update(rule["column"] for rule in self.window.analysis_sorts.get(table, []))
+            if any(rule["column"] not in allowed for rule in rules):
+                raise ValueError("Sort column is unavailable.")
+            if self.window.analysis_sorts.get(table) != rules:
+                self.window.analysis_sorts[table] = rules
+                self.window._mark_project_dirty()
+            return json.dumps({"ok": True})
+        except (ValueError, TypeError, KeyError) as exc:
+            return json.dumps({"error": str(exc)})
+
+    @Slot(str, result=str)
+    def animalResetSort(self, table: str) -> str:
+        if table not in SHEETS or self.window._is_working():
+            return json.dumps({"error": "Sorting is unavailable."})
+        if table in self.window.analysis_sorts:
+            del self.window.analysis_sorts[table]
+            self.window._mark_project_dirty()
+        return json.dumps({"ok": True})
+
     @Slot(str, int, int, result=str)
     def animalPage(self, table: str, offset: int, limit: int) -> str:
         try:
@@ -272,12 +302,17 @@ class WebBridge(QObject):
             if not isinstance(data, dict):
                 raise ValueError("Invalid action arguments.")
             if name in actions:
-                if data or self._native_action_open or not self._buttons()[name].isEnabled():
+                is_export = name.startswith("export_")
+                if (
+                    (data and (not is_export or set(data) != {"folder_name"}))
+                    or self._native_action_open
+                    or not self._buttons()[name].isEnabled()
+                ):
                     raise ValueError("Action is unavailable while the current operation is active.")
                 # Native pickers may enter a nested Qt event loop.
                 self._native_action_open = True
                 try:
-                    actions[name]()
+                    actions[name](**data)
                 finally:
                     self._native_action_open = False
             elif name in ("options", "set_options"):
@@ -337,7 +372,7 @@ class WebBridge(QObject):
                 if data.get("view") == "data":
                     from trial_cruncher.compact_results import DATA_COLUMNS
 
-                    if not 0 <= column < len(DATA_COLUMNS):
+                    if not 0 <= column < len(DATA_COLUMNS) + 2:
                         raise ValueError("Invalid sort column.")
                     w._compact_sort = (column, data["descending"])
                     self._batch_changed()
@@ -361,7 +396,6 @@ class WebBridge(QObject):
                     "status",
                     "phase",
                     "condition",
-                    "cohort",
                     "inclusion",
                     "layout",
                 }:
@@ -395,7 +429,6 @@ class WebBridge(QObject):
                 "status": (view.status_filter, False),
                 "phase": (view.phase_filter, True),
                 "condition": (view.condition_filter, True),
-                "cohort": (view.cohort_filter, True),
                 "inclusion": (view.inclusion_filter, True),
                 "layout": (view.column_view, False),
             }

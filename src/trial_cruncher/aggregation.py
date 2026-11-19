@@ -1,4 +1,4 @@
-"""Descriptive within-cohort analyses of reviewed, explicitly included recordings."""
+"""Descriptive within-project analyses of reviewed, explicitly included recordings."""
 
 import json
 import math
@@ -13,16 +13,11 @@ from trial_cruncher import phase_metrics, prl_metrics
 from trial_cruncher.analysis_metadata import AnalysisMetadata
 from trial_cruncher.analysis_plan import VERSION as VERSION
 from trial_cruncher.analysis_plan import AnalysisPlan
+from trial_cruncher.analysis_sort import SHEETS as SHEETS
 from trial_cruncher.processing import ImportResult, validate_reviewed_result
 from trial_cruncher.source_tracking import require_current_sources
 from trial_cruncher.tables import json_text
 
-SHEETS = {
-    "analysis_audit.csv": "Analysis audit",
-    "animal_metrics.csv": "Animal metrics",
-    "condition_comparison.csv": "Condition comparison",
-    "pooled_metrics.csv": "Pooled metrics",
-}
 ALL_METRICS = (*prl_metrics.METRIC_LABELS, *phase_metrics.METRIC_LABELS)
 ACCURACY = "prl.phase.proportion_correct"
 ADJUSTED = "prl.phase.adjusted_regressive_error_proportion"
@@ -82,8 +77,8 @@ def build_analysis(
     require_current_sources(
         {p: results[p].raw["source_sha256"] for p in paths if p in results and results[p].raw}
     )
-    audit, cells, cohorts, groups, hashes = _candidates(plan, results, paths, assignments)
-    individual, observed, blocked = _select_metrics(plan, results, cells, cohorts, groups, hashes)
+    audit, cells, groups, hashes = _candidates(plan, results, paths, assignments)
+    individual, observed, blocked = _select_metrics(plan, results, cells, groups, hashes)
     pooled = _pool(plan, cells, observed, blocked)
     comparison, labels = _compare(plan, audit, groups, observed, blocked)
     return _tables(audit, individual, pooled, comparison, labels)
@@ -92,7 +87,6 @@ def build_analysis(
 def _candidates(plan, results, paths, assignments):
     audit = []
     cells = defaultdict(list)
-    cohorts = defaultdict(set)
     groups = defaultdict(set)
     hashes = Counter()
     for path in paths:
@@ -104,29 +98,21 @@ def _candidates(plan, results, paths, assignments):
         subject = raw["headers"].get("Subject") if raw else None
         digest = raw["source_sha256"] if raw else None
         phase = r.phase_summary.config.phase if r and r.phase_summary else None
-        if subject and a.cohort:
-            cohorts[subject].add(a.cohort)
         reason = None
         if a.included is not True:
             reason = a.inclusion_status
         elif not r or r.error or not r.session or not r.summary or not r.phase_summary:
             reason = (r.error if r else None) or "Import required"
-        elif not all((subject, a.cohort, a.condition, phase)):
-            reason = "Missing subject, cohort, condition, or imported phase"
-        elif (
-            a.cohort != plan.cohort
-            or a.condition not in plan.conditions
-            or phase not in plan.phases
-        ):
+        elif not all((subject, a.condition, phase)):
+            reason = "Missing subject, condition, or imported phase"
+        elif a.condition not in plan.conditions or phase not in plan.phases:
             reason = "Outside selected scope"
         item = {
             "source_file": str(path),
             "source_sha256": digest,
             "subject_id": subject,
             "condition": a.condition,
-            "cohort": a.cohort,
             "phase": phase,
-            "session_order": a.session_order,
             "inclusion": a.inclusion_status,
             "inclusion_reason": a.inclusion_reason,
             "metadata_sha256": a.sha256,
@@ -150,10 +136,10 @@ def _candidates(plan, results, paths, assignments):
             cells[subject, a.condition, phase].append(item)
             groups[subject].add(a.condition)
             hashes[digest] += 1
-    return audit, cells, cohorts, groups, hashes
+    return audit, cells, groups, hashes
 
 
-def _select_metrics(plan, results, cells, cohorts, groups, hashes):
+def _select_metrics(plan, results, cells, groups, hashes):
     individual = []
     observed = {}
     blocked = {}
@@ -161,8 +147,6 @@ def _select_metrics(plan, results, cells, cohorts, groups, hashes):
         issues = []
         if len(items) > 1:
             issues.append("Multiple Included recordings for this cell")
-        if len(cohorts[subject]) > 1:
-            issues.append("Conflicting cohort assignments")
         if plan.design == "between-subjects" and len(groups[subject]) > 1:
             issues.append("Animal assigned to multiple between-subjects conditions")
         if any(hashes[i["source_sha256"]] > 1 for i in items):
@@ -179,7 +163,6 @@ def _select_metrics(plan, results, cells, cohorts, groups, hashes):
                 **{
                     k: item[k]
                     for k in (
-                        "cohort",
                         "subject_id",
                         "condition",
                         "phase",
@@ -220,7 +203,6 @@ def _pool(plan, cells, observed, blocked):
             denominator = sum(r["denominator"] for r in valid)
             scale = 60 if metric == prl_metrics.MEDPC_RATE else 1
             row = {
-                "cohort": plan.cohort,
                 "condition": condition,
                 "phase": phase,
                 "metric": metric,
@@ -269,8 +251,7 @@ def _pool(plan, cells, observed, blocked):
 def _compare(plan, audit, groups, observed, blocked):
     sources = defaultdict(list)
     for item in audit:
-        if item["cohort"] == plan.cohort:
-            sources[item["subject_id"], item["condition"], item["phase"]].append(item)
+        sources[item["subject_id"], item["condition"], item["phase"]].append(item)
     coverage = Counter()
     for (_, condition, phase, metric), record in observed.items():
         if record["value"] is not None:
@@ -291,7 +272,6 @@ def _compare(plan, audit, groups, observed, blocked):
         ]
         for metric in ALL_METRICS:
             row = {
-                "cohort": plan.cohort,
                 "subject_id": subject,
                 "design": plan.design,
                 "metric": metric,
@@ -350,7 +330,6 @@ def _compare(plan, audit, groups, observed, blocked):
 
 def _tables(audit, individual, pooled, comparison, labels):
     cols = (
-        "cohort",
         "subject_id",
         "condition",
         "phase",
@@ -380,7 +359,6 @@ def _tables(audit, individual, pooled, comparison, labels):
         "condition_comparison.csv": _frame(
             comparison,
             (
-                "cohort",
                 "subject_id",
                 "design",
                 "treatment_group",

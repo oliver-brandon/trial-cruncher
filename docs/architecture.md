@@ -52,8 +52,8 @@ verification and overwrite protection.
 
 ## Concise results
 
-`compact_results.py` supplies the same per-recording metric columns to the Data
-view and concise exports. It reads the reviewed session and phase results without
+`compact_results.py` supplies the shared metric columns for concise exports and the Sessions view.
+Sessions adds File and Quality before the exported columns. It reads the reviewed session and phase results without
 recalculating them. IDs and treatment labels remain text, numeric zero remains
 numeric, and unavailable values carry reasons in metadata. Export scopes include
 all successful recordings regardless of display filters or study inclusion flags.
@@ -180,7 +180,7 @@ scope and serialization rules. Per-session metadata retains reader/normalizer ve
 raw acquisition fields, and time units/origin. Schema 2 adds the six calculated
 session columns and their status/reasons/diagnostics; the manifest records metric
 definition IDs/versions and the strict withholding policy. Excel workbook layout
-version 6 uses schema 7 tables, including Phase metrics, Quality, and
+version 7 uses schema 8 tables, including Phase metrics, Quality, and
 Provenance sheets. Phase configurations and definitions are recorded independently
 of the existing session definitions. `excel.py` stores literal text, chunks long metadata, checks
 worksheet/XML limits, and exclusively creates `results.xlsx`; the shared export
@@ -206,11 +206,11 @@ engine without importing GUI dependencies into calculations.
 
 ## Project persistence and source freshness
 
-`projects.py` reads versions 1 through 3 of the `.tcproj.json` setup format. Saves are
+`projects.py` reads versions 1 through 4 of the `.tcproj.json` setup format. Saves are
 atomic, with exclusive creation or an expected-project-hash replacement guard. Files retain
 absolute source paths, nullable phase labels/reference hashes, discovery settings,
-and the fixed analysis configuration. Saves use version 2 for manual session annotations
-and version 3 when an animal analysis plan is included. The plan lives in `analysis_plan.py` so opening
+and the fixed analysis configuration. Version 4 stores manual annotations, the optional project-wide animal analysis plan,
+and per-table sort rules. The plan lives in `analysis_plan.py` so opening
 or saving a project does not load pandas or Qt. Incompatible definitions/policies fail closed.
 Calculated results and raw recordings are not serialized; loading clears results
 and requires import. Unknown or missing sources stay explicit in the selection.
@@ -254,7 +254,7 @@ phase metric JSON and Quality phase rows remain the original eight phase metrics
 ## Manual study annotations
 
 `analysis_metadata.py` provides an immutable, validated annotation record with
-nullable condition/cohort/order/inclusion, exclusion reason, version, and stable
+nullable condition and inclusion, exclusion reason, version, and stable
 content hash. It never reads raw Group/Experiment fields. `ImportResult` holds
 annotations separately from Session and calculated results, including on failed
 imports. Metadata edits replace only this field on existing results; metrics and
@@ -264,7 +264,7 @@ copies provide operation snapshots. The shared overview rows hold live manual
 annotations even when imported results are invalidated.
 
 Project format 2 adds per-source annotations; format 1 migrates with unknown fields
-and Not reviewed inclusion. Table schema 7/workbook layout 6 repeat annotations in
+and Not reviewed inclusion. Table schema 8/workbook layout 7 repeat annotations in
 all result tables and Quality; manifests account for failed/unimported inputs. The
 boolean flag is study intent only: all imports/exports retain their existing full-batch
 scope, and strict metric withholding remains independent. See [metadata](analysis-metadata.md).

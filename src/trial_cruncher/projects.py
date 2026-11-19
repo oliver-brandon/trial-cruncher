@@ -6,7 +6,7 @@ import os
 import re
 import tempfile
 from collections.abc import Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -14,12 +14,13 @@ from typing import Any
 from trial_cruncher import __version__, phase_metrics, prl_metrics
 from trial_cruncher.analysis_metadata import AnalysisMetadata, analysis_metadata_from_dict
 from trial_cruncher.analysis_plan import AnalysisPlan
+from trial_cruncher.analysis_sort import validate_analysis_sorts
 from trial_cruncher.discovery import normalize_extensions
 from trial_cruncher.prl import CHOICE_STORAGE_POLICY, NORMALIZER_VERSION
 from trial_cruncher.source_tracking import SourceCheck, check_sources, source_sha256
 
 PROJECT_FORMAT = "trial-cruncher-project"
-PROJECT_VERSION = "2"
+PROJECT_VERSION = "4"
 PROJECT_SUFFIX = ".tcproj.json"
 MAX_PROJECT_BYTES = 16 * 1024 * 1024
 _HASH = re.compile(r"[0-9a-f]{64}")
@@ -61,6 +62,7 @@ class Project:
     configuration_updated: bool = False
     configuration_update_message: str | None = None
     analysis_plan: AnalysisPlan | None = None
+    analysis_sorts: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -105,12 +107,17 @@ def _parse(payload: bytes, project_path: Path) -> Project:
         }
         | (
             {"analysis_plan"}
-            if isinstance(obj, dict) and obj.get("schema_version") == "3"
+            if isinstance(obj, dict) and obj.get("schema_version") in ("3", "4")
+            else set()
+        )
+        | (
+            {"analysis_sorts"}
+            if isinstance(obj, dict) and obj.get("schema_version") == "4"
             else set()
         ),
         "project",
     )
-    if obj["format"] != PROJECT_FORMAT or obj["schema_version"] not in ("1", PROJECT_VERSION, "3"):
+    if obj["format"] != PROJECT_FORMAT or obj["schema_version"] not in ("1", "2", "3", "4"):
         raise ValueError("Unsupported project format or version.")
     current_configuration = analysis_configuration()
     percentage_configuration = {
@@ -165,9 +172,20 @@ def _parse(payload: bytes, project_path: Path) -> Project:
     sources, seen = [], set()
     for item in obj["sources"]:
         keys = {"path", "phase", "sha256"}
-        if obj["schema_version"] in (PROJECT_VERSION, "3"):
+        if obj["schema_version"] in ("2", "3", "4"):
             keys.add("analysis_metadata")
         _keys(item, keys, "source")
+        if "analysis_metadata" in item:
+            metadata = item["analysis_metadata"]
+            expected_metadata = {"condition", "included", "inclusion_reason", "version"}
+            if obj["schema_version"] in ("2", "3"):
+                expected_metadata |= {"cohort", "session_order"}
+                expected_version = "1"
+            else:
+                expected_version = "2"
+            _keys(metadata, expected_metadata, "analysis metadata")
+            if metadata["version"] != expected_version:
+                raise ValueError("Unsupported project analysis metadata version.")
         annotation = (
             analysis_metadata_from_dict(item["analysis_metadata"])
             if "analysis_metadata" in item
@@ -190,13 +208,58 @@ def _parse(payload: bytes, project_path: Path) -> Project:
         if digest is not None and (not isinstance(digest, str) or not _HASH.fullmatch(digest)):
             raise ValueError("Source SHA-256 must be 64 lowercase hex digits or null.")
         sources.append(ProjectSource(path, phase, digest, annotation))
+    version = obj["schema_version"]
+    if version == "3":
+        legacy_plan = obj["analysis_plan"]
+        if not isinstance(legacy_plan, dict) or legacy_plan.get("definition_version") != "1":
+            raise ValueError("Invalid legacy analysis plan.")
+        if "cohort" not in legacy_plan:
+            raise ValueError("Legacy analysis plan requires a cohort.")
+    if version == "4" and obj["analysis_plan"] is not None:
+        current_plan = obj["analysis_plan"]
+        if not isinstance(current_plan, dict) or current_plan.get("definition_version") != "2":
+            raise ValueError("Invalid project analysis plan version.")
+        if "cohort" in current_plan:
+            raise ValueError("Invalid project analysis plan fields.")
+    plan = (
+        AnalysisPlan.restore(obj["analysis_plan"])
+        if version in ("3", "4") and obj["analysis_plan"] is not None
+        else None
+    )
+    if version in ("2", "3"):
+        note = "Removed cohort and session order from project metadata."
+        if version == "3" and plan is not None:
+            old_cohort = obj["analysis_plan"]["cohort"]
+            included_groups = {
+                item["analysis_metadata"]["cohort"]
+                for item in obj["sources"]
+                if item["analysis_metadata"]["included"] is True
+                and item["analysis_metadata"]["condition"] in plan.conditions
+                and item["phase"] in plan.phases
+            }
+            # V3 also withheld a subject with conflicting cohort labels anywhere
+            # in the batch. Saved sources do not contain the recorded Subject ID.
+            mixed_labels = any(
+                item["analysis_metadata"]["cohort"] not in (None, old_cohort)
+                for item in obj["sources"]
+            )
+            if included_groups - {old_cohort} or (old_cohort in included_groups and mixed_labels):
+                plan = None
+                note += (
+                    " Animal analysis was disabled because removing cohort could broaden "
+                    "the selection; review included recordings and configure analysis again."
+                )
+        update_message = " ".join(filter(None, (update_message, note)))
+        configuration_updated = True
+    sorts = validate_analysis_sorts(obj.get("analysis_sorts", {}))
     return Project(
         tuple(sources),
         extensions,
         discovery["recursive"],
         configuration_updated,
         update_message,
-        AnalysisPlan.restore(obj["analysis_plan"]) if obj["schema_version"] == "3" else None,
+        plan,
+        sorts,
     )
 
 
@@ -244,6 +307,7 @@ def save_project(
     expected_project_sha256: str | None = None,
     analysis_metadata: Mapping[Path, AnalysisMetadata] | None = None,
     analysis_plan: AnalysisPlan | None = None,
+    analysis_sorts: Mapping[str, list[dict[str, Any]]] | None = None,
 ) -> ProjectResult:
     """Save setup only. Existing baselines never advance merely because of a save.
 
@@ -289,8 +353,9 @@ def save_project(
         json.dumps(
             {
                 "format": PROJECT_FORMAT,
-                "schema_version": "3" if analysis_plan else PROJECT_VERSION,
-                **({"analysis_plan": analysis_plan.record()} if analysis_plan else {}),
+                "schema_version": PROJECT_VERSION,
+                "analysis_plan": analysis_plan.record() if analysis_plan else None,
+                "analysis_sorts": validate_analysis_sorts(dict(analysis_sorts or {})),
                 "application_version": __version__,
                 "saved_at_utc": datetime.now(UTC).isoformat(),
                 "analysis_configuration": analysis_configuration(),

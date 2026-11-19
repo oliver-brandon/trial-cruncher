@@ -12,7 +12,7 @@ from trial_cruncher.processing import import_medpc_file
 def test_compact_workbook_choices_links_and_literal_subject(phase_input):
     source = phase_input((1, 2, 6, 7))
     source.write_text(source.read_text().replace("Subject: 0007", "Subject: =test"))
-    result = import_medpc_file(source, "Reversal", AnalysisMetadata("Vehicle", "C", included=True))
+    result = import_medpc_file(source, "Reversal", AnalysisMetadata("Vehicle", included=True))
     manifest = {
         "inputs": [
             {

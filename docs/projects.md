@@ -1,7 +1,7 @@
 # Saved projects and source verification
 
 Trial Cruncher projects save the analysis setup so it can be restored in a later
-window. Project format version **2** uses a UTF-8 JSON file ending in `.tcproj.json`.
+window. Project format version **4** uses a UTF-8 JSON file ending in `.tcproj.json`.
 Project files contain source paths, phase labels, settings, and hashes; keep them
 private alongside the research workspace. They are ignored by Git by default.
 
@@ -40,7 +40,7 @@ View filters are cleared on load and are not stored in the project.
 | Field | Meaning |
 |---|---|
 | `format` | Exact marker `trial-cruncher-project` |
-| `schema_version` | Project schema `2`, independent of export schemas |
+| `schema_version` | Project schema `4`, independent of export schemas |
 | `application_version` | Application version that wrote the project |
 | `saved_at_utc` | Save timestamp with time zone |
 | `analysis_configuration` | Reader/normalizer versions, storage policy, session and phase definition sets/versions/policies, and the confirmed phase protocol profile |
@@ -49,7 +49,9 @@ View filters are cleared on load and are not stored in the project.
 | `sources[].path` | Full absolute source path; identical filenames in different folders remain separate |
 | `sources[].phase` | Explicit normalized phase label or null when unassigned |
 | `sources[].sha256` | Reference content fingerprint, or null when no readable reference has been recorded |
-| `sources[].analysis_metadata` | Versioned manual condition, cohort, session order, inclusion flag, and reason |
+| `analysis_plan` | Optional animal comparison design, conditions, and phases |
+| `analysis_sorts` | Per-table lists of sort columns and directions, in priority order |
+| `sources[].analysis_metadata` | Versioned manual treatment, inclusion flag, and reason |
 
 The phase protocol profile preserves its configuration version, owner-confirmation
 date, fixed-contingency/no-omission interpretation, and evidence text. These analysis
@@ -165,13 +167,20 @@ phase labels, and reference hashes; import is required and Save explicitly recor
 the current configuration. The phase definition remains 2. Unrecognized policy or
 profile changes are still rejected. See [Med-PC rate](medpc-trials-per-minute.md).
 
-## Manual metadata in project format 2
+## Manual metadata and saved sorting
 
-Each source stores a validated analysis metadata version-1 object. Exclude requires
+Each source stores validated analysis metadata. Project format 4 saves each animal-analysis table’s ordered sort rules, even without an active analysis plan. Exclude requires
 a reason; missing inclusion remains Not reviewed. Loading a format-1 project retains
 its paths, phases, and hashes and adds unassigned metadata, with an explicit unsaved
-upgrade notice. Loading does not write the file; Save persists format 2. Imported
+upgrade notice. Loading does not write the file; Save persists format 4. Imported
 results are still rebuilt on load. Inclusion never bypasses source freshness or
 strict withholding. See [manual metadata](analysis-metadata.md).
 
-An optional [animal analysis plan](aggregation-pairing-spec.md) adds analysis-audit, individual-animal, condition-comparison, and pooled-metric tables to CSV and Excel exports. Save the plan, Included recording selections, and phase assignments together in project format 3.
+An optional [animal analysis plan](aggregation-pairing-spec.md) adds analysis-audit, individual-animal, condition-comparison, and pooled-metric tables to CSV and Excel exports. Save the plan, Included recording selections, and phase assignments together in project format 4.
+
+Earlier projects retain paths, phases, treatment, inclusion and source hashes. Cohort
+and session order are removed when loaded. A legacy analysis plan is disabled if
+its old cohort scope could admit additional recordings, including when mixed legacy
+labels could have withheld a subject under the former conflict check. The app displays
+a message to review Included recordings before enabling the plan again. The original project stays intact
+until saved.

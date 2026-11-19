@@ -3,8 +3,7 @@
   "use strict";
   const PAGE_SIZE = 50;
   const fields = {
-    phase: "Phase", condition: "Condition / treatment", cohort: "Cohort",
-    session_order: "Session order", included: "Inclusion", inclusion_reason: "Reason"
+    phase: "Phase", condition: "Condition / treatment", included: "Inclusion", inclusion_reason: "Reason"
   };
 
   function element(tag, text) {
@@ -34,13 +33,10 @@
       input.onchange = () => change(input.value === "" ? null : input.value === "yes");
     } else {
       input = element(key === "inclusion_reason" ? "textarea" : "input");
-      if (key === "session_order") {
-        input.type = "number"; input.min = 1; input.max = 2147483647; input.step = 1;
-      } else if (key === "phase") input.setAttribute("list", "phase-suggestions");
+      if (key === "phase") input.setAttribute("list", "phase-suggestions");
       input.value = value ?? "";
       input.placeholder = key === "phase" ? "Select or type a label" : "Unassigned";
-      input.oninput = () => change(key === "session_order" && input.value !== ""
-        ? Number(input.value) : input.value.trim() || null);
+      input.oninput = () => change(input.value.trim() || null);
     }
     input.setAttribute("aria-label", fields[key]);
     input.dataset.field = key;
