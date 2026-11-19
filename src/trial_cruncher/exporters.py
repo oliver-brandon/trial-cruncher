@@ -38,6 +38,7 @@ from trial_cruncher.tables import (
 
 logger = logging.getLogger(__name__)
 ExportFormat = Literal["csv", "xlsx"]
+ExportProfile = Literal["compact", "detailed"]
 
 
 class Exporter(Protocol):
@@ -95,6 +96,7 @@ def export_import_results(
     *,
     assignments: Mapping[Path, AnalysisMetadata] | None = None,
     analysis_plan: AnalysisPlan | None = None,
+    profile: ExportProfile = "detailed",
 ) -> Path:
     """Export the reviewed snapshot into a fresh folder; record excluded inputs.
 
@@ -103,6 +105,8 @@ def export_import_results(
     """
     if export_format not in ("csv", "xlsx"):
         raise ValueError("Export format must be csv or xlsx.")
+    if profile not in ("compact", "detailed"):
+        raise ValueError("Export profile must be compact or detailed.")
     paths = tuple(sorted(set(selected_paths), key=str))
     sessions = []
     summaries = {}
@@ -122,7 +126,7 @@ def export_import_results(
             )
         session = result.session if result and not result.error else None
         if session is not None:
-            if analysis_plan is None:
+            if analysis_plan is None or profile == "compact":
                 validate_reviewed_result(result)
             sessions.append(session)
             annotations[session.source_file] = annotation
@@ -153,18 +157,20 @@ def export_import_results(
         for path in paths
         if results.get(path) and results[path].raw is not None
     }
-    if analysis_plan is None:
+    if analysis_plan is None or profile == "compact":
         require_current_sources(expected_hashes)
         derived = {}
     else:
         # Analysis checks both review versions and source freshness for the batch.
         derived = build_analysis(analysis_plan, results, paths, assignments)
-    tables = {
-        "sessions.csv": build_session_table(sessions, summaries, annotations),
-        "choices.csv": build_choice_table(sessions, phases, annotations),
-        "phase_metrics.csv": build_phase_table(sessions, phases, summaries, annotations),
-    }
-    tables.update(derived)
+    tables = {}
+    if profile == "detailed":
+        tables = {
+            "sessions.csv": build_session_table(sessions, summaries, annotations),
+            "choices.csv": build_choice_table(sessions, phases, annotations),
+            "phase_metrics.csv": build_phase_table(sessions, phases, summaries, annotations),
+        }
+        tables.update(derived)
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "application_version": __version__,
@@ -257,7 +263,35 @@ def export_import_results(
         ),
     }
     workbook = None
-    if export_format == "xlsx":
+    if profile == "compact":
+        from trial_cruncher.compact_export import compact_tables
+
+        if export_format == "csv":
+            tables = compact_tables(results, paths, assignments, manifest)
+        manifest["profile"] = "compact"
+        manifest["compact_profile_version"] = "1"
+        manifest["configuration"]["task_configuration"] = "User-assigned phase per source"
+        manifest["format"] = export_format
+        manifest["configuration"]["row_levels"] = ["recording", "choice"]
+        manifest["configuration"]["medpc_trials_per_minute"].pop("phase_table_copy")
+        manifest["configuration"]["compact_choice_encoding"] = {
+            "choice": "1 = correct, 0 = incorrect, blank = unavailable",
+            "outcome": "1 = rewarded, 0 = unrewarded, blank = unavailable",
+            "trial": "1-based recorded choice order",
+        }
+        manifest["tables"] = {
+            name: {"rows": len(table), "columns": list(table.columns)}
+            for name, table in tables.items()
+        }
+        # The plan remains recorded for provenance. Compact export contains
+        # individual recordings; the detailed profile contains analysis tables.
+        if analysis_plan:
+            manifest["aggregation"]["tables"] = []
+    if export_format == "xlsx" and profile == "compact":
+        from trial_cruncher.compact_excel import build_compact_workbook
+
+        workbook = build_compact_workbook(results, paths, manifest, assignments)
+    elif export_format == "xlsx":
         from trial_cruncher.excel import build_workbook
 
         workbook = build_workbook(

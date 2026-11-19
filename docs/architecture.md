@@ -50,6 +50,24 @@ sort order before paging. All displayed counts, ratios and denominators come fro
 the Python models. Both export buttons call the existing exporters with their source
 verification and overwrite protection.
 
+## Concise results
+
+`compact_results.py` supplies the same per-recording metric columns to the Data
+view and concise exports. It reads the reviewed session and phase results without
+recalculating them. IDs and treatment labels remain text, numeric zero remains
+numeric, and unavailable values carry reasons in metadata. Export scopes include
+all successful recordings regardless of display filters or study inclusion flags.
+
+The workbook presents one Data row per successful recording and one sheet per animal
+with recording blocks. Choice uses 1 for correct and 0 for incorrect. Outcome uses 1
+for rewarded and 0 for unrewarded. Missing values remain blank. Metadata links rows
+to sources, hashes and recorded warnings. Detailed exports retain the established
+versioned tables and animal-analysis data.
+
+The desktop uses `profile="compact"` for **Save Excel workbook…** and **Save CSV tables…**.
+The Python function `export_import_results()` defaults to `profile="detailed"` for
+existing callers. Set `profile="compact"` for the same student-facing output.
+
 ## Current components
 
 `discovery.py` accepts files or directories, extensions, and recursion settings and

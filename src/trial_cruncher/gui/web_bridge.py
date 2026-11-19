@@ -80,6 +80,8 @@ class WebBridge(QObject):
             "animal_analysis": w.analysis_button,
             "export_csv": w.export_button,
             "export_excel": w.excel_button,
+            "export_detailed_csv": w.export_button,
+            "export_detailed_excel": w.excel_button,
             "open_project": w.open_project_button,
             "save_project": w.save_project_button,
             "save_project_as": w.save_project_as_button,
@@ -123,7 +125,7 @@ class WebBridge(QObject):
                 "recursive": w.recursive.isChecked(),
                 "workflow": w.workflow.tabText(w.workflow.currentIndex()).lower(),
                 "ui_preferences": {
-                    "mode": self._settings.value("workspace/mode", "split"),
+                    "mode": self._settings.value("workspace/mode", "batch"),
                     "split": self._settings.value("workspace/split", 0.34, type=float),
                 },
                 "inspector_tab": (
@@ -253,8 +255,10 @@ class WebBridge(QObject):
             "choose_folder": w.choose_folder,
             "import": w.import_selected_files,
             "cancel": w.cancel_import,
-            "export_csv": w.export_csv,
-            "export_excel": w.export_excel,
+            "export_csv": w.export_data_csv,
+            "export_excel": w.export_data_excel,
+            "export_detailed_csv": w.export_csv,
+            "export_detailed_excel": w.export_excel,
             "open_project": w.open_project,
             "save_project": w.save_project,
             "save_project_as": w.save_project_as,
@@ -313,7 +317,7 @@ class WebBridge(QObject):
                         raise ValueError("Invalid workspace split.")
                     settings.setValue("workspace/split", split)
             elif name == "batch_view":
-                if data.get("view") not in ("sessions", "phase", "phases"):
+                if data.get("view") not in ("sessions", "data", "phase", "phases"):
                     raise ValueError("Invalid batch view.")
                 w.batch_tabs.setCurrentIndex(1 if data.get("view") in ("phase", "phases") else 0)
             elif name == "select":
@@ -324,12 +328,20 @@ class WebBridge(QObject):
                     raise ValueError("File is not in the current selection.")
                 w._active_batch().select_path(path)
             elif name == "sort":
-                if data.get("view") not in ("sessions", "phase", "phases"):
+                if data.get("view") not in ("sessions", "data", "phase", "phases"):
                     raise ValueError("Invalid batch view.")
                 if type(data.get("column")) is not int or type(data.get("descending")) is not bool:
                     raise ValueError("Invalid sort.")
                 view = w.phase_overview if data.get("view") in ("phase", "phases") else w.overview
                 column = data["column"]
+                if data.get("view") == "data":
+                    from trial_cruncher.compact_results import DATA_COLUMNS
+
+                    if not 0 <= column < len(DATA_COLUMNS):
+                        raise ValueError("Invalid sort column.")
+                    w._compact_sort = (column, data["descending"])
+                    self._batch_changed()
+                    return json.dumps({"ok": True})
                 if not 0 <= column < view.model.columnCount():
                     raise ValueError("Invalid sort column.")
                 order = (
@@ -339,7 +351,7 @@ class WebBridge(QObject):
                 )
                 view.table.sortByColumn(column, order)
             elif name in ("filter", "reset_filters"):
-                if data.get("view") not in ("sessions", "phase", "phases"):
+                if data.get("view") not in ("sessions", "data", "phase", "phases"):
                     raise ValueError("Invalid batch view.")
                 if set(data) - {
                     "view",

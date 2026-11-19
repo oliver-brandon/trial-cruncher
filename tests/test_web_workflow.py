@@ -72,6 +72,12 @@ def test_web_import_review_filter_and_export(app, phase_input, tmp_path, monkeyp
             ),
             timeout=15,
         )
+        javascript(app, shell.page, "document.querySelector('[data-batch=sessions]').click()")
+        wait_until(
+            app,
+            lambda: javascript(app, shell.page, "!!document.querySelector('#batch-quality')"),
+        )
+
         javascript(
             app,
             shell.page,
@@ -160,7 +166,8 @@ def test_web_import_review_filter_and_export(app, phase_input, tmp_path, monkeyp
         )
         javascript(app, shell.page, "document.querySelector('#animal-dialog').close()")
         javascript(app, shell.page, "document.querySelector('[data-workflow=export]').click()")
-        click_action("export-csv")
+        javascript(app, shell.page, "document.querySelector('#advanced-export').open=true")
+        click_action("detailed-csv")
         wait_until(app, lambda: bool(list(tmp_path.glob("*/sessions.csv"))), timeout=15)
         wait_until(app, lambda: not shell.controller._is_working(), timeout=15)
         assert "Saved" in shell.controller.export_status.text()
@@ -168,10 +175,10 @@ def test_web_import_review_filter_and_export(app, phase_input, tmp_path, monkeyp
         wait_until(
             app,
             lambda: javascript(
-                app, shell.page, "!document.querySelector('[data-action=export-excel]').disabled"
+                app, shell.page, "!document.querySelector('[data-action=detailed-excel]').disabled"
             ),
         )
-        click_action("export-excel")
+        click_action("detailed-excel")
         wait_until(app, lambda: bool(list(tmp_path.glob("*/results.xlsx"))), timeout=15)
         wait_until(app, lambda: not shell.controller._is_working(), timeout=15)
         book = load_workbook(next(tmp_path.glob("*/results.xlsx")), read_only=True)
@@ -209,6 +216,7 @@ def test_web_failed_and_withheld_statuses(app, phase_input, monkeypatch):
         wait_until(
             app, lambda: javascript(app, shell.page, "Boolean(window.trialReady)"), timeout=20
         )
+        javascript(app, shell.page, "document.querySelector('[data-batch=sessions]').click()")
         javascript(app, shell.page, "document.querySelector('[data-action=add-files]').click()")
         wait_until(
             app,

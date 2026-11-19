@@ -1,6 +1,6 @@
 /* Batch and inspector views. All scientific values come from the Python models. */
 (() => {
-  let bridge, currentState, view = "sessions", selected = null, detailTab = "Session metrics";
+  let bridge, currentState, view = "data", selected = null, detailTab = "Trials";
   let offset = 0, choiceOffset = 0, sortColumn = -1, descending = false, request = 0, detailRequest = 0;
   const size = 100;
   const widths = new Map();
@@ -15,13 +15,14 @@
   };
   const call = (name, data, done = () => {}) => bridge.action(name, JSON.stringify(data), done);
   const parse = value => { try { return JSON.parse(value); } catch { return {}; } };
-  function table(headers, rows, onSort, onSelect, columns = headers.map((_, i) => i), numeric = [], scope = `batch:${view}`) {
+  function table(headers, rows, onSort, onSelect, columns = headers.map((_, i) => i), numeric = [], scope = `batch:${view}`, descriptions = []) {
     const table = node("table"), head = node("thead"), hr = node("tr");
     table.classList.add("resizable-table");
     const colgroup = node("colgroup");
+    const dataWidths = [112, 82, 94, 100, 94, 90, 110, 90, 90, 90, 90, 100, 90];
     const columnWidths = headers.map((label, column) =>
       widths.get(`${scope}:${columns[column]}`) ||
-        (/file|metric/i.test(label) ? 210 : /reason|detail/i.test(label) ? 330 :
+        (scope === "batch:data" ? dataWidths[column] : /file|metric/i.test(label) ? 210 : /reason|detail/i.test(label) ? 330 :
           Math.max(110, Math.min(240, label.length * 8 + 36)))
     );
     const applyWidths = () => {
@@ -40,6 +41,11 @@
     headers.forEach((label, column) => {
       const th = node("th", label);
       if (numeric[column]) th.classList.add("numeric");
+      if (scope === "batch:data") {
+        th.classList.add("compact-heading");
+        th.title = descriptions[column];
+        th.setAttribute("aria-label", label + ". " + descriptions[column]);
+      }
       if (onSort) {
         const direction = sortColumn === columns[column] ? (descending ? "descending" : "ascending") : "none";
         th.setAttribute("aria-sort", direction);
@@ -83,7 +89,15 @@
       }
       cells.forEach((value, i) => {
         const td = node("td", value === null || value === undefined ? "—" : value);
-        td.title = value == null ? "" : String(value);
+        td.title = row.tooltips?.[i] || (value == null ? "" : String(value));
+        if (view === "data" && row.path && i === 0) {
+          td.title = [row.path, row.state_detail].filter(Boolean).join("\n");
+          if (row.row_state) {
+            const badge = node("span", row.row_state, "data-row-state");
+            badge.title = row.state_detail || row.row_state;
+            td.append(document.createElement("br"), badge);
+          }
+        }
         if (numeric[i]) td.classList.add("numeric");
         if (/status|quality/i.test(headers[i])) {
           const state = String(value).toLowerCase();
@@ -97,7 +111,7 @@
           badge.title = `Imported phase: ${row.imported_phase || "Unassigned"}. Pending phase: ${row.assigned_phase || "Unassigned"}. Re-import to apply.`;
           td.append(badge);
         }
-        if (row.path && bridge.batchTooltip) {
+        if (row.path && bridge.batchTooltip && view !== "data") {
           td.onmouseenter = () => bridge.batchTooltip(view === "phase" ? "phases" : view, row.path, columns[i], value => { td.title = value; });
         }
         tr.append(td);
@@ -128,6 +142,7 @@
       descending = data.sort_descending;
       const previousSelection = selected;
       selected = data.selected || null;
+      $("inspect-recording").disabled = selected === null;
       if (previousSelection !== selected) { choiceOffset = 0; showDetail(); }
       const batchData = {...data};
       delete batchData.selected;
@@ -160,13 +175,13 @@
           row.setAttribute("aria-selected", row.dataset.path === path ? "true" : "false");
         });
         call("select", {path}, showDetail);
-      }, data.columns, data.numeric), pager(data.total, offset, n => { offset = n; showBatch(); }));
+      }, data.columns, data.numeric, `batch:${view}`, data.descriptions), pager(data.total, offset, n => { offset = n; showBatch(); }));
       box.scrollLeft = scrollX; box.scrollTop = scrollY;
       if (focused) [...box.querySelectorAll("tr[data-path]")].find(row => row.dataset.path === focused)?.focus({preventScroll: true});
       $("batch-count").textContent = `Showing ${data.total} of ${data.batch_total ?? data.total} files. Import and export use the full batch.`;
     });
   }
-  const tabs = ["Session details", "Session metrics", "Phase metrics", "Analysis metadata", "Decoded choices", "Warnings and checks", "Source text"];
+  const tabs = ["Trials", "Session details", "Session metrics", "Phase metrics", "Analysis metadata", "Decoded choices", "Warnings and checks", "Source text"];
   function showDetail() {
     const seq = ++detailRequest;
     bridge.detailSection(detailTab, choiceOffset, size, raw => {
@@ -200,7 +215,8 @@
         box.append(table(content.table.headers, content.table.rows, null, null, undefined, undefined, `inspector:${detailTab}`));
         const details = node("details"), summary = node("summary", "Diagnostics"), pre = node("pre", content.diagnostics);
         details.open = wasOpen; details.append(summary, pre); box.append(details);
-      } else if (detailTab === "Decoded choices") {
+      } else if (detailTab === "Decoded choices" || detailTab === "Trials") {
+        if (content.note) box.append(node("p", content.note));
         box.append(table(content.headers, content.rows, null, null, undefined, undefined, `inspector:${detailTab}`));
         box.append(pager(content.total, choiceOffset, n => { choiceOffset = n; showDetail(); }));
       } else {
@@ -219,15 +235,18 @@
       $("inspector-tabs").append(button);
     });
     document.querySelectorAll("[data-batch]").forEach(button => button.onclick = () => {
+      const menu = document.querySelector(".more-views");
+      menu.querySelector("summary").textContent = button.dataset.batch === "data" ? "More views" : button.textContent;
+      menu.open = false;
       view = button.dataset.batch; offset = 0; sortColumn = -1; clearTimeout(timer); pendingSearch = null; filterSnapshot = "";
       document.querySelectorAll("[data-batch]").forEach(b => b.classList.toggle("active", b === button));
       call("batch_view", {view}, () => { renderFilters(); showBatch(); showDetail(); });
     });
-    document.querySelector('[data-batch="sessions"]').classList.add("active");
+    document.querySelector('[data-batch="data"]').classList.add("active");
   }
   function renderFilters() {
     const box = $("batch-filters");
-    const values = currentState.filter_values?.[view] || {};
+    const values = currentState.filter_values?.[view === "data" ? "sessions" : view] || {};
     const old = {};
     for (const [key, value] of Object.entries(values)) old[key] = key === "search" ? value : JSON.stringify(value);
     box.replaceChildren();
@@ -240,7 +259,7 @@
       timer = setTimeout(() => { applyFilters(); pendingSearch = null; }, 180);
     };
     box.append(input);
-    const fields = view === "sessions" ? ["program", "quality"] : ["phase", "status", "condition", "cohort", "inclusion", "layout"];
+    const fields = view !== "phase" ? ["program", "quality"] : ["phase", "status", "condition", "cohort", "inclusion", "layout"];
     for (const field of fields) {
       const select = node("select"); select.id = `batch-${field}`; select.dataset.filter = field;
       select.setAttribute("aria-label", field === "layout" ? "Phase results column layout" : "Filter by " + field);
@@ -264,14 +283,22 @@
     });
     offset = 0; call("filter", data, showBatch);
   }
-  window.Explorer = {refresh(b, state) {
+  window.Explorer = {
+    inspect() {
+      if (view === "data") {
+        detailTab = "Trials";
+        choiceOffset = 0;
+        showDetail();
+      }
+    },
+    refresh(b, state) {
     bridge = b; currentState = state; setup();
     const active = document.activeElement;
     if (state.inspector_tab && state.inspector_tab !== lastNativeTab) {
       lastNativeTab = state.inspector_tab;
       if (tabs.includes(lastNativeTab)) detailTab = lastNativeTab;
     }
-    const filters = JSON.stringify([view, state.filters, state.filter_values?.[view]]);
+    const filters = JSON.stringify([view, state.filters, state.filter_values?.[view === "data" ? "sessions" : view]]);
     if (filters !== filterSnapshot && !$("batch-filters").contains(active)) { filterSnapshot = filters; renderFilters(); }
     if (state.batch_revision === undefined || state.batch_revision !== lastBatchRevision) {
       lastBatchRevision = state.batch_revision;

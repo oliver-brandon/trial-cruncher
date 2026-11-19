@@ -1,8 +1,25 @@
 # Session, choice, and phase CSV export (schema 7)
 
+## Concise CSV
+
+The default CSV export creates `data.csv`, `trials.csv`, `metadata.csv`, and
+`manifest.json`. Data contains one row per successful recording. Trials contains
+one row per recorded choice and includes the source file, ID, phase and treatment.
+Choice is 1 for correct and 0 for incorrect. Outcome is 1 for rewarded and 0 for
+unrewarded. Missing values stay blank.
+
+Metadata includes a row for each selected source with status, source hash, inclusion,
+warnings, errors, metric unavailability reasons, and the original row number in Data (including the header). The manifest
+records configuration and software versions. Failed and unimported inputs appear in
+metadata and the manifest. Filters and inclusion flags do not limit the export.
+
+## Detailed CSV (schema 7)
+
+The following sections describe the detailed export.
+
 ## GUI workflow
 
-Import files, review the results, then click **Export CSV…** and choose a parent
+Import files, review the results, then choose **Export → Detailed exports → Detailed CSV…** and choose a parent
 folder. The application creates a fresh `trial-cruncher-export-<unique suffix>`
 subfolder containing `sessions.csv`, `choices.csv`, `phase_metrics.csv`, and `manifest.json`. The saved
 folder path is displayed as selectable text on the **Export** tab. Export always

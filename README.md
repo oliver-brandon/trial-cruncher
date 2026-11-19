@@ -7,6 +7,12 @@ research. It is intended to turn raw experiment files into traceable subject, se
 trial, and group datasets for personal research and broader laboratory use. Tasks do
 not need to have trials.
 
+## Quick start for a recording batch
+
+1. In **Import**, add the files or folder, assign phases and treatments, and choose **Import Med-PC**.
+2. In **Review → Data**, read one row per recording. Hover over a column for its meaning or an unavailable metric for its reason. Select a row and choose **Inspect recording** to see its choices, counts, or source text.
+3. In **Export**, choose **Save Excel workbook…**. Start with **Data**, click an animal ID for its trials, and use **Metadata** to look up a recording or a blank result.
+
 ## Current functionality
 
 - Installable `src/` package and help/version command line interface.
@@ -92,8 +98,8 @@ of MATLAB files and requires Med-PC text for import.
 The top tabs group controls by task. Start in **Import** to add recordings, assign
 phases and metadata, and run **Import Med-PC**. **File options…** opens the extension
 filter, subfolder setting, and Clear selection. After an import with usable results,
-the window advances from Import to **Review**. Use the Sessions or Phase results
-table to select a recording, then choose **Export results…** for CSV or Excel.
+the window advances from Import to **Review**. The **Data** table brings the main metrics together for each recording. Select a row
+for details, then choose **Export results…** for CSV or Excel.
 **Project** holds open, save, and source-check controls.
 
 Use the **Split view** selector at the upper right to choose **Batch only** or
@@ -126,7 +132,7 @@ Choose the phase or metadata value, then click **Apply to selected**. The button
 the number of selected files. **Apply to all files** is also available. Save, then click **Import Med-PC** to read
 the full batch with those assignments. Blank phases leave phase metrics unavailable.
 Each file has one fixed contingency under the confirmed no-omission protocol.
-Pending phase edits apply only on re-import; exports use the reviewed snapshot. The overview shows one row per file
+Pending phase edits apply only on re-import; exports use the reviewed snapshot. Under **More views → Sessions**, the overview shows one row per file
 with subject, program, recorded date, duration, seven metrics, and quality status. Sort
 by clicking column headings; combine search, program, and quality filters to find
 sessions needing attention. Click a row to review it below:
@@ -157,35 +163,42 @@ review and overview filters. Closing during import cancels remaining files and w
 The visible/total count makes hidden rows explicit. Dates retain the source header
 text and sort as text; no calendar format is inferred.
 
-Choose **Phase results** in the upper batch area to compare behavioral metrics across
+Choose **More views → Phase results** in the upper batch area to compare behavioral metrics across
 sessions. Select **Errors and criterion**, **Win-stay**, **Lose-shift**, **Session rate**, or **All metrics**
 to see the relevant values and denominators together. Search or filter by imported
 phase/status; click a row for details. Zero denominators remain zero while undefined
 ratios say **Unavailable**. See [batch phase results](docs/batch-phase-results.md).
 
-Click **Export CSV…** to export all successful imports, including hidden rows and
-warnings, then choose a parent folder. A new uniquely named folder holds `sessions.csv`,
-`choices.csv`, `phase_metrics.csv`, and `manifest.json`; the saved location appears on the **Export** tab.
-Existing files are never overwritten. Failed/unimported files are recorded in the
-manifest. Blank fields mean missing observations, while zero and false stay explicit.
-Phase metrics exports also include **whole_session_medpc_trials_per_minute** with
-its whole-session duration, count, unit, and independent availability reasons, so
-behavioral metrics can be reviewed together. Session CSV includes the seven
-calculated metrics and their versioned status/reasons;
-withheld values stay blank. Exports verify the reviewed snapshot against current source
-hashes; changed or unavailable sources require re-import. See
-[CSV schemas, provenance, and limitations](docs/csv-export.md).
+Use **Export results…** to choose CSV or Excel and a parent folder. The application
+creates a new folder for each export. The concise Data table contains one row per
+successfully imported recording, including rows hidden by filters and recordings
+marked Excluded or Not reviewed. Failed and unimported paths appear in the metadata.
+
+Data contains ID, Phase, Treatment, proportion correct, perseverative and regressive
+errors, adjusted regressive proportion, four win-stay/lose-shift probabilities, trials
+to criterion, and trials per minute. Proportion correct is a fraction from 0 to 1.
+Trials to criterion is the ordinal of the choice completing three consecutive correct
+choices. Trials/min is the whole-session Med-PC rate using recorded choices and S.
+
+The concise CSV export contains `data.csv`, `trials.csv`, `metadata.csv`, and
+`manifest.json`. The Excel export contains `results.xlsx` and `manifest.json`.
+Open **Detailed exports** when you need the full versioned tables and animal
+analysis tables.
+
+An empty metric means it could not be calculated. A numeric zero is a result.
+Metadata records warnings and reasons for unavailable metrics, plus source identifiers
+and analysis settings. The source hashes are checked before and after export. Changed
+or unavailable sources require re-import.
 
 Discovery never writes to inputs. It does not check content validity or readability
 beyond filesystem metadata. Full resolved paths are displayed and may appear in logs;
 review logs before sharing them outside the laboratory.
 
-Click **Export Excel…** for a workbook with **Sessions**, **Choices**, **Quality**,
-**Phase metrics**, and **Provenance** sheets plus a companion manifest in a fresh folder. Identifiers
-and raw decimals remain text; missing values stay blank, zero/false remain explicit,
-and withheld metrics retain reasons. Long text is preserved in numbered provenance
-chunks. Both export buttons include the full batch regardless of overview filters.
-See [Excel export and safeguards](docs/excel-export.md).
+The Excel workbook groups each animal's recorded choices on its own sheet, with
+one block per recording. Choice is 1 for a correct choice and 0 for an incorrect
+choice. Outcome is 1 for rewarded and 0 for unrewarded. An unknown choice or outcome
+stays blank. A Metadata sheet carries the source and calculation details. See
+[Excel export and safeguards](docs/excel-export.md).
 
 ## Pool animals and compare conditions
 
@@ -193,7 +206,7 @@ Assign a cohort, condition, phase, and **Include** to the intended recording for
 animal × condition × phase. Open **Animal analysis…**, choose within- or between-subjects,
 and select the cohort, conditions, and phases. **Apply and preview** shows the pooled
 evidence, individual animal values, side-by-side comparisons, and a source audit.
-With a plan enabled, both export buttons include those four tables. Save the project
+A detailed export with a plan enabled includes those four tables. Save the project
 to retain the analysis. See [aggregation and pairing](docs/aggregation-pairing-spec.md).
 
 ## Save and reopen an analysis

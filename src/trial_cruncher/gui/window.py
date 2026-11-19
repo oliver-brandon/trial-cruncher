@@ -34,7 +34,7 @@ from trial_cruncher.discovery import (
     discover_files,
     normalize_extensions,
 )
-from trial_cruncher.exporters import ExportFormat
+from trial_cruncher.exporters import ExportFormat, ExportProfile
 from trial_cruncher.gui.animal_analysis import AnalysisReview, AnalysisWorker, PlanDialog
 from trial_cruncher.gui.export_worker import ExportWorker
 from trial_cruncher.gui.import_worker import ImportWorker
@@ -49,6 +49,8 @@ from trial_cruncher.projects import PROJECT_SUFFIX, ProjectResult
 from trial_cruncher.source_tracking import SourceCheck
 
 logger = logging.getLogger(__name__)
+
+EXPORT_SCOPE = "All imported recordings are exported, including those marked Excluded."
 
 
 class DiscoverySignals(QObject):
@@ -225,7 +227,7 @@ class MainWindow(QMainWindow):
         review_bar.addWidget(self.go_to_export)
         export_bar.addWidget(self.export_button)
         export_bar.addWidget(self.excel_button)
-        self.export_status = QLabel("Exports include all successfully imported files.")
+        self.export_status = QLabel(EXPORT_SCOPE)
         self.export_status.setWordWrap(True)
         self.export_status.setTextFormat(Qt.TextFormat.PlainText)
         self.export_status.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -536,7 +538,7 @@ class MainWindow(QMainWindow):
     @Slot(bool)
     def _import_finished(self, cancelled: bool) -> None:
         self._import_worker = None
-        self.export_status.setText("Exports include all successfully imported files.")
+        self.export_status.setText(EXPORT_SCOPE)
         self.overview.finish_import()
         self.progress.hide()
         failures = sum(result.error is not None for result in self.import_results.values())
@@ -584,7 +586,15 @@ class MainWindow(QMainWindow):
     def export_excel(self) -> None:
         self._start_export("xlsx")
 
-    def _start_export(self, export_format: ExportFormat) -> None:
+    def export_data_csv(self) -> None:
+        self._start_export("csv", "compact")
+
+    def export_data_excel(self) -> None:
+        self._start_export("xlsx", "compact")
+
+    def _start_export(
+        self, export_format: ExportFormat, profile: ExportProfile = "detailed"
+    ) -> None:
         if self._closing or self._is_working():
             return
         count = sum(
@@ -607,6 +617,7 @@ class MainWindow(QMainWindow):
             export_format,
             self.metadata_assignments,
             self.analysis_plan,
+            profile=profile,
         )
         self._export_worker.signals.finished.connect(self._export_finished)
         self._export_worker.signals.failed.connect(self._export_failed)
@@ -704,7 +715,7 @@ class MainWindow(QMainWindow):
         self._analysis_worker = None
         self._set_busy(False)
         self.statusBar().showMessage(
-            "Animal analysis ready. CSV and Excel exports include the analysis tables."
+            "Animal analysis ready. Detailed exports include the analysis tables."
         )
         if self._web_analysis and (
             self._web_analysis_started_revision == self._web_analysis_revision

@@ -7,7 +7,7 @@ from PySide6.QtCore import QObject, QRunnable, Signal, Slot
 
 from trial_cruncher.analysis_metadata import AnalysisMetadata
 from trial_cruncher.analysis_plan import AnalysisPlan
-from trial_cruncher.exporters import ExportFormat, export_import_results
+from trial_cruncher.exporters import ExportFormat, ExportProfile, export_import_results
 from trial_cruncher.processing import ImportResult
 from trial_cruncher.source_tracking import SourcesChangedError
 
@@ -29,12 +29,14 @@ class ExportWorker(QRunnable):
         export_format: ExportFormat = "csv",
         metadata: dict[Path, AnalysisMetadata] | None = None,
         analysis_plan: AnalysisPlan | None = None,
+        profile: ExportProfile = "detailed",
     ) -> None:
         super().__init__()
         self.results = dict(results)
         self.paths = paths
         self.parent = parent
         self.export_format = export_format
+        self.profile = profile
         self.analysis_plan = analysis_plan
         self.metadata = dict(metadata or {})
         self.signals = ExportSignals()
@@ -47,6 +49,7 @@ class ExportWorker(QRunnable):
                 self.paths,
                 self.parent,
                 self.export_format,
+                profile=self.profile,
                 assignments=self.metadata,
                 analysis_plan=self.analysis_plan,
             )

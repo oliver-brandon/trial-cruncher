@@ -5,6 +5,7 @@
   const actions = {
     "add-files": "choose_files", "add-folder": "choose_folder",
     "animal-analysis": "animal_analysis", "export-csv": "export_csv",
+    "detailed-excel": "export_detailed_excel", "detailed-csv": "export_detailed_csv",
     "export-excel": "export_excel", "open-project": "open_project",
     "save-project": "save_project", "save-project-as": "save_project_as",
     "check-sources": "check_sources", import: "import", cancel: "cancel", clear: "clear"
@@ -169,6 +170,12 @@
   }
   $("#extensions").addEventListener("change", options);
   $("#recursive").addEventListener("change", options);
+  $("#inspect-recording").addEventListener("click", () => {
+    mode.value = "Split view";
+    layout();
+    window.Explorer?.inspect();
+    $("#inspector-tabs button.active")?.focus();
+  });
   mode.addEventListener("change", () => layout());
   if (!mode.value) mode.value = "Split view";
   layout();

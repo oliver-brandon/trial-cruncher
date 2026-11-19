@@ -1,6 +1,22 @@
 # Excel export
 
-After importing, click **Export Excel…** and choose a parent folder. A new uniquely
+## Concise workbook
+
+The default Excel export creates `results.xlsx` and `manifest.json`. **Data**
+contains one row per successful recording. Click an ID to open its recording block. Each animal has a sheet with recording
+blocks that show phase, treatment, source date, trial ordinal, Choice and Outcome.
+Choice is 1 for correct and 0 for incorrect. Outcome is 1 for rewarded and 0 for
+unrewarded. Missing values stay blank.
+
+**Metadata** records source links and hashes, inclusion, warnings, failures, metric
+unavailability reasons and a column guide. Its Data row and choices location refer to the original exported layout. The companion manifest records configurations and versions. Filters and inclusion
+flags do not limit the export.
+
+## Detailed workbook
+
+The following sections describe the detailed export.
+
+After importing, open **Export → Detailed exports → Detailed Excel…** and choose a parent folder. A new uniquely
 named `trial-cruncher-export-*` folder contains `results.xlsx` and `manifest.json`.
 Export runs in the background, and the saved location appears on the **Export** tab.
 The workbook has five sheets, frozen headers, filters, and formatted numeric cells.

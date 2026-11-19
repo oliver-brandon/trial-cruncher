@@ -31,6 +31,12 @@ def test_resize_columns_and_preserve_width_after_selection_and_sort(app, phase_i
             ),
         )
 
+        javascript(app, shell.page, "document.querySelector('[data-batch=sessions]').click()")
+        wait_until(
+            app,
+            lambda: javascript(app, shell.page, "!!document.querySelector('#batch-quality')"),
+        )
+
         def width():
             return javascript(
                 app,

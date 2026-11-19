@@ -67,6 +67,12 @@ class OverviewRow:
             else (self.result.analysis_metadata if self.result else AnalysisMetadata())
         )
 
+    @cached_property
+    def compact_values(self):
+        from trial_cruncher.compact_results import data_values
+
+        return data_values(self.result) if self.result and self.result.session else None
+
     @property
     def withheld(self) -> bool:
         summary = self.result.summary if self.result else None

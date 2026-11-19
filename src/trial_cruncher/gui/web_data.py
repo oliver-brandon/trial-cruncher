@@ -4,10 +4,12 @@ The existing Qt models remain responsible for sorting, filtering, formatting,
 and the distinction between unavailable and zero-valued observations.
 """
 
+from itertools import islice
 from pathlib import Path
 
 from PySide6.QtCore import Qt
 
+from trial_cruncher.compact_results import COLUMN_GUIDE, DATA_COLUMNS, data_reasons, trial_values
 from trial_cruncher.gui.window import MainWindow
 
 MAX_PAGE_SIZE = 500
@@ -26,6 +28,8 @@ def _bounds(offset: int, limit: int) -> tuple[int, int]:
 def batch(window: MainWindow, view: str, offset: int = 0, limit: int = 100) -> dict:
     """Return one page from the filtered, sorted session or phase proxy."""
     offset, limit = _bounds(offset, limit)
+    if view == "data":
+        return compact_batch(window, offset, limit)
     if view == "sessions":
         overview = window.overview
     elif view == "phases":
@@ -85,6 +89,92 @@ def batch(window: MainWindow, view: str, offset: int = 0, limit: int = 100) -> d
     }
 
 
+def compact_batch(window: MainWindow, offset: int, limit: int) -> dict:
+    proxy = window.overview.proxy
+    records = []
+    for position in range(proxy.rowCount()):
+        entry = proxy.sourceModel().row(proxy.mapToSource(proxy.index(position, 0)).row())
+        result = entry.result
+        usable = result is not None and result.session is not None and not entry.source_issue
+        if usable:
+            values = entry.compact_values
+        else:
+            subject = result.raw["headers"].get("Subject") if result and result.raw else None
+            values = (subject, window.phase_assignments.get(entry.path), entry.annotation.condition)
+            values += (None,) * (len(DATA_COLUMNS) - len(values))
+        records.append((entry, values, usable))
+    column, descending = getattr(window, "_compact_sort", (0, False))
+
+    def sort_key(record):
+        value = record[1][column]
+        return value.casefold() if isinstance(value, str) else value
+
+    present = sorted(
+        (r for r in records if r[1][column] is not None), key=sort_key, reverse=descending
+    )
+    missing = [r for r in records if r[1][column] is None]
+    records = present + missing
+    rows = []
+    for entry, values, usable in records[offset : offset + limit]:
+        reasons = data_reasons(entry.result) if usable else {}
+        state = (
+            "Re-import required"
+            if entry.source_issue
+            else "Failed"
+            if entry.result and entry.result.error
+            else entry.state
+        )
+        cells = []
+        for i, value in enumerate(values):
+            if value is None:
+                if i == 0:
+                    cells.append(f"File: {entry.path.name}")
+                elif i in (1, 2):
+                    cells.append("Unassigned")
+                else:
+                    cells.append("Withheld" if entry.withheld else "Unavailable" if usable else "—")
+            elif isinstance(value, float):
+                cells.append(f"{value:.4f}")
+            else:
+                cells.append(str(value))
+        rows.append(
+            {
+                "path": str(entry.path),
+                "cells": cells,
+                "row_state": "Withheld" if entry.withheld else state if not usable else "",
+                "state_detail": entry.source_issue or (entry.result.error if entry.result else ""),
+                "tooltips": [
+                    reasons.get(name, "") or (str(value) if value is not None else "")
+                    for name, value in zip(DATA_COLUMNS, values, strict=True)
+                ],
+                "pending_phase": bool(
+                    entry.result
+                    and entry.result.phase_summary
+                    and window.phase_assignments.get(entry.path)
+                    != entry.result.phase_summary.config.phase
+                ),
+                "imported_phase": entry.result.phase_summary.config.phase
+                if entry.result and entry.result.phase_summary
+                else None,
+                "assigned_phase": window.phase_assignments.get(entry.path),
+            }
+        )
+    selected = window.overview.current_path()
+    return {
+        "headers": DATA_COLUMNS,
+        "descriptions": tuple(COLUMN_GUIDE.values()),
+        "columns": list(range(len(DATA_COLUMNS))),
+        "numeric": [i >= 3 for i in range(len(DATA_COLUMNS))],
+        "rows": rows,
+        "total": len(records),
+        "batch_total": proxy.sourceModel().rowCount(),
+        "offset": offset,
+        "selected": str(selected) if selected else None,
+        "sort_column": column,
+        "sort_descending": descending,
+    }
+
+
 def batch_tooltip(window: MainWindow, view: str, path: str, column: int) -> str:
     """Return detailed provenance for a visible row and its original model column."""
     if view == "sessions":
@@ -127,7 +217,26 @@ def detail_section(window: MainWindow, section: str, offset: int = 0, limit: int
     """Read only the active inspector section, with bounded choice pages."""
     offset, limit = _bounds(offset, limit)
     review = window.review
-    if section == "Session metrics":
+    if section == "Trials":
+        path = window._reviewed_path
+        result = window.import_results.get(path)
+        session = (
+            result.session
+            if result and not result.error and path not in window._source_issues
+            else None
+        )
+        total = review.choice_model.rowCount() if session else 0
+        content = {
+            "headers": ["Trial", "Choice", "Outcome"],
+            "rows": list(islice(trial_values(session), offset, offset + limit)) if session else [],
+            "total": total,
+            "offset": offset,
+            "note": (
+                "Choice: 1 = correct, 0 = incorrect. Outcome: 1 = rewarded, "
+                "0 = unrewarded. — = unavailable."
+            ),
+        }
+    elif section == "Session metrics":
         content = {
             "note": review.metric_note.text(),
             "table": _widget_table(review.metric_table),

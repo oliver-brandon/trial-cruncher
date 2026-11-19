@@ -141,7 +141,8 @@ def test_saved_project_review_and_analysis_parity(app, phase_input, tmp_path, mo
 
         javascript(app, shell.page, "document.querySelector('#animal-dialog').close()")
         click("[data-workflow=export]")
-        click("[data-action=export-csv]")
+        javascript(app, shell.page, "document.querySelector('#advanced-export').open=true")
+        click("[data-action=detailed-csv]")
         wait_until(app, lambda: bool(list(tmp_path.glob("*/manifest.json"))), timeout=20)
         wait_until(app, lambda: not shell.controller._is_working(), timeout=20)
         folder = next(tmp_path.glob("*/manifest.json")).parent

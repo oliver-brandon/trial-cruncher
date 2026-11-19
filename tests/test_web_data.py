@@ -74,3 +74,82 @@ def test_sections_preserve_withholding_and_page_choices(app, phase_input, monkey
         assert second["rows"][0][0] == "100"
     finally:
         window.close()
+
+
+def test_compact_data_view_orders_values_and_sorts_without_losing_missing(app, phase_input):
+    from trial_cruncher.analysis_metadata import AnalysisMetadata
+    from trial_cruncher.compact_results import DATA_COLUMNS
+
+    first = phase_input((1, 1, 1, 7), name="one.txt")
+    second = phase_input((7, 7, 7, 7), name="two.txt")
+    results = {
+        first: import_medpc_file(first, "Reversal", AnalysisMetadata("Drug", "A", included=True)),
+        second: import_medpc_file(
+            second, "Reversal", AnalysisMetadata("Vehicle", "A", included=True)
+        ),
+    }
+    window = MainWindow()
+    try:
+        window.selected_files = set(results)
+        window.import_results = results
+        window.phase_assignments = dict.fromkeys(results, "Reversal")
+        window.overview.set_files(tuple(results), results)
+        window._compact_sort = (3, False)
+        result = batch(window, "data")
+        assert result["headers"] == DATA_COLUMNS
+        assert [r["path"] for r in result["rows"]] == [str(second), str(first)]
+        assert result["rows"][0]["cells"][3] == "0.0000"
+        assert result["rows"][1]["cells"][3] == "0.7500"
+        assert result["rows"][0]["cells"][2] == "Vehicle"
+        assert result["rows"][0]["cells"][11] == "Unavailable"
+        assert "not reached" in result["rows"][0]["tooltips"][11]
+        window._compact_sort = (11, True)
+        result = batch(window, "data")
+        assert [r["path"] for r in result["rows"]] == [str(first), str(second)]
+    finally:
+        window.close()
+
+
+def test_compact_pending_and_failed_rows_have_identity_and_distinct_state(app, phase_input):
+    from trial_cruncher.analysis_metadata import AnalysisMetadata
+
+    pending = phase_input(name="waiting.txt")
+    failed = phase_input(name="unsupported.txt", program="UNSUPPORTED")
+    result = import_medpc_file(failed, analysis_metadata=AnalysisMetadata("Treatment", "C"))
+    window = MainWindow()
+    try:
+        window.selected_files = {pending, failed}
+        window.import_results = {failed: result}
+        window.phase_assignments = {pending: "Reversal"}
+        window.overview.set_files(
+            (pending, failed),
+            {failed: result},
+            {failed: result.analysis_metadata},
+        )
+        rows = {row["path"]: row for row in batch(window, "data")["rows"]}
+        assert rows[str(pending)]["cells"][:3] == ["File: waiting.txt", "Reversal", "Unassigned"]
+        assert rows[str(pending)]["row_state"] == "Not imported"
+        assert rows[str(pending)]["cells"][3] == "—"
+        assert rows[str(failed)]["cells"][:3] == ["0007", "Unassigned", "Treatment"]
+        assert rows[str(failed)]["row_state"] == "Failed"
+        assert "Unsupported" in rows[str(failed)]["state_detail"]
+    finally:
+        window.close()
+
+
+def test_compact_trials_inspector_uses_recorded_choices_and_pages(app, phase_input):
+    path = phase_input((1, 2, 6, 7) * 30)
+    result = import_medpc_file(path, "Reversal")
+    window = MainWindow()
+    try:
+        window.import_results[path] = result
+        window.review_path(path)
+        first = detail_section(window, "Trials", 0, 2)["content"]
+        last = detail_section(window, "Trials", 100, 50)["content"]
+        assert first["rows"] == [(1, 1, 1), (2, 1, 0)]
+        assert first["total"] == 120
+        assert len(last["rows"]) == 20
+        assert last["rows"][-1] == (120, 0, 0)
+        assert "1 = correct" in first["note"]
+    finally:
+        window.close()

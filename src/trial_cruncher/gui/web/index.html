@@ -46,14 +46,23 @@
       <button data-action="clear">Clear selection</button>
     </section>
     <section class="action-bar" data-workflow-panel="review" hidden>
-      <button class="primary" data-action="animal-analysis"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="15" r="4"/><circle cx="5" cy="9" r="1.5"/><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="19" cy="9" r="1.5"/></svg>Animal analysis…</button>
+      <button data-action="animal-analysis"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="15" r="4"/><circle cx="5" cy="9" r="1.5"/><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="19" cy="9" r="1.5"/></svg>Animal analysis…</button>
       <button data-action="edit-files"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16zM14 7l3 3"/></svg>Edit files and assignments…</button>
       <span class="spacer"></span>
       <button class="primary" data-action="export-results"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 17v3h16v-3"/></svg>Export results…</button>
     </section>
     <section class="action-bar" data-workflow-panel="export" hidden>
-      <button class="primary" data-action="export-csv">Export CSV…</button>
-      <button data-action="export-excel">Export Excel…</button><span id="export-status" class="muted"></span>
+      <button class="primary" data-action="export-excel">Save Excel workbook…</button>
+      <button data-action="export-csv">Save CSV tables…</button>
+      <details id="advanced-export">
+        <summary>Detailed exports</summary>
+        <div class="export-choices">
+          <p>Full session and choice records, diagnostics, and any configured animal comparisons.</p>
+          <button data-action="detailed-excel">Detailed Excel…</button>
+          <button data-action="detailed-csv">Detailed CSV…</button>
+        </div>
+      </details>
+      <span id="export-status" class="muted"></span>
     </section>
     <section class="action-bar" data-workflow-panel="project" hidden>
       <button data-action="open-project">Open project…</button>
@@ -64,8 +73,12 @@
     <main id="workspace" class="workspace">
       <section id="batch-panel" class="panel batch-panel" aria-label="Batch explorer">
         <div id="batch-tabs" class="tabs">
-          <button data-batch="sessions">Sessions</button>
-          <button data-batch="phase">Phase results</button>
+          <button data-batch="data">Data</button>
+          <details class="more-views"><summary>More views</summary>
+            <button data-batch="sessions">Sessions</button>
+            <button data-batch="phase">Phase results</button>
+          </details>
+          <button id="inspect-recording" disabled>Inspect recording</button>
         </div>
         <div id="batch-filters" class="filters"></div>
         <div id="batch-count" class="batch-count"></div>
