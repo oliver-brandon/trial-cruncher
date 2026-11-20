@@ -259,9 +259,22 @@ jobs:
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
           security set-keychain-settings -lut 21600 "$keychain"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          # New Developer ID certificates chain through Apple's G2 intermediate.
+          # Import public intermediates without overriding system trust settings.
+          for ca in DeveloperIDCA DeveloperIDG2CA; do
+            file="$RUNNER_TEMP/$ca.cer"
+            curl --fail --silent --show-error --location --retry 3 \
+              "https://www.apple.com/certificateauthority/$ca.cer" -o "$file"
+            case "$ca" in
+              DeveloperIDCA) expected=7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f ;;
+              DeveloperIDG2CA) expected=f16cd3c54c7f83cea4bf1a3e6a0819c8aaa8e4a1528fd144715f350643d2df3a ;;
+            esac
+            printf '%s  %s\n' "$expected" "$file" | shasum -a 256 -c -
+            security add-certificates -k "$keychain" "$file"
+          done
           security import "$app_cert" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
           security import "$installer_cert" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$keychain"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$keychain" >/dev/null
           security list-keychains -d user -s "$keychain"
           xcrun notarytool store-credentials "trial-velopack" \
             --apple-id "$APPLE_ID" \
@@ -269,6 +282,13 @@ jobs:
             --password "$APPLE_PASSWORD" \
             --keychain "$keychain"
           echo "MACOS_NOTARY_PROFILE=trial-velopack" >> "$GITHUB_ENV"
+
+      - name: Verify both imported signing identities
+        env:
+          MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
+          MACOS_DEVELOPER_ID_INSTALLER: ${{ secrets.MACOS_DEVELOPER_ID_INSTALLER }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: python scripts/verify_macos_identities.py
 
       - name: Download previous macOS stable release
         if: ${{ needs.validate-source.outputs.previous_tag != '' }}
@@ -286,8 +306,8 @@ jobs:
       - name: Build signed and notarized macOS Velopack release
         env:
           VELOPACK_OUTPUT_DIR: ${{ github.workspace }}/dist/velopack-releases
-          MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
-          MACOS_DEVELOPER_ID_INSTALLER: ${{ secrets.MACOS_DEVELOPER_ID_INSTALLER }}
+          MACOS_DEVELOPER_ID_APPLICATION: ${{ env.VERIFIED_APPLICATION_IDENTITY }}
+          MACOS_DEVELOPER_ID_INSTALLER: ${{ env.VERIFIED_INSTALLER_IDENTITY }}
         run: scripts/package_macos_update.sh
 
       - name: Verify installation and available upgrade path

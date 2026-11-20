@@ -125,3 +125,6 @@ try {
         }
     }
 }
+
+# Signal success explicitly to the calling workflow after cleanup.
+exit 0
