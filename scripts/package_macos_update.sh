@@ -10,7 +10,7 @@ vpk_bin="${VPK_BIN:-vpk}"
 output_dir="${VELOPACK_OUTPUT_DIR:-${project_root}/dist/velopack-releases}"
 stage_root="${project_root}/build/velopack/macos"
 release_notes="${project_root}/packaging/velopack/release-notes.md"
-entitlements="${project_root}/packaging/macos/entitlements.plist"
+entitlements="${project_root}/packaging/macos/trial-cruncher.entitlements"
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "Velopack macOS releases must be built on macOS." >&2
