@@ -1,0 +1,368 @@
+name: Publish stable desktop updates
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_only:
+        description: Build and test candidate packages without publication
+        type: boolean
+        default: true
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trial-cruncher-stable-update-publish
+  cancel-in-progress: false
+
+jobs:
+  validate-source:
+    name: Validate stable release metadata
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.metadata.outputs.release_tag }}
+      version: ${{ steps.metadata.outputs.version }}
+      archive_stem: ${{ steps.metadata.outputs.archive_stem }}
+      velopack_version: ${{ steps.metadata.outputs.velopack_version }}
+      previous_tag: ${{ steps.previous.outputs.tag }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a main-branch release commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            test "$GITHUB_REF" = refs/heads/main
+          else
+            git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Read and validate canonical metadata
+        id: metadata
+        env:
+          TRIAL_CRUNCHER_UPDATE_SYSTEM: Windows
+          TRIAL_CRUNCHER_UPDATE_MACHINE: AMD64
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/version_metadata.py --check
+          for field in version archive_stem velopack_version; do
+            value=$(python scripts/version_metadata.py --field "$field")
+            echo "$field=$value" >> "$GITHUB_OUTPUT"
+          done
+          tag=$(python scripts/version_metadata.py --field update_release_tag)
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            test "$GITHUB_REF_NAME" = "$tag"
+          fi
+          echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve previous stable release
+        id: previous
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CANDIDATE_VERSION: ${{ steps.metadata.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          previous=$(python scripts/previous_stable_release.py)
+          echo "tag=$previous" >> "$GITHUB_OUTPUT"
+
+
+  build-windows:
+    timeout-minutes: 35
+    name: Build Windows installer and feed
+    needs: validate-source
+    runs-on: windows-latest
+    outputs:
+      channel: ${{ steps.metadata.outputs.channel }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install pinned Velopack CLI
+        shell: pwsh
+        run: dotnet tool install --global vpk --version "${{ needs.validate-source.outputs.velopack_version }}"
+
+      - name: Read Windows update channel
+        id: metadata
+        shell: pwsh
+        run: |
+          $channel = (python scripts/version_metadata.py --field update_channel).Trim()
+          if ($LASTEXITCODE -ne 0) { throw "Unable to determine the Windows release channel" }
+          "channel=$channel" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Download previous Windows stable release
+        if: ${{ needs.validate-source.outputs.previous_tag != '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist\velopack-releases -Force | Out-Null
+          vpk download github `
+            --outputDir dist\velopack-releases `
+            --channel "${{ steps.metadata.outputs.channel }}" `
+            --repoUrl "https://github.com/${{ github.repository }}" `
+            --token $env:GITHUB_TOKEN `
+            --pre false
+
+      - name: Build Windows Velopack release
+        env:
+          VELOPACK_OUTPUT_DIR: ${{ github.workspace }}\dist\velopack-releases
+        shell: pwsh
+        run: .\scripts\package_windows_update.ps1
+
+      - name: Download prior installer
+        if: ${{ needs.validate-source.outputs.previous_tag != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIOUS_TAG: ${{ needs.validate-source.outputs.previous_tag }}
+        shell: pwsh
+        run: |
+          gh release download $env:PREVIOUS_TAG --repo $env:GITHUB_REPOSITORY --pattern "*-Windows.exe" --dir "$env:RUNNER_TEMP/previous"
+          if ($LASTEXITCODE -ne 0) { throw "Could not download the previous installer" }
+
+      - name: Verify installation and available upgrade path
+        timeout-minutes: 10
+        shell: pwsh
+        env:
+          PREVIOUS_TAG: ${{ needs.validate-source.outputs.previous_tag }}
+          CANDIDATE_VERSION: ${{ needs.validate-source.outputs.version }}
+        run: |
+          $params = @{ CandidateDirectory = "dist/velopack-releases"; CandidateVersion = $env:CANDIDATE_VERSION }
+          if ($env:PREVIOUS_TAG) {
+            $installer = @(Get-ChildItem "$env:RUNNER_TEMP/previous" -Filter "*-Windows.exe")
+            if ($installer.Count -ne 1) { throw "Expected exactly one previous installer" }
+            $params.PreviousInstaller = $installer[0].FullName
+            $params.PreviousVersion = $env:PREVIOUS_TAG.Substring(1)
+          }
+          & scripts/smoke_stable_windows.ps1 @params
+          if ($LASTEXITCODE -ne 0) { throw "Installer smoke failed" }
+
+      - name: Verify installed Trial Cruncher UI
+        timeout-minutes: 7
+        shell: pwsh
+        run: |
+          & .build-venv/Scripts/python.exe scripts/smoke_installed_gui.py "$env:RUNNER_TEMP/trial-stable-upgrade/current/Trial Cruncher.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Installed Trial Cruncher UI smoke failed" }
+
+      - name: Verify packaged CLI analysis
+        shell: pwsh
+        run: |
+          & .build-venv/Scripts/python.exe scripts/smoke_packaged_analysis.py "$env:RUNNER_TEMP/trial-stable-upgrade/current/trial-cruncher-cli.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Packaged CLI analysis failed" }
+
+      - name: Upload Windows release payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: stable-windows-release
+          path: dist/velopack-releases/*
+          if-no-files-found: error
+          retention-days: 7
+
+  build-macos:
+    timeout-minutes: 75
+    name: Build signed macOS installer and feed
+    needs: validate-source
+    runs-on: macos-15
+    outputs:
+      channel: ${{ steps.metadata.outputs.channel }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install pinned Velopack CLI
+        run: dotnet tool install --global vpk --version "${{ needs.validate-source.outputs.velopack_version }}"
+
+      - name: Read macOS update channel
+        id: metadata
+        run: |
+          channel=$(python scripts/version_metadata.py --field update_channel)
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+
+      - name: Require Apple signing secrets
+        env:
+          APP_CERT: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION_P12_BASE64 }}
+          INSTALLER_CERT: ${{ secrets.MACOS_DEVELOPER_ID_INSTALLER_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_IDENTITY: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
+          INSTALLER_IDENTITY: ${{ secrets.MACOS_DEVELOPER_ID_INSTALLER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for variable in APP_CERT INSTALLER_CERT CERT_PASSWORD KEYCHAIN_PASSWORD \
+            APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID APP_IDENTITY INSTALLER_IDENTITY; do
+            [[ -n "${!variable:-}" ]] || {
+              echo "Required Apple signing secret ${variable} is missing." >&2
+              exit 1
+            }
+          done
+
+      - name: Install Developer ID certificates and notary profile
+        env:
+          APP_CERT: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION_P12_BASE64 }}
+          INSTALLER_CERT: ${{ secrets.MACOS_DEVELOPER_ID_INSTALLER_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/trial-signing.keychain-db"
+          app_cert="$RUNNER_TEMP/developer-id-application.p12"
+          installer_cert="$RUNNER_TEMP/developer-id-installer.p12"
+
+          trap 'rm -f "$app_cert" "$installer_cert"' EXIT
+          echo "MACOS_SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          printf '%s' "$APP_CERT" | base64 --decode > "$app_cert"
+          printf '%s' "$INSTALLER_CERT" | base64 --decode > "$installer_cert"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          security import "$app_cert" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security import "$installer_cert" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$keychain"
+          security list-keychains -d user -s "$keychain"
+          xcrun notarytool store-credentials "trial-velopack" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_PASSWORD" \
+            --keychain "$keychain"
+          echo "MACOS_NOTARY_PROFILE=trial-velopack" >> "$GITHUB_ENV"
+
+      - name: Download previous macOS stable release
+        if: ${{ needs.validate-source.outputs.previous_tag != '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p dist/velopack-releases
+          vpk download github \
+            --outputDir dist/velopack-releases \
+            --channel "${{ steps.metadata.outputs.channel }}" \
+            --repoUrl "https://github.com/${{ github.repository }}" \
+            --token "$GITHUB_TOKEN" \
+            --pre false
+
+      - name: Build signed and notarized macOS Velopack release
+        env:
+          VELOPACK_OUTPUT_DIR: ${{ github.workspace }}/dist/velopack-releases
+          MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
+          MACOS_DEVELOPER_ID_INSTALLER: ${{ secrets.MACOS_DEVELOPER_ID_INSTALLER }}
+        run: scripts/package_macos_update.sh
+
+      - name: Verify installation and available upgrade path
+        timeout-minutes: 10
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIOUS_TAG: ${{ needs.validate-source.outputs.previous_tag }}
+          CANDIDATE_VERSION: ${{ needs.validate-source.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate="dist/velopack-releases/com.trialcruncher.app-${CANDIDATE_VERSION}-stable-osx-arm64-full.nupkg"
+          test -f "$candidate"
+          scripts/smoke_stable_macos.sh "$candidate"
+
+      - name: Verify installed Trial Cruncher UI
+        timeout-minutes: 7
+        run: |
+          .build-venv/bin/python scripts/smoke_installed_gui.py "$RUNNER_TEMP/trial-stable-upgrade/Applications/Trial Cruncher.app/Contents/MacOS/Trial Cruncher"
+
+      - name: Verify packaged CLI analysis
+        run: .build-venv/bin/python scripts/smoke_packaged_analysis.py "$RUNNER_TEMP/trial-stable-upgrade/Applications/Trial Cruncher.app/Contents/Resources/bin/trial-cruncher-cli"
+
+      - name: Upload macOS release payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: stable-macos-release
+          path: dist/velopack-releases/*
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Remove signing keychain
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          if [[ -n "${MACOS_SIGNING_KEYCHAIN:-}" && -f "${MACOS_SIGNING_KEYCHAIN}" ]]; then
+            security delete-keychain "${MACOS_SIGNING_KEYCHAIN}"
+          fi
+
+  publish:
+    permissions:
+      contents: write
+    timeout-minutes: 20
+    name: Publish verified stable release
+    if: ${{ github.event_name == 'push' || !inputs.build_only }}
+    needs: [validate-source, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: stable-windows-release
+          path: release-windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: stable-macos-release
+          path: release-macos
+      - name: Point the stable tag at the verified main commit
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.validate-source.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          git fetch origin --tags
+          if ! git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            [[ "$GITHUB_REF" == refs/heads/main && "$GITHUB_EVENT_NAME" == workflow_dispatch ]]
+            git tag "$RELEASE_TAG" "$GITHUB_SHA"
+            git push origin "refs/tags/$RELEASE_TAG"
+          fi
+          test "$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")" = "$GITHUB_SHA"
+      - name: Verify payloads and publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ needs.validate-source.outputs.version }}
+          RELEASE_TAG: ${{ needs.validate-source.outputs.release_tag }}
+          INSTALLER_STEM: ${{ needs.validate-source.outputs.archive_stem }}
+          PREVIOUS_TAG: ${{ needs.validate-source.outputs.previous_tag }}
+        run: python3 scripts/publish_stable_release.py

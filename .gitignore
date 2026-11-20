@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+.build-venv/
 venv/
 .pytest_cache/
 .ruff_cache/
@@ -25,3 +26,18 @@ Thumbs.db
 *.tcproj.json
 *.tcproj.json.lock
 *.tcproj.json.*.tmp
+
+# Local agent configuration and macOS filesystem sidecars
+AGENTS.md
+.codex/
+.agents/
+._*
+.AppleDouble/
+
+# Local release credentials and temporary signing keychains
+*.p12
+*.pfx
+*.p8
+*.key
+*.keychain
+*.keychain-db

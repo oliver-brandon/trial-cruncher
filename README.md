@@ -66,7 +66,16 @@ selection, Med-PC import review, seven PRL session summaries, eight phase metric
 manual phase assignment, and CSV/Excel export. Additional task configuration and
 metric families remain future work.
 
-## Installation and launch
+## Install and update
+
+The desktop distribution targets Windows x64 and Apple Silicon Macs. Once the
+first stable release is published, use the Windows installer or the signed macOS
+package from [Releases](https://github.com/oliver-brandon/trial-cruncher/releases).
+Installed copies check for updates automatically and offer **Help → Check for
+Updates…**. Ubuntu uses a Git checkout and a virtual environment.
+See [desktop release setup](docs/desktop-releases.md) and [Ubuntu installation](docs/ubuntu-source.md).
+
+## Installation from source
 
 Use Python 3.12 or newer in a virtual environment. From the repository directory:
 

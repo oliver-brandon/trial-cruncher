@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+
+set -u
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+python="$repo_root/.build-venv/bin/python"
+
+if [ ! -x "$python" ]; then
+    printf '%s\n' \
+        "Trial Cruncher development Python was not found at:" \
+        "  $python" \
+        "Create the repository's .build-venv environment before running ./dev-aurora." >&2
+    exit 1
+fi
+
+export TRIAL_CRUNCHER_DEV=1
+exec "$python" -m trial_cruncher --gui "$@"

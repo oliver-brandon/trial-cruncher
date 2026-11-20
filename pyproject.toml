@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "trial-cruncher"
-version = "0.1.0"
+dynamic = ["version"]
 description = "From raw trials to analysis-ready data."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -13,9 +13,11 @@ dependencies = [
     "numpy>=1.26.4",
     "pandas>=2.2.3",
     "openpyxl>=3.1.5",
+    "packaging>=24",
 ]
 
 [project.optional-dependencies]
+build = ["pyinstaller>=6.11,<7", "velopack==1.2.0"]
 matlab = ["scipy>=1.13", "h5py>=3.11"]
 dev = ["pytest>=8.3", "pytest-timeout>=2.3", "ruff>=0.9"]
 
@@ -24,6 +26,9 @@ trial-cruncher = "trial_cruncher.cli:main"
 
 [project.gui-scripts]
 trial-cruncher-gui = "trial_cruncher.gui.app:main"
+
+[tool.hatch.version]
+path = "src/trial_cruncher/version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/trial_cruncher"]

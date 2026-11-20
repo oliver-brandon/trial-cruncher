@@ -3,12 +3,13 @@
 import argparse
 import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
 
 from trial_cruncher import __version__
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, gui_launcher: Callable[[], int] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="trial-cruncher", description="From raw trials to analysis-ready data."
     )
@@ -23,6 +24,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     if args.gui:
+        if gui_launcher is not None:
+            return gui_launcher()
         from trial_cruncher.gui.app import main as gui_main
 
         return gui_main()

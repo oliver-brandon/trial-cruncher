@@ -114,7 +114,7 @@ may need additional platform-specific Qt/X11 libraries.
 
 ## Contributions
 
-Read `AGENTS.md`, architecture documentation, and the relevant code/tests first.
+Read the architecture documentation and the relevant code and tests first.
 Keep a focused change with meaningful tests, actual validation results, and updated
 documentation. Keep the core GUI-independent. Avoid adding generic plugin systems
 before there are concrete implementations to extend.
