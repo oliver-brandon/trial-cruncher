@@ -19,7 +19,7 @@ dependencies = [
 [project.optional-dependencies]
 build = ["pyinstaller>=6.11,<7", "velopack==1.2.0"]
 matlab = ["scipy>=1.13", "h5py>=3.11"]
-dev = ["pytest>=8.3", "pytest-timeout>=2.3", "ruff>=0.9"]
+test = ["pytest>=8.3", "pytest-timeout>=2.3", "ruff>=0.9"]
 
 [project.scripts]
 trial-cruncher = "trial_cruncher.cli:main"

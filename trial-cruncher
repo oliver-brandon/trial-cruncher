@@ -7,11 +7,11 @@ python="$repo_root/.build-venv/bin/python"
 
 if [ ! -x "$python" ]; then
     printf '%s\n' \
-        "Trial Cruncher development Python was not found at:" \
+        "Trial Cruncher source environment was not found at:" \
         "  $python" \
-        "Create the repository's .build-venv environment before running ./dev-aurora." >&2
+        "Create the repository's .build-venv environment before running ./trial-cruncher." >&2
     exit 1
 fi
 
-export TRIAL_CRUNCHER_DEV=1
+export TRIAL_CRUNCHER_DISABLE_UPDATES=1
 exec "$python" -m trial_cruncher --gui "$@"

@@ -233,10 +233,10 @@ not cached calculations. **Check sources** refreshes source status without impor
 Both exports verify source content and require re-import of changed files.
 See [saved projects and source verification](docs/projects.md).
 
-## Development
+## Testing
 
 ```sh
-python -m pip install -e '.[dev]'
+python -m pip install -e '.[test]'
 pytest
 ruff check .
 ruff format --check .
@@ -245,7 +245,7 @@ ruff format --check .
 Set `TRIAL_CRUNCHER_WEBENGINE_TESTS=1` to include embedded-renderer workflow tests.
 GUI tests use Qt's offscreen platform automatically. On Linux without Qt runtime
 libraries, install your distribution's EGL/OpenGL packages before running GUI tests
-(Ubuntu CI uses `libegl1` and `libopengl0`). See [development](docs/development.md).
+(Ubuntu CI uses `libegl1` and `libopengl0`). See [testing](docs/testing.md).
 
 ## Structure
 
@@ -272,7 +272,7 @@ src/trial_cruncher/
   gui/                     Desktop shell, WebChannel bridge, Qt models and workers
   gui/web/                 Bundled HTML, CSS and JavaScript workspace
 tests/                     Synthetic core and offscreen GUI checks
-docs/                      Architecture, metric standards, development
+docs/                      Architecture, metric standards, testing
 .github/workflows/ci.yml    Python 3.12/3.14 lint and test jobs
 ```
 

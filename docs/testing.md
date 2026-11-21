@@ -1,4 +1,4 @@
-# Development
+# Testing
 
 ## Setup
 
@@ -7,7 +7,7 @@ Install Python 3.12+ and create an isolated environment in the checkout:
 ```sh
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[dev]'
+python -m pip install -e '.[test]'
 ```
 
 Use `.venv\Scripts\Activate.ps1` on Windows PowerShell. On Linux, `python3` may be
@@ -129,7 +129,7 @@ Dependencies use compatible minimum versions rather than a lockfile in this init
 foundation. For reproducible research deployments, record the actual resolved
 environment and all analysis configuration. Current CSV and Excel manifests record runtime
 versions (including SciPy and h5py when installed), import/export scope, and the PRL definition set/version and strict
-eligibility policy. Additional metric configuration must be recorded when implemented. Do not describe a passing development build as scientific validation.
+eligibility policy. Additional metric configuration must be recorded when implemented. Do not describe a passing test run as scientific validation.
 
 No license or author identity has been assigned. Publishing and licensing decisions
 remain with the repository owner.

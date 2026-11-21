@@ -22,7 +22,7 @@ from trial_cruncher.version import (
 )
 
 LOG = logging.getLogger(__name__)
-DEVELOPMENT_MODE_ENV = "TRIAL_CRUNCHER_DEV"
+DISABLE_UPDATES_ENV = "TRIAL_CRUNCHER_DISABLE_UPDATES"
 
 
 class UpdateState(StrEnum):
@@ -86,10 +86,10 @@ class UpdateBackend(Protocol):
     def apply_and_restart(self, release: UpdateRelease) -> None: ...
 
 
-def development_mode_enabled(environ: dict[str, str] | None = None) -> bool:
+def updates_disabled(environ: dict[str, str] | None = None) -> bool:
     """Return whether this source launch explicitly disabled app updates."""
     source = os.environ if environ is None else environ
-    return source.get(DEVELOPMENT_MODE_ENV, "").strip().lower() in {
+    return source.get(DISABLE_UPDATES_ENV, "").strip().lower() in {
         "1",
         "true",
         "yes",
@@ -139,7 +139,7 @@ def run_velopack_startup() -> bool:
 
 def velopack_runtime_available() -> bool:
     """Return whether this process can be managed by a Velopack installation."""
-    if development_mode_enabled():
+    if updates_disabled():
         return False
     try:
         update_target()

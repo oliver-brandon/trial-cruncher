@@ -1,8 +1,7 @@
 # Desktop installations and stable updates
 
-Trial Cruncher uses the stable Photon Cruncher distribution pattern. Its package
-identity is `com.trialcruncher.app`, and its update feed is the Trial Cruncher
-repository. Photon Cruncher and Trial Cruncher can be installed side by side.
+Trial Cruncher’s package identity is `com.trialcruncher.app`. Installed copies
+read stable updates from the Trial Cruncher repository.
 
 | Platform | First installation | Later updates |
 | --- | --- | --- |
@@ -36,8 +35,7 @@ workflow, including when the repository is private and the owner has access.
    Windows and macOS jobs. The build jobs read repository contents. Only the final
    publish job requests `contents: write`.
 3. Configure the following **repository Actions secrets** under Settings →
-   Secrets and variables → Actions. Photon Cruncher's repository-scoped secrets
-   belong to that repository. Use the original certificates and credentials from
+   Secrets and variables → Actions. Use the original certificates and credentials from
    their secure store, or grant this repository access to equivalent organization
    secrets. GitHub does not return existing secret values.
 
@@ -84,6 +82,4 @@ The platform smoke jobs verify local install/apply paths. After a release,
 verify discovery from an installed previous version against the published GitHub
 feed using **Help → Check for Updates…**.
 
-Reference implementations and feed behavior are documented in [Photon Cruncher's
-stable release](https://github.com/oliver-brandon/photon-cruncher/releases/tag/v2.1.0)
-and [Velopack update sources](https://docs.velopack.io/integrating/update-sources).
+For feed behavior, see [Velopack update sources](https://docs.velopack.io/integrating/update-sources).

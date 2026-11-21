@@ -23,8 +23,7 @@ script, and sends commands through QWebChannel. The shell restricts navigation
 to its entry document. Native pickers supply the file, folder, project and export
 destinations.
 
-This follows Photon Cruncher Aurora's desktop-shell and shared-Python-service
-design. Trial Cruncher uses the in-process channel for both commands and data.
+Trial Cruncher uses the in-process channel for both commands and data.
 Installing the Python wheel supplies the frontend. Running the application requires
 neither a listening network port nor a JavaScript build tool.
 

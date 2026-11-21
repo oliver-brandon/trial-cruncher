@@ -22,7 +22,7 @@ Reader version is `"1"`; normalizer version is `"2"`. Version 2 recognizes
 
 ## Use
 
-With the development environment activated:
+With the project environment activated:
 
 ```sh
 trial-cruncher --inspect-medpc "data/your-session.txt"

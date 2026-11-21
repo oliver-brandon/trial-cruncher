@@ -21,7 +21,7 @@ def main() -> None:
         run = subprocess.run(
             [str(executable), "--verify-install"],
             cwd=temporary,
-            env=dict(os.environ, TRIAL_CRUNCHER_DEV="1"),
+            env=dict(os.environ, TRIAL_CRUNCHER_DISABLE_UPDATES="1"),
             timeout=240,
         )
         receipt = Path(temporary) / "trial-cruncher-install-check.json"
