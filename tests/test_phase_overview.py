@@ -2,6 +2,7 @@
 
 import csv
 import json
+import os
 from dataclasses import replace
 from threading import Event
 
@@ -196,7 +197,8 @@ def test_phase_click_through_tabs_hidden_rows_and_pending_assignments(app, phase
         assert str(second) in window.review.details.toPlainText()
         window.phase_assignments[second] = "Pending change"
         assert shown(view, second, 2) == "Reversal"
-        window.overview.search.setText("one/")  # Inactive view cannot overwrite phase review.
+        # Inactive view cannot overwrite phase review.
+        window.overview.search.setText(f"{first.parent.name}{os.sep}")
         assert str(second) in window.review.details.toPlainText()
         view.table.sortByColumn(4, Qt.SortOrder.AscendingOrder)
         assert view.current_path() == second

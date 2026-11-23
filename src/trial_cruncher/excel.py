@@ -17,6 +17,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from trial_cruncher.aggregation import SHEETS
 from trial_cruncher.analysis_metadata import ANNOTATION_COLUMNS, analysis_metadata_from_dict
+from trial_cruncher.exclusive_file import open_exclusive
 from trial_cruncher.tables import WHOLE_SESSION_RATE_COLUMN, json_text
 
 MAX_ROWS = 1_048_576
@@ -259,7 +260,7 @@ def save_workbook(workbook: Workbook, destination: Path, source_paths: Sequence[
     """Exclusively create a workbook and remove only this file if writing fails."""
     if destination.resolve() in {path.resolve() for path in source_paths}:
         raise ValueError("An export cannot use an input file's path.")
-    stream = destination.open("xb")
+    stream = open_exclusive(destination, binary=True)
     try:
         with stream:
             workbook.save(stream)

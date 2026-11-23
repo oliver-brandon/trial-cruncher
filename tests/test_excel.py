@@ -3,7 +3,6 @@
 import json
 from dataclasses import replace
 from decimal import Decimal
-from pathlib import Path
 from zipfile import ZipFile
 
 import pandas as pd
@@ -199,14 +198,16 @@ def test_repeated_exports_and_write_failures_preserve_previous(write_export, tmp
     assert set(tmp_path.glob("*-trial-cruncher-export-*")) == {first, second}
     assert {p.name: p.read_bytes() for p in first.iterdir()} == before
     monkeypatch.setattr(Workbook, "save", real_save)
-    real_open = Path.open
+    from trial_cruncher import exporters
 
-    def broken_manifest(self, *args, **kwargs):
-        if self.name == "manifest.json" and args[0] == "x":
+    real_open = exporters.open_exclusive
+
+    def broken_manifest(candidate, *, binary):
+        if candidate.name == "manifest.json":
             raise OSError("Synthetic manifest failure")
-        return real_open(self, *args, **kwargs)
+        return real_open(candidate, binary=binary)
 
-    monkeypatch.setattr(Path, "open", broken_manifest)
+    monkeypatch.setattr(exporters, "open_exclusive", broken_manifest)
     with pytest.raises(OSError, match="manifest failure"):
         export_import_results(results, [path], tmp_path, "xlsx")
     assert set(tmp_path.glob("*-trial-cruncher-export-*")) == {first, second}
@@ -322,3 +323,18 @@ def test_no_successes_or_invalid_format_create_no_output(tmp_path):
     with pytest.raises(ValueError, match="format"):
         export_import_results({}, [], tmp_path, "unknown")
     assert not list(tmp_path.iterdir())
+
+
+def test_save_refuses_dangling_link_without_creating_target(tmp_path):
+    target = tmp_path / "missing.xlsx"
+    link = tmp_path / "dangling.xlsx"
+    link.symlink_to(target)
+    with pytest.raises(FileExistsError):
+        save_workbook(Workbook(), link)
+    assert link.is_symlink() and not target.exists()
+
+
+def test_export_refuses_existing_directory(tmp_path):
+    with pytest.raises(OSError):
+        save_workbook(Workbook(), tmp_path)
+    assert tmp_path.is_dir()

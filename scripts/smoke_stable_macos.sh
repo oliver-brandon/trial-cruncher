@@ -108,8 +108,49 @@ else
 fi
 kill -TERM "$new_pid"
 for _ in {1..30}; do
-  kill -0 "$new_pid" 2>/dev/null || { echo "Installed app ready for GUI verification."; exit 0; }
+  kill -0 "$new_pid" 2>/dev/null || break
   sleep 1
 done
-echo "Installed app did not close." >&2
-exit 1
+if kill -0 "$new_pid" 2>/dev/null; then
+  echo "Installed app did not close." >&2
+  exit 1
+fi
+new_pid=""
+
+# On an upgrade run the package above installs the previous release. Exercise
+# the candidate PKG itself as well, since those are the installer bytes published.
+if [[ -n "$previous" ]]; then
+  candidate_pkg="$(find "$(dirname "$1")" -maxdepth 1 -name '*-Setup.pkg' -print -quit)"
+  test -f "$candidate_pkg"
+  pkgutil --check-signature "$candidate_pkg"
+  spctl --assess --verbose=2 --type install "$candidate_pkg"
+  sudo installer -pkg "$candidate_pkg" -target /
+  test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$installed/Contents/Info.plist")" = "com.trialcruncher.app"
+  test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$installed/Contents/Info.plist")" = "$target_version"
+  codesign --verify --deep --strict "$installed"
+  # Verify the executable from the candidate installer with the same synthetic
+  # import/export flow used for the upgraded copy.
+  .build-venv/bin/python scripts/smoke_installed_gui.py "$installed/Contents/MacOS/Trial Cruncher"
+  .build-venv/bin/python scripts/smoke_packaged_analysis.py "$installed/Contents/Resources/bin/trial-cruncher-cli"
+  open -n "$installed"
+  for _ in {1..60}; do
+    new_pid="$(pgrep -f "^$installed/Contents/MacOS/Trial Cruncher" | head -1 || true)"
+    [[ -n "$new_pid" ]] && break
+    sleep 1
+  done
+  if [[ -z "$new_pid" ]]; then
+    echo "Candidate installer app did not start." >&2
+    exit 1
+  fi
+  kill -TERM "$new_pid"
+  for _ in {1..30}; do
+    kill -0 "$new_pid" 2>/dev/null || break
+    sleep 1
+  done
+  if kill -0 "$new_pid" 2>/dev/null; then
+    echo "Candidate installer app did not close." >&2
+    exit 1
+  fi
+  new_pid=""
+fi
+echo "Candidate installer and updated app ready for GUI verification."

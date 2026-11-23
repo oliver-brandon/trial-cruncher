@@ -36,7 +36,7 @@ TRIAL_CRUNCHER_WEBENGINE_TESTS=1 pytest
 On Windows PowerShell set `$env:TRIAL_CRUNCHER_WEBENGINE_TESTS = "1"` before
 running `pytest`. The tests use a local WebEngine page, native picker test doubles,
 synthetic recordings and the real background workers. Run these tests in an
-environment that permits Chromium subprocesses. The CI matrix enables this suite.
+environment that permits Chromium subprocesses. CI enables this suite in the Ubuntu full run and in the selected macOS and Windows tests.
 For interactive desktop testing, launch `trial-cruncher --gui` with the normal
 platform plugin and exercise the system file picker and display scaling.
 
@@ -104,8 +104,13 @@ successful imports remain included. Confirm inputs and the first export remain u
 Repeat with **Export Excel…**: inspect all five sheets, filters/frozen headers, source
 IDs, missing/zero/false values, Quality reasons, and complete Provenance chunks. Open
 `results.xlsx` in Microsoft Excel for native rendering verification when available.
-CI runs on Ubuntu, macOS and Windows with Python 3.12 and 3.14. Each job has a
-10-minute limit. During pytest, a test that stalls for 90 seconds prints thread stacks
+Routine CI runs the full suite on Ubuntu with Python 3.12, scientific and export
+compatibility checks on Ubuntu 3.14, and focused file-safety, project, and embedded
+GUI checks on macOS and Windows with Python 3.12. Lint runs once in the Ubuntu 3.12 job. Tag pushes do not
+start a duplicate ordinary CI run. For dependency upgrades or broader verification,
+dispatch CI with **full_matrix** selected to run the full suite on all three systems
+and both Python versions. Release jobs call this same full matrix for their exact
+candidate commit. Each job has a 10-minute limit. During pytest, a test that stalls for 90 seconds prints thread stacks
 and terminates that test process. A newer run on the same ref cancels the older run.
 GUI tests drive dialog controls directly and report unexpected worker warnings as failures.
 Native dialog appearance and display scaling need a desktop check on each target. Linux Qt may

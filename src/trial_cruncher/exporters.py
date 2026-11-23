@@ -18,6 +18,7 @@ import pandas as pd
 from trial_cruncher import __version__, phase_metrics
 from trial_cruncher.aggregation import AnalysisPlan, build_analysis
 from trial_cruncher.analysis_metadata import AnalysisMetadata
+from trial_cruncher.exclusive_file import open_exclusive
 from trial_cruncher.prl import CHOICE_STORAGE_POLICY
 from trial_cruncher.prl_metrics import (
     DEFINITION_SET,
@@ -101,7 +102,7 @@ class CSVExporter:
         if destination.resolve() in self.source_paths:
             raise ValueError("An export cannot use an input file's path.")
         # Exclusive creation is the overwrite guard, including concurrent attempts.
-        stream = destination.open("x", encoding="utf-8", newline="")
+        stream = open_exclusive(destination, binary=False)
         try:
             with stream:
                 writer = csv.writer(stream)
@@ -363,7 +364,7 @@ def export_import_results(
             for name, table in tables.items():
                 writer.export(table, destination / name)
         require_current_sources(expected_hashes)
-        with (destination / "manifest.json").open("x", encoding="utf-8") as stream:
+        with open_exclusive(destination / "manifest.json", binary=False) as stream:
             stream.write(manifest_text + "\n")
     except Exception:
         try:

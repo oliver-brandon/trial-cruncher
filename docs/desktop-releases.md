@@ -56,20 +56,26 @@ workflow, including when the repository is private and the owner has access.
    installer metadata and stable tag use the same version. Keep the package ID and
    platform channels stable across releases.
 2. After the release changes are on `main`, run **Publish stable desktop updates**
-   in GitHub Actions on `main` with **build_only** checked (the default). This
-   builds both native packages, installs the candidate on the first release, and
-   exercises the installed desktop and packaged CLI with synthetic recordings.
-   On subsequent releases the workflow obtains the previous stable package,
-   applies the candidate via Velopack and checks the relaunched app. Build-only
-   outputs are workflow artifacts for testing.
-3. To publish, push the matching `v<version>` tag at a commit on `main`, or
-   explicitly dispatch the workflow on `main` with **build_only** unchecked.
-   Both platform jobs must succeed. The publisher verifies the package identities,
-   sizes and hashes, stages the installers, portable archives, full packages and
-   channel JSON in a draft, then verifies uploaded assets before publication.
-   The first release establishes the full-package baseline. A subsequent release
-   also supplies a delta from its predecessor. Retrying a draft verifies any
-   previously uploaded files. Published tags cannot be reused for replacement binaries.
+   on `main` with **build_only** checked. The build waits for the full scientific,
+   file-safety and GUI test suites on all six OS/Python combinations. The native
+   jobs sign/package once and exercise the actual candidate installers, installed
+   GUI and packaged CLI. Subsequent releases also test upgrading from the previous
+   stable release. The two downloadable artifacts stay available for 30 days.
+3. Try the installers from that build. To publish **those exact bytes**, dispatch
+   the same workflow on `main`, uncheck **build_only**, and enter that build's run
+   ID under **candidate_run_id**. Alternatively, push the matching `v<version>`
+   tag at the tested commit. Without a run ID, publication looks for the latest
+   successful build-only run at that exact commit. A verified match skips CI,
+   signing, packaging and notarization. A new commit without a matching build
+   runs the full checks and publishes the resulting tested packages.
+
+   Promotion checks the repository, branch, commit, CI and installer job results,
+   immutable artifact IDs, and SHA-256 of the downloaded archives. The archives
+   also identify the version and previous stable release used during testing.
+   An expired, incomplete or mismatched candidate stops publication. Run a new
+   build-only candidate if needed. The publisher verifies draft asset hashes before
+   making the release public. Retry an interrupted publish with the same artifacts.
+
 4. For a local platform build, install Python 3.12+ and run
    `scripts/build_macos_app.sh` or `scripts/build_windows_app.ps1` on the
    corresponding OS. For installer packaging use the matching
