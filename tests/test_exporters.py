@@ -178,14 +178,16 @@ def test_write_failure_removes_attempt_only(write_export, tmp_path, monkeypatch,
     result = import_medpc_file(path)
     previous = export_import_results({path: result}, [path], tmp_path)
     before = {file.name: file.read_bytes() for file in previous.iterdir()}
-    original_open = type(path).open
+    from trial_cruncher import exporters
 
-    def failing_open(candidate, *args, **kwargs):
-        if candidate.name == failed_name and args and args[0] == "x":
+    original_open = exporters.open_exclusive
+
+    def failing_open(candidate, *, binary):
+        if candidate.name == failed_name:
             raise OSError("Synthetic disk failure")
-        return original_open(candidate, *args, **kwargs)
+        return original_open(candidate, binary=binary)
 
-    monkeypatch.setattr(type(path), "open", failing_open)
+    monkeypatch.setattr(exporters, "open_exclusive", failing_open)
     with pytest.raises(OSError, match="Synthetic disk failure"):
         export_import_results({path: result}, [path], tmp_path)
     assert list(tmp_path.glob("*-trial-cruncher-export-*")) == [previous]
