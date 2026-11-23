@@ -2,7 +2,7 @@
 
 import platform
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 APP_NAME = INSTALL_APP_NAME = "Trial Cruncher"
 BUNDLE_IDENTIFIER = UPDATE_PACKAGE_ID = "com.trialcruncher.app"
 UPDATE_CHANNEL_PREFIX = "stable"

@@ -72,9 +72,18 @@ def _application():
 
 
 @pytest.fixture
-def app(_application, monkeypatch):
+def app(_application, monkeypatch, tmp_path):
     """Unexpected worker warnings should fail the test without waiting for a user."""
+    from PySide6.QtCore import QSettings
     from PySide6.QtWidgets import QMessageBox
+
+    from trial_cruncher.gui import preferences
+
+    monkeypatch.setattr(
+        preferences,
+        "workspace_settings",
+        lambda: QSettings(str(tmp_path / "workspace.ini"), QSettings.Format.IniFormat),
+    )
 
     warnings = []
 

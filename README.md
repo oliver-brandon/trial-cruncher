@@ -114,7 +114,8 @@ for details, then choose **Export results…** for CSV or Excel.
 Use the **Split view** selector at the upper right to choose **Batch only** or
 **Detail only** for full-height tables. Switching back restores both panes and
 keeps the selected recording. In split view, drag the divider to resize either pane.
-The layout mode and split ratio are saved locally. Use arrow keys on the divider
+The app remembers the main window’s position, size, and maximized state between launches.
+On Wayland, the compositor controls window placement. The layout mode and split ratio are saved locally. Use arrow keys on the divider
 for keyboard resizing. Drag a table header’s right edge to resize its column.
 Large batches and decoded choice tables use page controls. **Diagnostics** beneath
 a metric table opens its supporting counts and warnings.

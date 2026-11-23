@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtCore import QByteArray, Qt, QTimer, QUrl
 from PySide6.QtGui import QCloseEvent, QIcon
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import (
@@ -12,8 +12,9 @@ from PySide6.QtWebEngineCore import (
     QWebEngineUrlRequestInterceptor,
 )
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtWidgets import QLabel, QMainWindow
+from PySide6.QtWidgets import QApplication, QLabel, QMainWindow
 
+from trial_cruncher.gui import preferences
 from trial_cruncher.gui.update_controls import UpdateControls
 from trial_cruncher.gui.web_bridge import WebBridge
 from trial_cruncher.gui.window import MainWindow
@@ -50,7 +51,6 @@ class WebShell(QMainWindow):
         self.update_action = self.menuBar().addMenu("Help").addAction("Check for Updates…")
         self.update_controls = UpdateControls(self)
         self.update_action.triggered.connect(self.update_controls.offer)
-        self.resize(1300, 900)
         self.controller = MainWindow()
         self.controller.setParent(self, Qt.WindowType.Window)
         self.controller.dialog_parent = self
@@ -67,7 +67,17 @@ class WebShell(QMainWindow):
         self.setCentralWidget(self.view)
         self.view.loadFinished.connect(self._load_finished)
         self.page.renderProcessTerminated.connect(self._renderer_failed)
+        self._settings = preferences.workspace_settings()
+        geometry = self._settings.value("window/geometry")
+        if not isinstance(geometry, QByteArray) or not self.restoreGeometry(geometry):
+            self.resize(1300, 900)
+        QApplication.instance().aboutToQuit.connect(self._save_geometry)
         self.view.load(QUrl.fromLocalFile(str(INDEX)))
+
+    def _save_geometry(self) -> None:
+        if self.isVisible():
+            self._settings.setValue("window/geometry", self.saveGeometry())
+            self._settings.sync()
 
     def _show_failure(self, message: str) -> None:
         label = QLabel(message, self)
@@ -96,6 +106,7 @@ class WebShell(QMainWindow):
                 self._wait_for_workers()
             event.ignore()
             return
+        self._save_geometry()
         self.controller.close()
         event.accept()
 

@@ -1,3 +1,4 @@
-# Trial Cruncher 0.1.0
+# Trial Cruncher 0.1.1
 
-First packaged release of the behavioral analysis desktop application.
+Trial Cruncher remembers the main window’s position and size between launches.
+Windows CSV and Excel exports now refuse existing destination links, including links to missing files.

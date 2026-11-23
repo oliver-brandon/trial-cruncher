@@ -3,10 +3,10 @@
 import json
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QSettings, Qt, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
 
 from trial_cruncher.analysis_sort import SHEETS, validate_analysis_sorts
-from trial_cruncher.gui import web_animal, web_assignments, web_data
+from trial_cruncher.gui import preferences, web_animal, web_assignments, web_data
 from trial_cruncher.gui.window import MainWindow
 
 
@@ -17,7 +17,7 @@ class WebBridge(QObject):
         super().__init__(parent)
         self.window = controller
         self._native_action_open = False
-        self._settings = QSettings("Trial Cruncher", "Trial Cruncher")
+        self._settings = preferences.workspace_settings()
         self._batch_revision = 0
         self._detail_revision = 0
         self._message_revision = 0

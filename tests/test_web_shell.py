@@ -3,9 +3,10 @@
 import os
 
 import pytest
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QByteArray, QPoint, QSize, QUrl
 from PySide6.QtWidgets import QFileDialog
 
+from trial_cruncher.gui import preferences
 from trial_cruncher.gui.web_shell import INDEX, AssetRequests, LocalPage
 
 pytestmark = pytest.mark.skipif(
@@ -73,10 +74,37 @@ def test_close_waits_for_active_controller_work(app, monkeypatch):
     try:
         assert shell.close() is False
         assert shell.isVisible()
+        assert not preferences.workspace_settings().contains("window/geometry")
         assert shell.controller._closing
         working[0] = False
         shell._wait_for_workers()
         assert not shell.isVisible()
+        assert preferences.workspace_settings().contains("window/geometry")
     finally:
         working[0] = False
         shell.close()
+
+
+@pytest.mark.parametrize("invalid", [None, "corrupt", QByteArray(b"invalid geometry")])
+def test_window_geometry_survives_reopening(app, invalid):
+    from trial_cruncher.gui.web_shell import WebShell
+
+    if invalid is not None:
+        preferences.workspace_settings().setValue("window/geometry", invalid)
+    first = WebShell()
+    assert first.size() == QSize(1300, 900)
+    first.resize(640, 400)
+    first.show()
+    first.move(QPoint(55, 70))
+    app.processEvents()
+    position, size = first.pos(), first.size()
+    assert first.close()
+
+    reopened = WebShell()
+    reopened.show()
+    try:
+        app.processEvents()
+        assert reopened.pos() == position
+        assert reopened.size() == size
+    finally:
+        reopened.close()
