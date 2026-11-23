@@ -7,12 +7,17 @@ on:
         description: Build and test candidate packages without publication
         type: boolean
         default: true
+      candidate_run_id:
+        description: Optional verified build-only run ID to promote
+        type: string
+        default: ""
   push:
     tags:
       - "v*"
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: trial-cruncher-stable-update-publish
@@ -28,6 +33,8 @@ jobs:
       archive_stem: ${{ steps.metadata.outputs.archive_stem }}
       velopack_version: ${{ steps.metadata.outputs.velopack_version }}
       previous_tag: ${{ steps.previous.outputs.tag }}
+      candidate_id: ${{ steps.candidate.outputs.run_id }}
+      candidate_provenance: ${{ steps.candidate.outputs.provenance }}
 
     steps:
       - name: Check out repository
@@ -80,11 +87,36 @@ jobs:
           previous=$(python scripts/previous_stable_release.py)
           echo "tag=$previous" >> "$GITHUB_OUTPUT"
 
+      - name: Find a tested candidate for this commit
+        id: candidate
+        if: ${{ github.event_name == 'push' || !inputs.build_only }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          VERSION: ${{ steps.metadata.outputs.version }}
+          PREVIOUS_TAG: ${{ steps.previous.outputs.tag }}
+        run: |
+          set -euo pipefail
+          args=(--sha "$GITHUB_SHA" --repo "$GITHUB_REPOSITORY" --version "$VERSION" --previous-tag "$PREVIOUS_TAG")
+          if [[ -n "$CANDIDATE_RUN_ID" ]]; then args+=(--run-id "$CANDIDATE_RUN_ID"); fi
+          python3 scripts/validate_release_candidate.py "${args[@]}" > "$RUNNER_TEMP/candidate.json"
+          candidate=$(python3 -c 'import json,sys; x=json.load(open(sys.argv[1])); print(x.get("run_id", ""))' "$RUNNER_TEMP/candidate.json")
+          echo "run_id=$candidate" >> "$GITHUB_OUTPUT"
+          echo "provenance=$(cat "$RUNNER_TEMP/candidate.json")" >> "$GITHUB_OUTPUT"
+
+
+  full-ci:
+    name: Full CI
+    needs: validate-source
+    if: ${{ needs.validate-source.outputs.candidate_id == '' }}
+    uses: ./.github/workflows/ci.yml
+    with:
+      full_matrix: true
 
   build-windows:
     timeout-minutes: 35
     name: Build Windows installer and feed
-    needs: validate-source
+    needs: [validate-source, full-ci]
     runs-on: windows-latest
     outputs:
       channel: ${{ steps.metadata.outputs.channel }}
@@ -175,18 +207,28 @@ jobs:
           & .build-venv/Scripts/python.exe scripts/smoke_packaged_analysis.py "$env:RUNNER_TEMP/trial-stable-upgrade/current/trial-cruncher-cli.exe"
           if ($LASTEXITCODE -ne 0) { throw "Packaged CLI analysis failed" }
 
+      - name: Record tested windows candidate provenance
+        env:
+          VERSION: ${{ needs.validate-source.outputs.version }}
+          PREVIOUS_TAG: ${{ needs.validate-source.outputs.previous_tag }}
+        shell: bash
+        run: |
+          python scripts/validate_release_candidate.py --write-marker dist/velopack-releases/tested-candidate.json \
+            --sha "$GITHUB_SHA" --version "$VERSION" --previous-tag "$PREVIOUS_TAG" --platform windows
+
       - name: Upload Windows release payload
         uses: actions/upload-artifact@v4
         with:
           name: stable-windows-release
           path: dist/velopack-releases/*
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30
+          overwrite: true
 
   build-macos:
     timeout-minutes: 75
     name: Build signed macOS installer and feed
-    needs: validate-source
+    needs: [validate-source, full-ci]
     runs-on: macos-15
     outputs:
       channel: ${{ steps.metadata.outputs.channel }}
@@ -331,13 +373,23 @@ jobs:
       - name: Verify packaged CLI analysis
         run: .build-venv/bin/python scripts/smoke_packaged_analysis.py "$RUNNER_TEMP/trial-stable-upgrade/Applications/Trial Cruncher.app/Contents/Resources/bin/trial-cruncher-cli"
 
+      - name: Record tested macOS candidate provenance
+        env:
+          VERSION: ${{ needs.validate-source.outputs.version }}
+          PREVIOUS_TAG: ${{ needs.validate-source.outputs.previous_tag }}
+        shell: bash
+        run: |
+          python scripts/validate_release_candidate.py --write-marker dist/velopack-releases/tested-candidate.json \
+            --sha "$GITHUB_SHA" --version "$VERSION" --previous-tag "$PREVIOUS_TAG" --platform macos
+
       - name: Upload macOS release payload
         uses: actions/upload-artifact@v4
         with:
           name: stable-macos-release
           path: dist/velopack-releases/*
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30
+          overwrite: true
 
       - name: Remove signing keychain
         if: ${{ always() }}
@@ -350,21 +402,41 @@ jobs:
   publish:
     permissions:
       contents: write
+      actions: read
     timeout-minutes: 20
     name: Publish verified stable release
-    if: ${{ github.event_name == 'push' || !inputs.build_only }}
-    needs: [validate-source, build-windows, build-macos]
+    if: ${{ !failure() && !cancelled() && (github.event_name == 'push' || !inputs.build_only) && (needs.validate-source.outputs.candidate_id != '' || (needs.build-windows.result == 'success' && needs.build-macos.result == 'success')) }}
+    needs: [validate-source, full-ci, build-windows, build-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: stable-windows-release
-          path: release-windows
-      - uses: actions/download-artifact@v4
-        with:
-          name: stable-macos-release
-          path: release-macos
+      - name: Verify and download tested candidate
+        if: ${{ needs.validate-source.outputs.candidate_id != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CANDIDATE_RUN_ID: ${{ needs.validate-source.outputs.candidate_id }}
+          VERSION: ${{ needs.validate-source.outputs.version }}
+          PREVIOUS_TAG: ${{ needs.validate-source.outputs.previous_tag }}
+          CANDIDATE_PROVENANCE: ${{ needs.validate-source.outputs.candidate_provenance }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$CANDIDATE_PROVENANCE" > "$RUNNER_TEMP/expected-candidate.json"
+          python3 scripts/validate_release_candidate.py --run-id "$CANDIDATE_RUN_ID" \
+            --sha "$GITHUB_SHA" --repo "$GITHUB_REPOSITORY" --version "$VERSION" \
+            --previous-tag "$PREVIOUS_TAG" --expected "$RUNNER_TEMP/expected-candidate.json" --output-dir .
+
+      - name: Verify and download this run's tested artifacts
+        if: ${{ needs.validate-source.outputs.candidate_id == '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.validate-source.outputs.version }}
+          PREVIOUS_TAG: ${{ needs.validate-source.outputs.previous_tag }}
+        run: |
+          set -euo pipefail
+          python3 scripts/validate_release_candidate.py --current-run --run-id "$GITHUB_RUN_ID" \
+            --sha "$GITHUB_SHA" --repo "$GITHUB_REPOSITORY" --version "$VERSION" \
+            --previous-tag "$PREVIOUS_TAG" --output-dir .
+
       - name: Point the stable tag at the verified main commit
         shell: bash
         env:

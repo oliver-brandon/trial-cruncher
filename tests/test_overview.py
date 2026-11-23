@@ -2,6 +2,7 @@
 
 import csv
 import json
+import os
 from dataclasses import replace
 from threading import Event
 
@@ -251,7 +252,7 @@ def test_sorted_click_through_duplicate_names_and_hidden_selection_clear(app, ma
         overview.table.sortByColumn(6, Qt.SortOrder.AscendingOrder)
         assert overview.current_path() == second
         assert f"Source file: {second}" in window.review.details.toPlainText()
-        overview.search.setText("one/")
+        overview.search.setText(f"{first.parent.name}{os.sep}")
         assert visible_paths(overview) == [first]
         assert overview.current_path() is None
         assert window.review.metric_table.rowCount() == 0

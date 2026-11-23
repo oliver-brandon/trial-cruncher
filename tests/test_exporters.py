@@ -346,3 +346,18 @@ def test_csv_export_without_optional_matlab_packages(write_export, tmp_path, mon
     output = export_import_results({path: import_medpc_file(path)}, [path], tmp_path)
     manifest = json.loads((output / "manifest.json").read_text())
     assert set(manifest["dependency_versions"]) == {"pandas", "numpy", "openpyxl", "PySide6"}
+
+
+def test_csv_refuses_dangling_link_without_creating_target(tmp_path):
+    target = tmp_path / "missing.csv"
+    link = tmp_path / "dangling.csv"
+    link.symlink_to(target)
+    with pytest.raises(FileExistsError):
+        CSVExporter().export(pd.DataFrame({"value": [1]}), link)
+    assert link.is_symlink() and not target.exists()
+
+
+def test_export_refuses_existing_directory(tmp_path):
+    with pytest.raises(OSError):
+        CSVExporter().export(pd.DataFrame({"value": [1]}), tmp_path)
+    assert tmp_path.is_dir()

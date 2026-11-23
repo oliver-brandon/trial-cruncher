@@ -322,3 +322,18 @@ def test_no_successes_or_invalid_format_create_no_output(tmp_path):
     with pytest.raises(ValueError, match="format"):
         export_import_results({}, [], tmp_path, "unknown")
     assert not list(tmp_path.iterdir())
+
+
+def test_save_refuses_dangling_link_without_creating_target(tmp_path):
+    target = tmp_path / "missing.xlsx"
+    link = tmp_path / "dangling.xlsx"
+    link.symlink_to(target)
+    with pytest.raises(FileExistsError):
+        save_workbook(Workbook(), link)
+    assert link.is_symlink() and not target.exists()
+
+
+def test_export_refuses_existing_directory(tmp_path):
+    with pytest.raises(OSError):
+        save_workbook(Workbook(), tmp_path)
+    assert tmp_path.is_dir()

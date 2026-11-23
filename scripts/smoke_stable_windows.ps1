@@ -39,6 +39,9 @@ $old = $null
 $apply = $null
 $restarted = $null
 $reopened = $null
+$candidateProc = $null
+$candidateApp = $null
+$candidateInstall = Join-Path $env:RUNNER_TEMP "trial-fresh-candidate"
 
 function Assert-InstalledIdentity([string]$version) {
     $manifestPath = Join-Path $install "current\sq.version"
@@ -108,16 +111,44 @@ try {
     if (-not (Test-Path -LiteralPath (Join-Path $install "current\trial-cruncher-cli.exe"))) {
         throw "Installed command-line executable is missing."
     }
-    Write-Host "Verified installed identity, startup, shortcut, and candidate version $CandidateVersion."
+    # When an earlier installer was used for the upgrade test, verify the
+    # candidate setup executable in a separate installation directory too.
+    if ($PreviousInstaller) {
+        if (Test-Path -LiteralPath $candidateInstall) { throw "Candidate install path already exists." }
+        $candidateProc = Start-Process -FilePath $setups[0].FullName -ArgumentList @("--silent", "--installto", ('"' + $candidateInstall + '"')) -PassThru
+        if (-not $candidateProc.WaitForExit(180000)) { throw "Candidate installer did not finish." }
+        if ($candidateProc.ExitCode -ne 0) { throw "Candidate installer returned $($candidateProc.ExitCode)." }
+        $candidateExe = Join-Path $candidateInstall "current\Trial Cruncher.exe"
+        $candidateManifest = Join-Path $candidateInstall "current\sq.version"
+        if (-not (Test-Path -LiteralPath $candidateExe) -or -not (Test-Path -LiteralPath $candidateManifest)) {
+            throw "Candidate installer did not create the expected application and manifest."
+        }
+        [xml]$candidateInfo = Get-Content -LiteralPath $candidateManifest -Raw
+        $candidateId = $candidateInfo.SelectSingleNode("//*[local-name()='metadata']/*[local-name()='id']")
+        $candidateVer = $candidateInfo.SelectSingleNode("//*[local-name()='metadata']/*[local-name()='version']")
+        if (-not $candidateId -or -not $candidateVer -or $candidateId.InnerText -ne "com.trialcruncher.app" -or $candidateVer.InnerText -ne $CandidateVersion) {
+            throw "Candidate installer package identity or version is incorrect."
+        }
+        & .build-venv/Scripts/python.exe scripts/smoke_installed_gui.py $candidateExe
+        if ($LASTEXITCODE -ne 0) { throw "Candidate installer GUI verification failed." }
+        $candidateCli = Join-Path $candidateInstall "current\trial-cruncher-cli.exe"
+        & .build-venv/Scripts/python.exe scripts/smoke_packaged_analysis.py $candidateCli
+        if ($LASTEXITCODE -ne 0) { throw "Candidate installer CLI verification failed." }
+        $candidateApp = Start-Process -FilePath $candidateExe -PassThru
+        $candidateApp = Wait-ForWindow $candidateExe
+        $candidateApp.CloseMainWindow() | Out-Null
+        if (-not $candidateApp.WaitForExit(30000)) { throw "Candidate installer app did not close." }
+    }
+    Write-Host "Verified candidate installer, installed identity, startup, shortcut, and candidate version $CandidateVersion."
 } finally {
     $owned = @(Get-Process -Name "Trial Cruncher", "Update" -ErrorAction SilentlyContinue | Where-Object {
         $_.Path -and $_.Path.StartsWith("$install\", [StringComparison]::OrdinalIgnoreCase)
     })
-    foreach ($process in @($proc, $old, $apply, $restarted, $reopened) + $owned) {
+    foreach ($process in @($proc, $old, $apply, $restarted, $reopened, $candidateProc, $candidateApp) + $owned) {
         if ($null -ne $process) {
             try {
                 $process.Refresh()
-                if (-not $process.HasExited -and ($process.Path -eq $setup -or $process.Path.StartsWith("$install\", [StringComparison]::OrdinalIgnoreCase))) {
+                if (-not $process.HasExited -and ($process.Path -eq $setup -or $process.Path -eq $setups[0].FullName -or $process.Path.StartsWith("$install\", [StringComparison]::OrdinalIgnoreCase) -or $process.Path.StartsWith("$candidateInstall\", [StringComparison]::OrdinalIgnoreCase))) {
                     $process.Kill()
                     $process.WaitForExit(5000) | Out-Null
                 }
