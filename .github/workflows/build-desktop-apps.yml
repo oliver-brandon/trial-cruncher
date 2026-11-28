@@ -38,7 +38,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -53,7 +53,7 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -123,15 +123,15 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
 
@@ -217,7 +217,7 @@ jobs:
             --sha "$GITHUB_SHA" --version "$VERSION" --previous-tag "$PREVIOUS_TAG" --platform windows
 
       - name: Upload Windows release payload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: stable-windows-release
           path: dist/velopack-releases/*
@@ -235,15 +235,15 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
 
@@ -383,7 +383,7 @@ jobs:
             --sha "$GITHUB_SHA" --version "$VERSION" --previous-tag "$PREVIOUS_TAG" --platform macos
 
       - name: Upload macOS release payload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: stable-macos-release
           path: dist/velopack-releases/*
@@ -409,7 +409,7 @@ jobs:
     needs: [validate-source, full-ci, build-windows, build-macos]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Verify and download tested candidate
         if: ${{ needs.validate-source.outputs.candidate_id != '' }}
         env:
