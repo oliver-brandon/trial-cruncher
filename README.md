@@ -290,4 +290,4 @@ Animal aggregation and condition pairing are available through **Animal analysis
 3. Validate animal-level comparisons on a representative experiment with reviewed treatment assignments.
 4. Add broader task configuration and, separately, MAT-derived trials per minute.
 
-No software license has been selected. No author identity is declared.
+Trial Cruncher is released under the [MIT License](LICENSE). No author identity is declared.
