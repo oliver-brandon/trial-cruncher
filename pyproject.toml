@@ -7,6 +7,7 @@ name = "trial-cruncher"
 dynamic = ["version"]
 description = "From raw trials to analysis-ready data."
 readme = "README.md"
+license = {text = "MIT"}
 requires-python = ">=3.12"
 dependencies = [
     "PySide6>=6.7",
